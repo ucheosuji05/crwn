@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   statNumber: {
-    fontSize: 19, //should be 18!!!!!
+    fontSize: 18, //should be 18!!!!!
     fontWeight: '700',
     color: '#111827',
     marginBottom: 2
