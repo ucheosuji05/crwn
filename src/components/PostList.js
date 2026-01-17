@@ -1,11 +1,21 @@
 import React from 'react';
-import { View, FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, RefreshControl, Text, View } from 'react-native';
 import PostCard from './PostCard';
-import { POSTS } from '../data/posts';
+import { usePosts } from '../hooks/usePosts';
 
-// PostList: Scrollable list of posts
 export default function PostList() {
-  const posts = POSTS;
+  // Don't pass userId - fetch ALL posts for explore
+  const { posts, loading, refresh } = usePosts();
+
+  if (posts.length === 0 && !loading) {
+    return (
+      <View style={styles.emptyState}>
+        <Text style={styles.emptyIcon}>🌟</Text>
+        <Text style={styles.emptyText}>No posts yet</Text>
+        <Text style={styles.emptySubtext}>Be the first to share!</Text>
+      </View>
+    );
+  }
 
   return (
     <FlatList
@@ -14,12 +24,35 @@ export default function PostList() {
       renderItem={({ item }) => <PostCard post={item} />}
       style={styles.list}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={loading} onRefresh={refresh} />
+      }
     />
   );
 }
 
 const styles = StyleSheet.create({
   list: {
-    flex: 1
-  }
+    flex: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
 });

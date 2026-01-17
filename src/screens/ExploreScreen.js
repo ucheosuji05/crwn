@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import SearchBar from '../components/SearchBar';
 import RecommendationSlider from '../components/RecommendationSlider';
 import PostList from '../components/PostList';
-import { POSTS } from '../data/posts';
+import { usePosts } from '../hooks/usePosts'; // ← ADD THIS
+
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const GRID_SPACING = 2;
@@ -13,22 +14,29 @@ const TILE_SIZE = (SCREEN_WIDTH - (GRID_SPACING * (NUM_COLUMNS + 1))) / NUM_COLU
 
 export default function ExploreScreen() {
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'grid'
+  
+  //Fetch real posts from Supabase
+  const { posts, loading, refresh } = usePosts();
 
   const toggleView = () => {
     setViewMode(viewMode === 'list' ? 'grid' : 'list');
   };
 
   const renderGridItem = ({ item }) => {
-    // Get first image from imageSources
-    const imageSource = item.imageSources?.[0] || item.imageSource;
+    // Get first image from post_media array (Supabase structure)
+    const firstImage = item.post_media?.[0]?.media_url;
     
     return (
       <TouchableOpacity style={styles.gridItem}>
-        <Image
-          source={imageSource}
-          style={styles.gridImage}
-          resizeMode="cover"
-        />
+        {firstImage ? (
+          <Image
+            source={{ uri: firstImage }}
+            style={styles.gridImage}
+            resizeMode="cover"
+          />
+        ) : (
+          <View style={styles.gridImage} />
+        )}
       </TouchableOpacity>
     );
   };
@@ -60,13 +68,15 @@ export default function ExploreScreen() {
         <PostList />
       ) : (
         <FlatList
-          data={POSTS}
+          data={posts} 
           renderItem={renderGridItem}
           keyExtractor={item => item.id}
           numColumns={NUM_COLUMNS}
           contentContainerStyle={styles.gridContainer}
           columnWrapperStyle={styles.gridRow}
           showsVerticalScrollIndicator={false}
+          refreshing={loading} 
+          onRefresh={refresh} 
         />
       )}
     </View>
