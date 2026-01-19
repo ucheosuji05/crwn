@@ -2,7 +2,6 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
-// Import screens
 import ExploreScreen from '../screens/ExploreScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
@@ -38,17 +37,14 @@ export default function BottomTabNavigator() {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#2563eb',
+        tabBarActiveTintColor: '#5d1f1f', // ✅ UPDATED COLOR
         tabBarInactiveTintColor: 'gray',
+        tabBarShowLabel: false, // ✅ HIDE LABELS
       })}
     >
       <Tab.Screen name="Explore" component={ExploreScreen} />
       <Tab.Screen name="Community" component={CommunityScreen} />
-      <Tab.Screen 
-        name="Create" 
-        component={CreatePostScreen}
-        options={{ tabBarLabel: '' }} // Only show icon
-      />
+      <Tab.Screen name="Create" component={CreatePostScreen} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
     </Tab.Navigator>

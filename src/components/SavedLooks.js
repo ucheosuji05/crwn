@@ -62,7 +62,7 @@ export default function SavedLooks() {
   if (bookmarkedPosts.length === 0) {
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>🔖</Text>
+        {/*emoji removed*/}
         <Text style={styles.emptyTitle}>No saved posts yet</Text>
         <Text style={styles.emptyText}>
           Tap the bookmark icon on posts you want to save for later

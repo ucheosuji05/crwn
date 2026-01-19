@@ -10,7 +10,7 @@ export default function PostList() {
   if (posts.length === 0 && !loading) {
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyIcon}>🌟</Text>
+        {/*emoji removed*/}
         <Text style={styles.emptyText}>No posts yet</Text>
         <Text style={styles.emptySubtext}>Be the first to share!</Text>
       </View>

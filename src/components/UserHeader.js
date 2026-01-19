@@ -81,7 +81,7 @@ export default function UserHeader() {
     <View style={styles.wrapper}>
       {/* Gradient Header Background with Safe Area */}
       <LinearGradient
-        colors={['#8B4513', '#D2691E']}
+        colors={['#8B4513', '#D2691E']} //TODO: change colors
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.gradientHeader}
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 2,
     right: 2,
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#5D1F1F',
     width: 30,
     height: 30,
     borderRadius: 15,

@@ -26,7 +26,7 @@ export default function ProfileTabs() {
         if (posts.length === 0) {
           return (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyIcon}>📸</Text>
+              {/*emoji removed*/}
               <Text style={styles.emptyTitle}>No posts yet</Text>
               <Text style={styles.emptyText}>
                 Share your first hairstyle to inspire others!
@@ -48,7 +48,7 @@ export default function ProfileTabs() {
       case 'activity':
         return (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyIcon}>📊</Text>
+            {/*emoji removed*/}
             <Text style={styles.emptyTitle}>Activity</Text>
             <Text style={styles.emptyText}>
               Your recent activity will appear here

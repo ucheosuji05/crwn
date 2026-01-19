@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
   imageContainer: {
     width: 120,
     height: 40,
-    backgroundColor: '#FFB034', // change this to be darker later 
+    backgroundColor: '#5D1F1F', // change this to be darker later 
     borderRadius: 10,
     overflow: 'hidden',
     justifyContent: 'center'

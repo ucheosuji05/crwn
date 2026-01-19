@@ -159,11 +159,6 @@ export default function CreatePostScreen({ navigation }) {
         showsVerticalScrollIndicator={true}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Create Post</Text>
-          <Text style={styles.headerSubtitle}>Share your hair journey</Text>
-        </View>
 
         {/* Title Input */}
         <View style={styles.section}>
@@ -204,7 +199,7 @@ export default function CreatePostScreen({ navigation }) {
               style={styles.imageButton}
               onPress={pickImages}
             >
-              <Ionicons name="images-outline" size={24} color="#3b82f6" />
+              <Ionicons name="images-outline" size={24} color="#5D1F1F" />
               <Text style={styles.imageButtonText}>Choose Photos</Text>
             </TouchableOpacity>
 
@@ -212,7 +207,7 @@ export default function CreatePostScreen({ navigation }) {
               style={styles.imageButton}
               onPress={takePhoto}
             >
-              <Ionicons name="camera-outline" size={24} color="#3b82f6" />
+              <Ionicons name="camera-outline" size={24} color="#5D1F1F" />
               <Text style={styles.imageButtonText}>Take Photo</Text>
             </TouchableOpacity>
           </View>
@@ -280,7 +275,7 @@ export default function CreatePostScreen({ navigation }) {
               <Ionicons 
                 name="add-circle" 
                 size={28} 
-                color={tagInput.trim() ? "#3b82f6" : "#d1d5db"} 
+                color={tagInput.trim() ? "#5D1F1F" : "#d1d5db"} 
               />
             </TouchableOpacity>
           </View>
@@ -289,7 +284,7 @@ export default function CreatePostScreen({ navigation }) {
         {/* Tag Stylist Section */}
         <View style={styles.section}>
           <TouchableOpacity style={styles.tagStylistButton}>
-            <Ionicons name="person-add-outline" size={22} color="#3b82f6" />
+            <Ionicons name="person-add-outline" size={22} color="#5D1F1F" />
             <Text style={styles.tagStylistText}>Tag your stylist</Text>
             <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
           </TouchableOpacity>
@@ -417,7 +412,7 @@ const styles = StyleSheet.create({
   },
   imageButtonText: {
     fontSize: 15,
-    color: '#3b82f6',
+    color: '#5D1F1F',
     fontWeight: '600',
   },
   imagesList: {
@@ -452,7 +447,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
-    backgroundColor: 'rgba(59, 130, 246, 0.9)',
+    backgroundColor: '#5D1F1F', //rgba(59, 130, 246, 0.9)', //change this
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
@@ -487,7 +482,7 @@ const styles = StyleSheet.create({
   },
   tagText: {
     fontSize: 14,
-    color: '#3b82f6',
+    color: '#5D1F1F',
     fontWeight: '500',
   },
   tagInputContainer: {
@@ -522,7 +517,7 @@ const styles = StyleSheet.create({
   tagStylistText: {
     flex: 1,
     fontSize: 16,
-    color: '#3b82f6',
+    color: '#5D1F1F',
     fontWeight: '500',
   },
   spacer: {
@@ -545,11 +540,11 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   postButton: {
-    backgroundColor: '#3b82f6',
+    backgroundColor: '#5D1F1F',
     paddingVertical: 16,
     borderRadius: 12,
     alignItems: 'center',
-    shadowColor: '#3b82f6',
+    shadowColor: '#5D1F1F',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
