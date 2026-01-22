@@ -6,7 +6,7 @@ import ExploreScreen from '../screens/ExploreScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
-import ProfileScreen from '../screens/ProfileScreen';
+import ProfileScreen from '../screens/ProfileScreen'; // ← Use this
 
 const Tab = createBottomTabNavigator();
 
@@ -37,16 +37,20 @@ export default function BottomTabNavigator() {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#5d1f1f', // ✅ UPDATED COLOR
+        tabBarActiveTintColor: '#5D1F1F',
         tabBarInactiveTintColor: 'gray',
-        tabBarShowLabel: false, // ✅ HIDE LABELS
+        tabBarShowLabel: false,
       })}
     >
       <Tab.Screen name="Explore" component={ExploreScreen} />
       <Tab.Screen name="Community" component={CommunityScreen} />
       <Tab.Screen name="Create" component={CreatePostScreen} />
       <Tab.Screen name="Notifications" component={NotificationsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} options={{ headerShown: false }} />
+      <Tab.Screen 
+        name="Profile" 
+        component={ProfileScreen}  // ← Direct to ProfileScreen
+        options={{ headerShown: false }}
+      />
     </Tab.Navigator>
   );
 }
