@@ -1,13 +1,15 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import React, { useState } from 'react'; // ← Move useState here
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Modal } from 'react-native'; // ← Add Modal
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
+import EditProfileScreen from '../EditProfileScreen';
 
-export default function AccountSettings({ navigation }) {
+export default function AccountSettings({ onBack }) { // ← Changed from navigation to onBack
   const { user } = useAuth();
+  const [showEditProfile, setShowEditProfile] = useState(false); // ← Move to top
 
   const accountOptions = [
-    { title: 'Edit Profile', icon: 'create-outline', onPress: () => navigation.navigate('EditProfile') },
+    { title: 'Edit Profile', icon: 'create-outline', onPress: () => setShowEditProfile(true) },
     { title: 'Update Profile Photo', icon: 'camera-outline', onPress: () => Alert.alert('Coming Soon') },
     { title: 'Email & Phone', icon: 'mail-outline', onPress: () => Alert.alert('Coming Soon') },
     { title: 'Change Password', icon: 'key-outline', onPress: () => Alert.alert('Coming Soon') },
@@ -27,32 +29,53 @@ export default function AccountSettings({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Your account, your crown.</Text>
-        <Text style={styles.sectionDescription}>
-          Manage your personal information and account settings.
-        </Text>
+    <View style={styles.fullContainer}>
+      {/* Back Button Header */}
+      <View style={styles.detailHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#5D1F1F" />
+        </TouchableOpacity>
+        <Text style={styles.detailTitle}>Account</Text>
+        <View style={styles.placeholder} />
       </View>
 
-      {accountOptions.map((option, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.option}
-          onPress={option.onPress}
-        >
-          <Ionicons 
-            name={option.icon} 
-            size={22} 
-            color={option.danger ? '#ef4444' : '#6b7280'} 
-          />
-          <Text style={[styles.optionText, option.danger && styles.dangerText]}>
-            {option.title}
+      <ScrollView style={styles.container}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Your account, your crown.</Text>
+          <Text style={styles.sectionDescription}>
+            Manage your personal information and account settings.
           </Text>
-          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+        </View>
+
+        {accountOptions.map((option, index) => (
+          <TouchableOpacity
+            key={index}
+            style={styles.option}
+            onPress={option.onPress}
+          >
+            <Ionicons 
+              name={option.icon} 
+              size={22} 
+              color={option.danger ? '#ef4444' : '#6b7280'} 
+            />
+            <Text style={[styles.optionText, option.danger && styles.dangerText]}>
+              {option.title}
+            </Text>
+            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        visible={showEditProfile}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowEditProfile(false)}
+      >
+        <EditProfileScreen onBack={() => setShowEditProfile(false)} />
+      </Modal>
+    </View>
   );
 }
 

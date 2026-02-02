@@ -1,8 +1,10 @@
-import  React, { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../hooks/useAuth';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../config/supabase';
 
 // Import all settings screens
 import AccountSettings from './settings/AccountSettings';
@@ -15,8 +17,9 @@ import SupportFeedback from './settings/SupportFeedback';
 import AboutCRWN from './settings/AboutCRWN';
 
 export default function SettingsScreen({ onClose }) {
-  const { user, signOut } = useAuth();
+  const { clearAuth } = useAuth();
   const [activeScreen, setActiveScreen] = useState(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const settingsSections = [
     {
@@ -70,9 +73,39 @@ export default function SettingsScreen({ onClose }) {
     }
   ];
 
-  const handleSignOut = async () => {
-    await signOut();
-    onClose();
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: performSignOut }
+      ]
+    );
+  };
+
+  const performSignOut = async () => {
+    console.log('=== SIGN OUT START ===');
+    setSigningOut(true);
+    
+    // Step 1: Call Supabase signOut (don't await - it might hang)
+    supabase.auth.signOut().then(() => {
+      console.log('Supabase signOut completed');
+    }).catch((err) => {
+      console.log('Supabase signOut error (ignored):', err);
+    });
+
+    // Step 2: Wait a brief moment for Supabase to process
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // Step 3: Manually clear auth state (this is what actually logs you out in the UI)
+    if (clearAuth) {
+      clearAuth();
+    }
+
+    console.log('=== SIGN OUT COMPLETE ===');
+    
+    // Don't set signingOut to false - component will unmount
   };
 
   const renderScreen = () => {
@@ -100,7 +133,6 @@ export default function SettingsScreen({ onClose }) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header with Close Button */}
       <View style={styles.modalHeader}>
         <TouchableOpacity onPress={onClose} style={styles.closeButton}>
           <Ionicons name="close" size={28} color="#111827" />
@@ -110,16 +142,13 @@ export default function SettingsScreen({ onClose }) {
       </View>
 
       {activeScreen ? (
-        // Show detail screen
         renderScreen()
       ) : (
-        // Show main settings menu
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
           <View style={styles.header}>
             <Text style={styles.headerSubtitle}>Manage your CRWN experience</Text>
           </View>
 
-          {/* Settings Sections */}
           {settingsSections.map((section, index) => (
             <TouchableOpacity
               key={index}
@@ -143,13 +172,24 @@ export default function SettingsScreen({ onClose }) {
             </TouchableOpacity>
           ))}
 
-          {/* Sign Out Button */}
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-            <Text style={styles.signOutText}>Sign Out</Text>
+          <TouchableOpacity 
+            style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]} 
+            onPress={handleSignOut}
+            disabled={signingOut}
+          >
+            {signingOut ? (
+              <>
+                <ActivityIndicator size="small" color="#ef4444" />
+                <Text style={styles.signOutText}>Signing out...</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                <Text style={styles.signOutText}>Sign Out</Text>
+              </>
+            )}
           </TouchableOpacity>
 
-          {/* App Version */}
           <Text style={styles.version}>CRWN v1.0.0</Text>
         </ScrollView>
       )}
@@ -247,6 +287,9 @@ const styles = StyleSheet.create({
     borderColor: '#fecaca',
     backgroundColor: '#fef2f2',
     gap: 8,
+  },
+  signOutButtonDisabled: {
+    opacity: 0.6,
   },
   signOutText: {
     fontSize: 16,

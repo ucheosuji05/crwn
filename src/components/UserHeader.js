@@ -1,29 +1,74 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useAuth } from '../hooks/useAuth';
+import { profileService } from '../services/profileService';
 
 export default function UserHeader() {
-  const [avatarUri, setAvatarUri] = useState(null);
-  
-  const user = {
-    name: 'Uche Osuji',
-    username: '@uosuji',
-    bio: 'Natural hair enthusiast 🌸 | Protective styles lover | Sharing my hair journey ✨',
-    followers: 412,
-    following: 500
-  };
+  const { user } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
-  const pickImage = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photo library to change your profile picture.');
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    } else {
+      // No user - stop loading
+      setLoading(false);
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    if (!user?.id) {
+      console.log('UserHeader: No user ID, skipping fetch');
+      setLoading(false);
       return;
     }
 
+    console.log('UserHeader: Fetching profile for user:', user.id);
+    setLoading(true);
+    
+    try {
+      const { data, error } = await profileService.getProfile(user.id);
+      
+      if (error) {
+        console.error('UserHeader: Error fetching profile:', error);
+        // If profile doesn't exist, use data from auth user
+        setProfile({
+          full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+          username: user.user_metadata?.username || user.email?.split('@')[0] || 'user',
+          email: user.email,
+          avatar_url: null,
+          followers_count: 0,
+          following_count: 0,
+          bio: null,
+        });
+      } else {
+        console.log('UserHeader: Profile fetched successfully:', data);
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error('UserHeader: Unexpected error:', err);
+      // Fallback profile
+      setProfile({
+        full_name: user.email?.split('@')[0] || 'User',
+        username: user.email?.split('@')[0] || 'user',
+        email: user.email,
+        avatar_url: null,
+        followers_count: 0,
+        following_count: 0,
+        bio: null,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const pickImage = async () => {
     Alert.alert(
       'Change Profile Picture',
       'Choose an option',
@@ -60,11 +105,18 @@ export default function UserHeader() {
     });
 
     if (!result.canceled) {
-      setAvatarUri(result.assets[0].uri);
+      uploadAvatar(result.assets[0].uri);
     }
   };
 
   const chooseFromLibrary = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      return;
+    }
+
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,
@@ -73,15 +125,44 @@ export default function UserHeader() {
     });
 
     if (!result.canceled) {
-      setAvatarUri(result.assets[0].uri);
+      uploadAvatar(result.assets[0].uri);
     }
   };
+
+  const uploadAvatar = async (uri) => {
+    if (!user?.id) return;
+    
+    setUploading(true);
+    const { url, error } = await profileService.uploadAvatar(user.id, uri);
+    
+    if (error) {
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+      console.error('Upload error:', error);
+    } else {
+      setProfile(prev => ({ ...prev, avatar_url: url }));
+      Alert.alert('Success', 'Profile picture updated!');
+    }
+    setUploading(false);
+  };
+
+  // Show loading state
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#5D1F1F" />
+      </View>
+    );
+  }
+
+  // Get display values with fallbacks
+  const displayName = profile?.full_name || user?.email?.split('@')[0] || 'User';
+  const displayUsername = profile?.username || user?.email?.split('@')[0] || 'user';
 
   return (
     <View style={styles.wrapper}>
       {/* Gradient Header Background with Safe Area */}
       <LinearGradient
-        colors={['#8B4513', '#D2691E']} //TODO: change colors
+        colors={['#8B4513', '#D2691E']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
         style={styles.gradientHeader}
@@ -90,9 +171,13 @@ export default function UserHeader() {
           {/* Avatar positioned on gradient */}
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={pickImage} style={styles.avatarContainer}>
-              {avatarUri ? (
+              {uploading ? (
+                <View style={styles.avatar}>
+                  <ActivityIndicator size="small" color="#5D1F1F" />
+                </View>
+              ) : profile?.avatar_url ? (
                 <Image 
-                  source={{ uri: avatarUri }}
+                  source={{ uri: profile.avatar_url }}
                   style={styles.avatar}
                 />
               ) : (
@@ -113,19 +198,19 @@ export default function UserHeader() {
       <View style={styles.container}>
         {/* Name and Username */}
         <View style={styles.nameSection}>
-          <Text style={styles.name}>{user.name}</Text>
-          <Text style={styles.username}>{user.username}</Text>
+          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.username}>@{displayUsername}</Text>
         </View>
 
         {/* Stats */}
         <View style={styles.stats}>
           <View style={styles.stat}>
-            <Text style={styles.statNumber}>{user.followers}</Text>
+            <Text style={styles.statNumber}>{profile?.followers_count || 0}</Text>
             <Text style={styles.statLabel}>Followers</Text>
           </View>
 
           <View style={styles.stat}>
-            <Text style={styles.statNumber}>{user.following}</Text>
+            <Text style={styles.statNumber}>{profile?.following_count || 0}</Text>
             <Text style={styles.statLabel}>Following</Text>
           </View>
         </View>
@@ -142,9 +227,9 @@ export default function UserHeader() {
         </View>
 
         {/* Bio Section */}
-        {user.bio && (
+        {profile?.bio && (
           <View style={styles.bioSection}>
-            <Text style={styles.bioText}>{user.bio}</Text>
+            <Text style={styles.bioText}>{profile.bio}</Text>
           </View>
         )}
       </View>
@@ -154,7 +239,13 @@ export default function UserHeader() {
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: '#fff'
+    backgroundColor: '#FDF9F0'
+  },
+  loadingContainer: {
+    height: 300,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FDF9F0',
   },
   gradientHeader: {
     width: '100%'
@@ -175,7 +266,9 @@ const styles = StyleSheet.create({
     borderRadius: 45,
     backgroundColor: '#e5e7eb',
     borderWidth: 4,
-    borderColor: '#fff'
+    borderColor: '#FDF9F0',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatarPlaceholder: {
     width: 90,
@@ -183,7 +276,7 @@ const styles = StyleSheet.create({
     borderRadius: 45,
     backgroundColor: '#e5e7eb',
     borderWidth: 4,
-    borderColor: '#fff',
+    borderColor: '#FDF9F0',
     alignItems: 'center',
     justifyContent: 'center'
   },
@@ -198,11 +291,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: '#fff'
+    borderColor: '#FDF9F0'
   },
   container: {
     paddingHorizontal: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#FDF9F0',
     paddingTop: 12
   },
   nameSection: {
@@ -229,7 +322,7 @@ const styles = StyleSheet.create({
     alignItems: 'center'
   },
   statNumber: {
-    fontSize: 18, //should be 18!!!!!
+    fontSize: 18,
     fontWeight: '700',
     color: '#111827',
     marginBottom: 2
@@ -249,7 +342,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
-    backgroundColor: '#fff',
+    backgroundColor: '#FDF9F0',
     alignItems: 'center'
   },
   buttonText: {

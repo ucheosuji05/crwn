@@ -41,7 +41,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FDF9F0'
+    backgroundColor: '#ffffff'
   },
   settingsButton: {
     position: 'absolute',
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FDF9F0',
+    backgroundColor: '#ffffff',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
