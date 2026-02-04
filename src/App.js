@@ -19,6 +19,8 @@ function AppContent() {
   const { user, loading } = useAuth();
   const [showSignIn, setShowSignIn] = useState(false);
 
+  console.log('AppContent render - user:', user?.email || 'NO USER');
+
   // Show loading spinner while checking auth state
   if (loading) {
     return (

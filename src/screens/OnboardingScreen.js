@@ -286,8 +286,15 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
 
   const renderBackButton = () => {
     const currentIndex = STEP_ORDER.indexOf(currentStep);
-    if (currentIndex <= 2) return null; // Don't show on splash, welcome, or first question
+    if (currentIndex <= 1) return null; // Don't show on splash, welcome, or first question
 
+    if (currentStep === STEPS.USER_TYPE){
+      return(
+        <TouchableOpacity style={styles.backButton} onPress={() => goToStep(STEPS.WELCOME)}>
+        <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+      </TouchableOpacity>
+      );
+    }
     return (
       <TouchableOpacity style={styles.backButton} onPress={goBack}>
         <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
@@ -302,8 +309,12 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const renderSplash = () => (
     <GradientScreen>
       <View style={styles.splashContent}>
-        <Text style={styles.logoText}>cr♛n</Text>
-        <Text style={styles.tagline}>every crown tells a story.</Text>
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoTextDark}>cr</Text>
+          <Text style={styles.logoCrownDark}>♛</Text>
+          <Text style={styles.logoTextDark}>n</Text>
+        </View>
+        <Text style={styles.taglineDark}>every crown tells a story.</Text>
       </View>
     </GradientScreen>
   );
@@ -311,8 +322,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const renderWelcome = () => (
     <GradientScreen>
       <View style={styles.welcomeContent}>
-        <Text style={styles.logoText}>cr♛n</Text>
-        <Text style={styles.tagline}>every crown tells a story.</Text>
+        <Text style={styles.logoText}>crwn.</Text>
+        <Text style={styles.tagline}>Every crown tells a story.</Text>
       </View>
       <View style={styles.welcomeButtons}>
         <TouchableOpacity style={styles.createAccountButton} onPress={goNext}>

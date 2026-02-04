@@ -2,77 +2,87 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Switch } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-export default function PreferencesSettings() {
+export default function PreferencesSettings({ onBack }) {
   const [darkMode, setDarkMode] = useState(false);
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Hair Profile</Text>
-        
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionLabel}>Hair Type</Text>
-          <View style={styles.optionValue}>
-            <Text style={styles.valueText}>4A Coily</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </View>
+    <View style={styles.fullContainer}>
+      <View style={styles.detailHeader}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#5D1F1F" />
         </TouchableOpacity>
-
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionLabel}>Porosity</Text>
-          <View style={styles.optionValue}>
-            <Text style={styles.valueText}>Low</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
+        <Text style={styles.detailTitle}>Preferences</Text>
+        <View style={styles.placeholder} />
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Content Preferences</Text>
-        
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionLabel}>Content Focus</Text>
-          <View style={styles.optionValue}>
-            <Text style={styles.valueText}>Tutorials</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-      </View>
+      <ScrollView style={styles.container}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Hair Profile</Text>
+          
+          <TouchableOpacity style={styles.option}>
+            <Text style={styles.optionLabel}>Hair Type</Text>
+            <View style={styles.optionValue}>
+              <Text style={styles.valueText}>4A Coily</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </View>
+          </TouchableOpacity>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Appearance</Text>
-        
-        <View style={styles.option}>
-          <Text style={styles.optionLabel}>Dark Mode</Text>
-          <Switch
-            value={darkMode}
-            onValueChange={setDarkMode}
-            trackColor={{ false: '#d1d5db', true: '#5D1F1F' }}
-            thumbColor="#fff"
-          />
+          <TouchableOpacity style={styles.option}>
+            <Text style={styles.optionLabel}>Porosity</Text>
+            <View style={styles.optionValue}>
+              <Text style={styles.valueText}>Low</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </View>
+          </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionLabel}>Text Size</Text>
-          <View style={styles.optionValue}>
-            <Text style={styles.valueText}>Medium</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </View>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Content Preferences</Text>
+          
+          <TouchableOpacity style={styles.option}>
+            <Text style={styles.optionLabel}>Content Focus</Text>
+            <View style={styles.optionValue}>
+              <Text style={styles.valueText}>Tutorials</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </View>
+          </TouchableOpacity>
+        </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Location</Text>
-        
-        <TouchableOpacity style={styles.option}>
-          <Text style={styles.optionLabel}>Current Location</Text>
-          <View style={styles.optionValue}>
-            <Text style={styles.valueText}>Terre Haute, IN</Text>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Appearance</Text>
+          
+          <View style={styles.option}>
+            <Text style={styles.optionLabel}>Dark Mode</Text>
+            <Switch
+              value={darkMode}
+              onValueChange={setDarkMode}
+              trackColor={{ false: '#d1d5db', true: '#5D1F1F' }}
+              thumbColor="#fff"
+            />
           </View>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+          <TouchableOpacity style={styles.option}>
+            <Text style={styles.optionLabel}>Text Size</Text>
+            <View style={styles.optionValue}>
+              <Text style={styles.valueText}>Medium</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Location</Text>
+          
+          <TouchableOpacity style={styles.option}>
+            <Text style={styles.optionLabel}>Current Location</Text>
+            <View style={styles.optionValue}>
+              <Text style={styles.valueText}>Terre Haute, IN</Text>
+              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            </View>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 

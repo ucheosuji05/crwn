@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  ScrollView
+  ScrollView,
+  Pressable
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../config/supabase';
 
 export default function AuthScreen({ onBack }) {
   const { signIn } = useAuth();
@@ -22,18 +24,23 @@ export default function AuthScreen({ onBack }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const handleSignIn = async () => {
-    // Validation
+    console.log('=== handleSignIn called ===');
+    
     if (!email || !password) {
       Alert.alert('Error', 'Please enter email and password');
       return;
     }
 
     setLoading(true);
+    console.log('Attempting sign in for:', email);
 
     try {
       const result = await signIn(email.trim().toLowerCase(), password);
+      
+      console.log('Sign in result:', result);
       
       if (result.error) {
         console.error('Sign in error:', result.error);
@@ -41,12 +48,45 @@ export default function AuthScreen({ onBack }) {
           'Sign In Failed', 
           result.error.message || 'Invalid email or password'
         );
+      } else {
+        console.log('Sign in successful!');
       }
-      // If successful, the AuthProvider will detect the session change
-      // and App.js will automatically show the main app
     } catch (error) {
       console.error('Unexpected error:', error);
       Alert.alert('Error', 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    console.log('=== handleForgotPassword called ===');
+    
+    if (!email) {
+      Alert.alert('Enter Email', 'Please enter your email address first');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log('Sending reset email to:', email);
+      const { error } = await supabase.auth.resetPasswordForEmail(
+        email.trim().toLowerCase()
+      );
+      
+      if (error) {
+        console.error('Reset password error:', error);
+        Alert.alert('Error', error.message);
+      } else {
+        Alert.alert(
+          'Check Your Email', 
+          'We sent you a password reset link. Check your inbox!'
+        );
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err);
+      Alert.alert('Error', 'Something went wrong');
     } finally {
       setLoading(false);
     }
@@ -61,23 +101,27 @@ export default function AuthScreen({ onBack }) {
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <KeyboardAvoidingView 
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.container}
+          style={styles.keyboardView}
         >
           <ScrollView 
             contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
+            keyboardShouldPersistTaps="always"
             showsVerticalScrollIndicator={false}
           >
             {/* Back Button */}
             {onBack && (
-              <TouchableOpacity style={styles.backButton} onPress={onBack}>
+              <Pressable style={styles.backButton} onPress={onBack}>
                 <Ionicons name="arrow-back" size={24} color="#fff" />
-              </TouchableOpacity>
+              </Pressable>
             )}
 
             <View style={styles.content}>
               {/* Logo */}
-              <Text style={styles.title}>cr♛n</Text>
+              <View style={styles.logoContainer}>
+                <Text style={styles.logoText}>cr</Text>
+                <Text style={styles.logoCrown}>♛</Text>
+                <Text style={styles.logoText}>n</Text>
+              </View>
               <Text style={styles.subtitle}>Welcome back</Text>
               
               {/* Email Input */}
@@ -110,7 +154,7 @@ export default function AuthScreen({ onBack }) {
                     autoCapitalize="none"
                     editable={!loading}
                   />
-                  <TouchableOpacity
+                  <Pressable
                     style={styles.eyeButton}
                     onPress={() => setShowPassword(!showPassword)}
                   >
@@ -119,19 +163,53 @@ export default function AuthScreen({ onBack }) {
                       size={22}
                       color="#666"
                     />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               </View>
 
-              {/* Forgot Password */}
-              <TouchableOpacity style={styles.forgotButton}>
-                <Text style={styles.forgotText}>Forgot password?</Text>
-              </TouchableOpacity>
+              {/* Remember Me & Forgot Password Row */}
+              <View style={styles.optionsRow}>
+                {/* Remember Me Checkbox */}
+                <Pressable 
+                  style={styles.rememberMeContainer}
+                  onPress={() => {
+                    console.log('Remember me toggled');
+                    setRememberMe(!rememberMe);
+                  }}
+                  disabled={loading}
+                >
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && (
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                    )}
+                  </View>
+                  <Text style={styles.rememberMeText}>Remember me</Text>
+                </Pressable>
+
+                {/* Forgot Password */}
+                <Pressable 
+                  style={styles.forgotButton} 
+                  onPress={() => {
+                    console.log('Forgot password tapped');
+                    handleForgotPassword();
+                  }}
+                  disabled={loading}
+                >
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </Pressable>
+              </View>
               
               {/* Sign In Button */}
-              <TouchableOpacity 
-                style={[styles.button, loading && styles.buttonDisabled]} 
-                onPress={handleSignIn}
+              <Pressable 
+                style={({ pressed }) => [
+                  styles.button, 
+                  loading && styles.buttonDisabled,
+                  pressed && styles.buttonPressed
+                ]} 
+                onPress={() => {
+                  console.log('Sign in button tapped');
+                  handleSignIn();
+                }}
                 disabled={loading}
               >
                 {loading ? (
@@ -139,15 +217,15 @@ export default function AuthScreen({ onBack }) {
                 ) : (
                   <Text style={styles.buttonText}>Sign In</Text>
                 )}
-              </TouchableOpacity>
+              </Pressable>
               
               {/* Back to Create Account */}
               {onBack && (
-                <TouchableOpacity onPress={onBack} disabled={loading}>
+                <Pressable onPress={onBack} disabled={loading}>
                   <Text style={styles.switchText}>
                     Don't have an account? <Text style={styles.switchLink}>Create one</Text>
                   </Text>
-                </TouchableOpacity>
+                </Pressable>
               )}
             </View>
           </ScrollView>
@@ -162,6 +240,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
     flex: 1,
   },
   scrollContent: {
@@ -181,13 +262,21 @@ const styles = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
   },
-  title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    textAlign: 'center',
+  logoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 8,
-    color: '#fff',
-    letterSpacing: 2,
+  },
+  logoText: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: '#5D3A1A',
+  },
+  logoCrown: {
+    fontSize: 40,
+    color: '#5D3A1A',
+    marginHorizontal: -2,
   },
   subtitle: {
     fontSize: 18,
@@ -230,10 +319,40 @@ const styles = StyleSheet.create({
   },
   eyeButton: {
     paddingHorizontal: 14,
+    paddingVertical: 14,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
+  rememberMeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  checkboxChecked: {
+    backgroundColor: '#5D1F1F',
+    borderColor: '#5D1F1F',
+  },
+  rememberMeText: {
+    color: '#fff',
+    fontSize: 14,
   },
   forgotButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   forgotText: {
     color: '#fff',
@@ -247,6 +366,9 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: {
     opacity: 0.7,
+  },
+  buttonPressed: {
+    opacity: 0.8,
   },
   buttonText: {
     color: '#8B4513',
