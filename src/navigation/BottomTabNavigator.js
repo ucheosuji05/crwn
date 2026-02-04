@@ -6,7 +6,7 @@ import ExploreScreen from '../screens/ExploreScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
-import ProfileScreen from '../screens/ProfileScreen'; // ← Use this
+import ProfileScreen from '../screens/ProfileScreen'; // Use this
 
 const Tab = createBottomTabNavigator();
 
