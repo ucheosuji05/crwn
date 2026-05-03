@@ -106,7 +106,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
                         <View style={styles.stylistTag}>
                           <Icon name="cut-outline" size={12} color={colors.primary} />
                           <Text style={styles.stylistTagText} numberOfLines={1}>
-                            {item.stylists.business_name || item.stylists.username}
+                            {item.stylists.full_name || item.stylists.username}
                           </Text>
                         </View>
                       )}

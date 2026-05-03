@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { postService } from '../services/postService';
+import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 
@@ -29,8 +30,11 @@ export default function CreatePostScreen({ navigation }) {
   const [images, setImages] = useState([]);
   const [tags, setTags] = useState([]);
   const [tagInput, setTagInput] = useState('');
-  const [stylistTag, setStylistTag] = useState('');
   const [showStylistTag, setShowStylistTag] = useState(false);
+  const [stylistQuery, setStylistQuery] = useState('');
+  const [stylistResults, setStylistResults] = useState([]);
+  const [selectedStylist, setSelectedStylist] = useState(null);
+  const [stylistSearching, setStylistSearching] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const pickImages = async () => {
@@ -90,6 +94,16 @@ export default function CreatePostScreen({ navigation }) {
     setTags(tags.filter(tag => tag !== tagToRemove));
   };
 
+  const handleStylistSearch = async (query) => {
+    setStylistQuery(query);
+    setSelectedStylist(null);
+    if (!query.trim()) { setStylistResults([]); return; }
+    setStylistSearching(true);
+    const { data } = await stylistService.searchStylists(query);
+    setStylistResults(data || []);
+    setStylistSearching(false);
+  };
+
   const handlePost = async () => {
     if (images.length === 0) {
       Alert.alert('No images', 'Please add at least one photo to your post.');
@@ -108,8 +122,8 @@ export default function CreatePostScreen({ navigation }) {
       {
         title: title.trim(),
         description: description.trim(),
-        stylist_tag: showStylistTag && stylistTag.trim() ? stylistTag.trim() : null,
-        show_stylist_tag: showStylistTag && !!stylistTag.trim(),
+        stylistId: showStylistTag ? (selectedStylist?.id || null) : null,
+        tags,
       },
       images
     );
@@ -122,12 +136,6 @@ export default function CreatePostScreen({ navigation }) {
       return;
     }
 
-    // Add tags if any
-    if (tags.length > 0 && data) {
-      // You can add tag saving logic here
-      console.log('Post tags:', tags);
-    }
-
     Alert.alert('Success', 'Post created!', [
       {
         text: 'OK',
@@ -136,6 +144,8 @@ export default function CreatePostScreen({ navigation }) {
           setTitle('');
           setDescription('');
           setTags([]);
+          setSelectedStylist(null);
+          setStylistQuery('');
           navigation?.goBack();
         }
       }
@@ -307,26 +317,77 @@ export default function CreatePostScreen({ navigation }) {
           <View style={styles.switchRow}>
             <View style={styles.switchLabel}>
               <Ionicons name="cut-outline" size={18} color={colors.primary} />
-              <Text style={styles.switchLabelText}>Show stylist tag</Text>
+              <Text style={styles.switchLabelText}>Tag a stylist</Text>
             </View>
             <TouchableOpacity
               style={[styles.toggle, showStylistTag && styles.toggleOn]}
-              onPress={() => setShowStylistTag(v => !v)}
+              onPress={() => {
+                setShowStylistTag(v => !v);
+                setStylistQuery('');
+                setStylistResults([]);
+                setSelectedStylist(null);
+              }}
               activeOpacity={0.8}
             >
               <View style={[styles.toggleThumb, showStylistTag && styles.toggleThumbOn]} />
             </TouchableOpacity>
           </View>
+
           {showStylistTag && (
-            <TextInput
-              style={[styles.titleInput, { marginTop: 12 }]}
-              placeholder="Stylist name or @handle..."
-              placeholderTextColor={colors.placeholder}
-              value={stylistTag}
-              onChangeText={setStylistTag}
-              maxLength={60}
-              autoCapitalize="none"
-            />
+            <View style={{ marginTop: 12 }}>
+              {selectedStylist ? (
+                <View style={styles.selectedStylist}>
+                  <Ionicons name="cut-outline" size={16} color={colors.primary} />
+                  <Text style={styles.selectedStylistText} numberOfLines={1}>
+                    {selectedStylist.full_name || selectedStylist.username}
+                  </Text>
+                  <TouchableOpacity onPress={() => { setSelectedStylist(null); setStylistQuery(''); setStylistResults([]); }}>
+                    <Ionicons name="close-circle" size={18} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.titleInput}
+                    placeholder="Search stylist by name..."
+                    placeholderTextColor={colors.placeholder}
+                    value={stylistQuery}
+                    onChangeText={handleStylistSearch}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+                  {stylistSearching && (
+                    <Text style={styles.stylistSearchHint}>Searching...</Text>
+                  )}
+                  {stylistResults.length > 0 && (
+                    <View style={styles.stylistDropdown}>
+                      {stylistResults.slice(0, 5).map((s) => (
+                        <TouchableOpacity
+                          key={s.id}
+                          style={styles.stylistOption}
+                          onPress={() => {
+                            setSelectedStylist(s);
+                            setStylistResults([]);
+                          }}
+                        >
+                          <Text style={styles.stylistOptionName} numberOfLines={1}>
+                            {s.full_name || s.username}
+                          </Text>
+                          {s.username && (
+                            <Text style={styles.stylistOptionHandle} numberOfLines={1}>
+                              @{s.username}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  {!stylistSearching && stylistQuery.trim().length > 0 && stylistResults.length === 0 && (
+                    <Text style={styles.stylistSearchHint}>No stylists found</Text>
+                  )}
+                </>
+              )}
+            </View>
           )}
         </View>
 
@@ -609,6 +670,56 @@ const makeStyles = (c) => StyleSheet.create({
   },
   toggleThumbOn: {
     alignSelf: 'flex-end',
+  },
+  selectedStylist: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eff6ff',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  selectedStylistText: {
+    flex: 1,
+    fontSize: 15,
+    color: c.primary,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+  stylistDropdown: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: c.surface,
+  },
+  stylistOption: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  stylistOptionName: {
+    fontSize: 15,
+    color: c.text,
+    fontFamily: 'Figtree_500Medium',
+    flex: 1,
+  },
+  stylistOptionHandle: {
+    fontSize: 13,
+    color: c.textMuted,
+  },
+  stylistSearchHint: {
+    fontSize: 13,
+    color: c.textMuted,
+    marginTop: 6,
+    paddingHorizontal: 4,
   },
   spacer: {
     height: 20,

@@ -174,7 +174,7 @@ export default function ExploreScreen() {
 
   const renderTileInner = (item, height) => {
     const firstImage = item.post_media?.[0]?.media_url;
-    const stylistName = item.stylists?.business_name || item.stylists?.username;
+    const stylistName = item.stylists?.full_name || item.stylists?.username;
     return (
       <TouchableOpacity
         style={[styles.tileImage, { height }]}

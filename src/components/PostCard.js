@@ -101,7 +101,7 @@ export default function PostCard({
   const authorAvatar = authorId === user?.id ? (currentUserProfile?.avatar_url ?? profiles?.avatar_url) : profiles?.avatar_url;
 
   // Get stylist info
-  const stylistUsername = stylists?.username;
+  const stylistDisplayName = stylists?.full_name || stylists?.username;
   const stylistId = stylists?.id;
 
   // Calculate time ago
@@ -370,11 +370,10 @@ export default function PostCard({
         <Text style={styles.title}>{title}</Text>
         
         <View style={styles.metadata}>
-          {stylistUsername && (
-            <TouchableOpacity onPress={handleStylistPress}>
-              <Text style={styles.stylist}>
-                Stylist: <Text style={styles.stylistName}>@{stylistUsername}</Text>
-              </Text>
+          {stylistDisplayName && (
+            <TouchableOpacity style={styles.stylistChip} onPress={handleStylistPress} activeOpacity={0.7}>
+              <Ionicons name="cut-outline" size={13} color={colors.primary} />
+              <Text style={styles.stylistName}>{stylistDisplayName}</Text>
             </TouchableOpacity>
           )}
           {rating && (
@@ -383,6 +382,14 @@ export default function PostCard({
         </View>
 
         {description && <Text style={styles.description}>{description}</Text>}
+
+        {currentPost.tags?.length > 0 && (
+          <View style={styles.tagsRow}>
+            {currentPost.tags.map((tag, i) => (
+              <Text key={i} style={styles.tagChip}>#{tag}</Text>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Actions */}
@@ -643,14 +650,21 @@ const makeStyles = (c) => StyleSheet.create({
   metadata: {
     marginBottom: 8
   },
-  stylist: {
-    fontSize: 14,
-    color: c.textSecondary,
-    marginBottom: 4
+  stylistChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    backgroundColor: '#eff6ff',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 6,
   },
   stylistName: {
+    fontSize: 13,
     color: c.primary,
-    fontFamily: 'Figtree_500Medium'
+    fontFamily: 'Figtree_600SemiBold',
   },
   rating: {
     fontSize: 14,
@@ -660,6 +674,17 @@ const makeStyles = (c) => StyleSheet.create({
     fontSize: 15,
     color: c.text,
     lineHeight: 20
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+  },
+  tagChip: {
+    fontSize: 13,
+    color: c.primary,
+    fontFamily: 'Figtree_500Medium',
   },
   actions: {
     flexDirection: 'row',

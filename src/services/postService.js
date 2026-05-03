@@ -8,7 +8,7 @@ export const postService = {
       .select(`
         *,
         profiles:user_id (id, username, full_name, avatar_url),
-        stylists:stylist_id (id, username, business_name),
+        stylists:profiles!posts_stylist_id_fkey (id, username, full_name),
         post_media (id, media_url, media_type, position),
         likes(count),
         comments(count)
@@ -27,7 +27,7 @@ export const postService = {
       .select(`
         *,
         profiles:user_id (id, username, full_name, avatar_url),
-        stylists:stylist_id (id, username, business_name),
+        stylists:profiles!posts_stylist_id_fkey (id, username, full_name),
         post_media (id, media_url, media_type, position),
         likes(count),
         comments(count)
@@ -49,6 +49,7 @@ export const postService = {
           title: postData.title,
           description: postData.description,
           stylist_id: postData.stylistId || null,
+          tags: postData.tags || [],
           is_public: true,
         }])
         .select()
