@@ -19,6 +19,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { authService } from '../services/authService';
+import { profileService } from '../services/profileService';
+import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -224,8 +226,47 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
 
       setLoadingMessage('Setting up your hair profile...');
 
-      // Small delay for UX
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Save onboarding data to profile
+      await Promise.allSettled([
+        // Upload profile photo
+        formData.profilePhoto && user?.id
+          ? profileService.uploadAvatar(user.id, formData.profilePhoto)
+          : Promise.resolve(),
+
+        // Save hair style preferences (explorer flow)
+        formData.selectedStyles.length > 0 && user?.id
+          ? profileService.updateHairProfile(user.id, { goals: formData.selectedStyles })
+          : Promise.resolve(),
+      ]);
+
+      // Stylist-specific data (sequential: photos must upload before registering)
+      if (formData.userType === 'stylist' && user?.id) {
+        // Upload portfolio photos and collect public URLs
+        const photoUrls = [];
+        for (let i = 0; i < portfolioPhotos.length; i++) {
+          const { url } = await profileService.uploadPortfolioPhoto(user.id, portfolioPhotos[i], i);
+          if (url) photoUrls.push(url);
+        }
+
+        // Register stylist: sets is_stylist, specialties, portfolio_photos
+        await stylistService.registerAsStylist(user.id, {
+          specialties: formData.stylistSpecialties,
+          portfolioPhotos: photoUrls,
+        });
+
+        // Store remaining stylist fields in the preferences JSONB column
+        const stylistPrefs = {};
+        if (formData.businessName)       stylistPrefs.business_name  = formData.businessName;
+        if (formData.stylistWorkType)    stylistPrefs.work_type      = formData.stylistWorkType;
+        if (formData.stylistExperience)  stylistPrefs.experience     = formData.stylistExperience;
+        if (formData.stylistAvailability) stylistPrefs.availability  = formData.stylistAvailability;
+        const activeServices = services.filter(s => s.name.trim());
+        if (activeServices.length > 0)   stylistPrefs.services       = activeServices;
+
+        if (Object.keys(stylistPrefs).length > 0) {
+          await profileService.updateProfile(user.id, { preferences: stylistPrefs });
+        }
+      }
 
       Animated.timing(loadingProgress, {
         toValue: 1,

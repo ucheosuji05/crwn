@@ -136,20 +136,7 @@ export default function CreatePostScreen({ navigation }) {
       return;
     }
 
-    Alert.alert('Success', 'Post created!', [
-      {
-        text: 'OK',
-        onPress: () => {
-          setImages([]);
-          setTitle('');
-          setDescription('');
-          setTags([]);
-          setSelectedStylist(null);
-          setStylistQuery('');
-          navigation?.goBack();
-        }
-      }
-    ]);
+    navigation?.goBack();
   };
 
   const renderImageItem = ({ item, index }) => (

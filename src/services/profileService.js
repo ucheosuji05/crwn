@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 
 export const profileService = {
@@ -57,36 +58,44 @@ export const profileService = {
   // Upload avatar image
   uploadAvatar: async (userId, imageUri) => {
     try {
-      // Get file extension
-      const fileExt = imageUri.split('.').pop();
-      const fileName = `${userId}/avatar.${fileExt}`;
-      
-      // Read file as ArrayBuffer (reliable for local URIs in React Native)
-      const arrayBuffer = await new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', imageUri);
-        xhr.responseType = 'arraybuffer';
-        xhr.onload = () => resolve(xhr.response);
-        xhr.onerror = reject;
-        xhr.send();
-      });
+      let uploadData;
+      let contentType;
+      let fileExt;
 
-      // Upload to Supabase Storage
-      const { data, error } = await supabase.storage
-        .from('avatars')
-        .upload(fileName, arrayBuffer, {
-          upsert: true,
-          contentType: `image/${fileExt}`
+      if (Platform.OS === 'web') {
+        // On web, ImagePicker returns a blob URL — fetch it to get a real Blob
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        contentType = blob.type || 'image/jpeg';
+        // e.g. "image/jpeg" -> "jpg", "image/png" -> "png"
+        fileExt = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+        uploadData = blob;
+      } else {
+        // On native, imageUri is a local file:// path — read as ArrayBuffer via XHR
+        fileExt = imageUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+        contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+        uploadData = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', imageUri);
+          xhr.responseType = 'arraybuffer';
+          xhr.onload = () => resolve(xhr.response);
+          xhr.onerror = reject;
+          xhr.send();
         });
+      }
+
+      const fileName = `${userId}/avatar.${fileExt}`;
+
+      const { error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, uploadData, { upsert: true, contentType });
 
       if (error) throw error;
 
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('avatars')
         .getPublicUrl(fileName);
 
-      // Update profile with new avatar URL
       await supabase
         .from('profiles')
         .update({ avatar_url: publicUrl })
@@ -95,6 +104,51 @@ export const profileService = {
       return { url: publicUrl, error: null };
     } catch (error) {
       console.error('Upload error:', error);
+      return { url: null, error };
+    }
+  },
+
+  // Upload a single portfolio photo; returns its public URL
+  uploadPortfolioPhoto: async (userId, imageUri, index) => {
+    try {
+      let uploadData;
+      let contentType;
+      let fileExt;
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        contentType = blob.type || 'image/jpeg';
+        fileExt = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+        uploadData = blob;
+      } else {
+        fileExt = imageUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+        contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+        uploadData = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', imageUri);
+          xhr.responseType = 'arraybuffer';
+          xhr.onload = () => resolve(xhr.response);
+          xhr.onerror = reject;
+          xhr.send();
+        });
+      }
+
+      const fileName = `${userId}/portfolio_${index}.${fileExt}`;
+
+      const { error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, uploadData, { upsert: true, contentType });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      return { url: publicUrl, error: null };
+    } catch (error) {
+      console.error('Portfolio photo upload error:', error);
       return { url: null, error };
     }
   },
