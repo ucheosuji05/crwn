@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
+import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform } from 'react-native';
+import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,7 +13,6 @@ export default function ProfileScreen({ route, navigation }) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
 
@@ -21,9 +21,9 @@ export default function ProfileScreen({ route, navigation }) {
   const isStackScreen = route?.name === 'UserProfile';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+    <View style={[styles.container, { backgroundColor: colors.surface }, webWrap(WEB_MAX_WIDTHS.profile)]}>
       <ScrollView
-        style={[styles.scroll, Platform.OS === 'web' && { height: windowHeight }]}
+        style={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
         {/* UserHeader no longer receives onBack — the overlay button below handles it */}

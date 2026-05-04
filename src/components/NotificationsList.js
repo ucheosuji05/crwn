@@ -3,6 +3,7 @@ import {
   View, Text, Image, FlatList, StyleSheet,
   TouchableOpacity, RefreshControl, ActivityIndicator,
 } from 'react-native';
+import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -38,7 +39,7 @@ function actionText(type, actorName) {
   }
 }
 
-export default function NotificationsList() {
+export default function NotificationsList({ panelMode = false }) {
   const { user } = useAuth();
   const navigation = useNavigation();
   const { colors } = useTheme();
@@ -130,39 +131,50 @@ export default function NotificationsList() {
     );
   };
 
+  const list = (
+    <FlatList
+      data={notifications}
+      keyExtractor={(item) => item.id}
+      renderItem={renderItem}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
+      ListEmptyComponent={
+        <View style={styles.center}>
+          <Ionicons name="notifications-outline" size={52} color={colors.border} />
+          <Text style={styles.emptyText}>No notifications yet</Text>
+        </View>
+      }
+      contentContainerStyle={notifications.length === 0 && styles.emptyContainer}
+    />
+  );
+
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: colors.surface }]}>
+      <View style={[styles.center, { flex: 1, backgroundColor: colors.surface }]}>
         <ActivityIndicator color={colors.primary} />
       </View>
     );
   }
 
+  // Panel mode: bare list, no header/SafeAreaView/webWrap — parent panel owns the chrome
+  if (panelMode) {
+    return <View style={{ flex: 1 }}>{list}</View>;
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader
-        title="Notifications"
-        right={
-          unreadCount > 0 ? (
-            <TouchableOpacity onPress={handleMarkAllRead}>
-              <Text style={styles.markAll}>Mark all read</Text>
-            </TouchableOpacity>
-          ) : null
-        }
-      />
-      <FlatList
-        data={notifications}
-        keyExtractor={(item) => item.id}
-        renderItem={renderItem}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
-        ListEmptyComponent={
-          <View style={styles.center}>
-            <Ionicons name="notifications-outline" size={52} color={colors.border} />
-            <Text style={styles.emptyText}>No notifications yet</Text>
-          </View>
-        }
-        contentContainerStyle={notifications.length === 0 && styles.emptyContainer}
-      />
+      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
+        <ScreenHeader
+          title="Notifications"
+          right={
+            unreadCount > 0 ? (
+              <TouchableOpacity onPress={handleMarkAllRead}>
+                <Text style={styles.markAll}>Mark all read</Text>
+              </TouchableOpacity>
+            ) : null
+          }
+        />
+        {list}
+      </View>
     </SafeAreaView>
   );
 }

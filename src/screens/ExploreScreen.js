@@ -1,5 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
+import { Platform } from 'react-native';
 import { s } from '../utils/responsive';
+import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import {
   View,
@@ -372,7 +374,7 @@ export default function ExploreScreen() {
             <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.text} />
           </Pressable>
 
-          <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>
+          {Platform.OS !== 'web' && <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>}
 
           <TouchableOpacity
             style={styles.headerIcon}
@@ -464,7 +466,7 @@ export default function ExploreScreen() {
 
       {/* ── Scrapbook Grid ── */}
       <ScrollView
-        style={styles.scroll}
+        style={[styles.scroll, webWrap(WEB_MAX_WIDTHS.grid)]}
         contentContainerStyle={styles.grid}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.primary} />}
@@ -495,32 +497,34 @@ export default function ExploreScreen() {
         onRequestClose={() => setSelectedPost(null)}
       >
         <SafeAreaView style={styles.modalSafe} edges={['top']}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setSelectedPost(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
+          <View style={[styles.modalInner, webWrap(680)]}>
+            <View style={styles.modalHeader}>
+              <TouchableOpacity onPress={() => setSelectedPost(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {selectedPost && (
+                <PostCard
+                  post={selectedPost}
+                  currentUserId={user?.id}
+                  onDelete={async (postId, userId) => {
+                    const result = await deletePost(postId, userId);
+                    if (result?.success) setSelectedPost(null);
+                    return result;
+                  }}
+                  onNavigateToProfile={(userId) => {
+                    setSelectedPost(null);
+                    navigation.navigate('UserProfile', { viewedUserId: userId });
+                  }}
+                  onNavigateToStylist={(stylistId) => {
+                    setSelectedPost(null);
+                    navigation.navigate('UserProfile', { viewedUserId: stylistId });
+                  }}
+                />
+              )}
+            </ScrollView>
           </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {selectedPost && (
-              <PostCard
-                post={selectedPost}
-                currentUserId={user?.id}
-                onDelete={async (postId, userId) => {
-                  const result = await deletePost(postId, userId);
-                  if (result?.success) setSelectedPost(null);
-                  return result;
-                }}
-                onNavigateToProfile={(userId) => {
-                  setSelectedPost(null);
-                  navigation.navigate('UserProfile', { viewedUserId: userId });
-                }}
-                onNavigateToStylist={(stylistId) => {
-                  setSelectedPost(null);
-                  navigation.navigate('UserProfile', { viewedUserId: stylistId });
-                }}
-              />
-            )}
-          </ScrollView>
         </SafeAreaView>
       </Modal>
     </View>
@@ -738,7 +742,8 @@ const makeStyles = (c) => StyleSheet.create({
   },
 
   // ── Post Modal ──
-  modalSafe: { flex: 1, backgroundColor: c.surface },
+  modalSafe: { flex: 1, backgroundColor: c.surface, alignItems: 'center' },
+  modalInner: { flex: 1, width: '100%' },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

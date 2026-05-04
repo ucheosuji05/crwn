@@ -3,6 +3,7 @@ import {
   View, FlatList, Text, TouchableOpacity, Pressable,
   StyleSheet, ActivityIndicator, Keyboard,
 } from 'react-native';
+import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -107,6 +108,7 @@ export default function ThreadList({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
       <View style={styles.header}>
         <Pressable
           style={styles.headerIcon}
@@ -171,6 +173,7 @@ export default function ThreadList({
         />
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }

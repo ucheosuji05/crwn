@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   TextInput, Image, ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -187,6 +188,7 @@ export default function StylistsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
       {/* Search icon + filter chips in one scrollable row */}
       <View style={styles.topBar}>
         <ScrollView
@@ -278,6 +280,7 @@ export default function StylistsScreen() {
           }
         />
       )}
+      </View>
     </SafeAreaView>
   );
 }

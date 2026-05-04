@@ -10,7 +10,9 @@ import {
   Modal,
   Pressable,
   ScrollView,
+  Platform,
 } from 'react-native';
+import { WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import SavedLooks from './SavedLooks';
 import HairProfile from './HairProfile';
@@ -25,7 +27,10 @@ import { supabase } from '../config/supabase';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const GRID_GAP = 8;
-const GRID_SIZE = (SCREEN_WIDTH - GRID_GAP * 3) / 2;
+const CONTENT_WIDTH = Platform.OS === 'web'
+  ? Math.min(SCREEN_WIDTH, WEB_MAX_WIDTHS.profile)
+  : SCREEN_WIDTH;
+const GRID_SIZE = (CONTENT_WIDTH - GRID_GAP * 3) / 2;
 
 const ALL_TABS = [
   { key: 'posts',     label: 'Posts' },
