@@ -495,7 +495,7 @@ const makeStyles = (c) => StyleSheet.create({
   tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabText: { fontSize: 15, color: c.textSecondary, fontFamily: 'Figtree_500Medium' },
   activeTabText: { color: c.selected, fontFamily: 'Figtree_700Bold' },
-  activeUnderline: { position: 'absolute', bottom: -1, left: 8, right: 8, height: 3, borderRadius: 2, backgroundColor: HONEY },
+  activeUnderline: { position: 'absolute', bottom: -1, left: 8, right: 8, height: 3, borderRadius: 2, backgroundColor: '#5D1F1F' },
   gridContainer: { padding: GRID_GAP },
   gridRow: { flexDirection: 'row', gap: GRID_GAP, marginBottom: GRID_GAP },
   gridCell: { width: GRID_SIZE, height: GRID_SIZE, borderRadius: 10, overflow: 'hidden' },

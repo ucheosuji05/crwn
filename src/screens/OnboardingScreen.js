@@ -634,88 +634,65 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </WhiteScreen>
   );
 
+  const stylistSkipFooter = (disabled = false) => (
+    <>
+      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+        <Text style={styles.skipLinkText}>Skip for now</Text>
+      </TouchableOpacity>
+      <ContinueButton onPress={goNext} disabled={disabled} />
+    </>
+  );
+
   const renderStylistWorkType = () => (
-    <WhiteScreen>
+    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!formData.stylistWorkType} />}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>How do you work?</Text>
       <Text style={styles.questionSubtitle}>Tell us about your setup so clients know what to expect.</Text>
       <View style={styles.optionsContainer}>
-        {[
-          'Independent / Freelance',
-          'Salon-based',
-          'Mobile stylist (I come to you)',
-          'Suite / Studio rental',
-        ].map(opt => {
-          const selected = formData.stylistWorkType === opt;
+        {['Independent / Freelance', 'Salon-based', 'Mobile stylist (I come to you)', 'Suite / Studio rental'].map(opt => {
+          const sel = formData.stylistWorkType === opt;
           return (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.optionButton, selected && styles.optionButtonSelected]}
-              onPress={() => update('stylistWorkType', opt)}
-            >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            <TouchableOpacity key={opt} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => update('stylistWorkType', opt)}>
+              <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-      <ContinueButton onPress={goNext} disabled={!formData.stylistWorkType} />
     </WhiteScreen>
   );
 
   const renderStylistExperience = () => (
-    <WhiteScreen>
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>How long have you been doing this?</Text>
       <Text style={styles.questionSubtitle}>Your experience helps clients find the right fit.</Text>
       <View style={styles.optionsContainer}>
-        {[
-          'Just starting out (0–2 years)',
-          'Getting established (3–5 years)',
-          'Seasoned stylist (6–10 years)',
-          'Industry veteran (10+ years)',
-        ].map(opt => {
-          const selected = formData.stylistExperience === opt;
+        {['Just starting out (0–2 years)', 'Getting established (3–5 years)', 'Seasoned stylist (6–10 years)', 'Industry veteran (10+ years)'].map(opt => {
+          const sel = formData.stylistExperience === opt;
           return (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.optionButton, selected && styles.optionButtonSelected]}
-              onPress={() => update('stylistExperience', opt)}
-            >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            <TouchableOpacity key={opt} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => update('stylistExperience', opt)}>
+              <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-      <ContinueButton onPress={goNext} disabled={false} />
-      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-        <Text style={styles.skipLinkText}>Skip for now</Text>
-      </TouchableOpacity>
     </WhiteScreen>
   );
 
   const renderStylistSpecialties = () => (
-    <WhiteScreen scrollable footer={<>
-      <ContinueButton onPress={goNext} disabled={false} />
-      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-        <Text style={styles.skipLinkText}>Skip for now</Text>
-      </TouchableOpacity>
-    </>}>
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>What do you specialize in?</Text>
       <Text style={styles.questionSubtitle}>Select the styles and techniques that define your work.</Text>
       <View style={styles.optionsContainer}>
         {STYLIST_SPECIALTY_OPTIONS.map(opt => {
-          const selected = formData.stylistSpecialties.includes(opt);
+          const sel = formData.stylistSpecialties.includes(opt);
           return (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.optionButton, selected && styles.optionButtonSelected]}
-              onPress={() => toggleStylistSpecialty(opt)}
-            >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            <TouchableOpacity key={opt} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => toggleStylistSpecialty(opt)}>
+              <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
@@ -724,7 +701,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   );
 
   const renderStylistBusinessName = () => (
-    <WhiteScreen>
+    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!formData.businessName.trim()} />}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>What is your business called?</Text>
@@ -740,54 +717,34 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           autoCapitalize="words"
         />
       </View>
-      <ContinueButton onPress={goNext} disabled={!formData.businessName.trim()} />
     </WhiteScreen>
   );
 
   const renderStylistAvailability = () => (
-    <WhiteScreen>
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>Are you accepting new clients?</Text>
       <Text style={styles.questionSubtitle}>Set your current availability so your CRWN profile stays accurate.</Text>
       <View style={styles.optionsContainer}>
-        {[
-          'Yes, accepting new clients',
-          'Accepting clients by referral only',
-          'Currently on a waitlist',
-          'Not accepting new clients right now',
-        ].map(opt => {
-          const selected = formData.stylistAvailability === opt;
+        {['Yes, accepting new clients', 'Accepting clients by referral only', 'Currently on a waitlist', 'Not accepting new clients right now'].map(opt => {
+          const sel = formData.stylistAvailability === opt;
           return (
-            <TouchableOpacity
-              key={opt}
-              style={[styles.optionButton, selected && styles.optionButtonSelected]}
-              onPress={() => update('stylistAvailability', opt)}
-            >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            <TouchableOpacity key={opt} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => update('stylistAvailability', opt)}>
+              <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-      <ContinueButton onPress={goNext} disabled={false} />
-      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-        <Text style={styles.skipLinkText}>Skip for now</Text>
-      </TouchableOpacity>
     </WhiteScreen>
   );
 
   const renderStylistBooking = () => (
-    <WhiteScreen scrollable footer={<>
-      <ContinueButton onPress={goNext} disabled={false} />
-      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-        <Text style={styles.skipLinkText}>Skip for now</Text>
-      </TouchableOpacity>
-    </>}>
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>Your services & pricing</Text>
       <Text style={styles.questionSubtitle}>Add your styles and what you charge so clients know what to expect.</Text>
-
       {services.map((service, idx) => (
         <View key={idx} style={styles.serviceRow}>
           <TextInput
@@ -815,7 +772,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           )}
         </View>
       ))}
-
       <TouchableOpacity style={styles.addServiceBtn} onPress={addService}>
         <Ionicons name="add" size={20} color={colors.forest} />
         <Text style={styles.addServiceText}>Add service</Text>
@@ -824,12 +780,11 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   );
 
   const renderStylistPortfolio = () => (
-    <WhiteScreen>
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>Show them what you can do.</Text>
       <Text style={styles.questionSubtitle}>Add at least one photo of your work. This is your first impression on CRWN.</Text>
-
       {portfolioPhotos.length === 0 ? (
         <TouchableOpacity style={styles.portfolioUploadBox} onPress={pickPortfolioPhoto} activeOpacity={0.8}>
           <View style={styles.portfolioUploadIcon}>
@@ -843,10 +798,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           {portfolioPhotos.map((uri, idx) => (
             <View key={idx} style={styles.portfolioThumbWrap}>
               <Image source={{ uri }} style={styles.portfolioThumb} />
-              <TouchableOpacity
-                style={styles.portfolioThumbRemove}
-                onPress={() => setPortfolioPhotos(prev => prev.filter((_, i) => i !== idx))}
-              >
+              <TouchableOpacity style={styles.portfolioThumbRemove} onPress={() => setPortfolioPhotos(prev => prev.filter((_, i) => i !== idx))}>
                 <Ionicons name="close-circle" size={20} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -858,11 +810,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           )}
         </View>
       )}
-
-      <ContinueButton onPress={goNext} disabled={false} />
-      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-        <Text style={styles.skipLinkText}>Skip for now</Text>
-      </TouchableOpacity>
     </WhiteScreen>
   );
 
@@ -899,12 +846,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       );
     };
     return (
-      <WhiteScreen scrollable footer={<>
-        <ContinueButton onPress={goNext} disabled={false} />
-        <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-          <Text style={styles.skipLinkText}>Skip for now</Text>
-        </TouchableOpacity>
-      </>}>
+      <WhiteScreen scrollable footer={stylistSkipFooter()}>
         {renderBack()}
         {renderProgress()}
         <Text style={styles.questionTitle}>Find creators to follow</Text>
@@ -1280,6 +1222,13 @@ const styles = StyleSheet.create({
   userTypeCardTitle: { fontSize: 17, fontFamily: 'LibreBaskerville_700Bold', color: colors.textPrimary, marginBottom: 6 },
   userTypeCardDesc: { fontSize: 13, fontFamily: 'Figtree_400Regular', color: colors.textSecondary, lineHeight: 18 },
   userTypeCheckmark: { position: 'absolute', top: 16, right: 16 },
+
+  // Option buttons (single + multi select for stylist screens)
+  optionsContainer: { gap: 12, marginBottom: 8 },
+  optionButton: { borderWidth: 1, borderColor: '#D8D0C8', borderRadius: 12, paddingVertical: 18, paddingHorizontal: 20, backgroundColor: colors.white },
+  optionButtonSelected: { borderColor: '#4F4032', backgroundColor: '#F5F0E8' },
+  optionText: { fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
+  optionTextSelected: { color: colors.textBrown, fontFamily: 'Figtree_600SemiBold' },
 
   // Continue button
   continueButtonContainer: { marginTop: 'auto', paddingBottom: 12 },
