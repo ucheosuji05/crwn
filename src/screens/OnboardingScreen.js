@@ -48,7 +48,16 @@ const STEPS = {
   LOCATION: 'location',
   PROFILE_PHOTO: 'profilePhoto',
   USER_TYPE: 'userType',
-  STYLIST_SETUP: 'stylistSetup',
+  // stylist path
+  STYLIST_WORK_TYPE: 'stylistWorkType',
+  STYLIST_EXPERIENCE: 'stylistExperience',
+  STYLIST_SPECIALTIES: 'stylistSpecialties',
+  STYLIST_BUSINESS_NAME: 'stylistBusinessName',
+  STYLIST_AVAILABILITY: 'stylistAvailability',
+  STYLIST_BOOKING: 'stylistBooking',
+  STYLIST_PORTFOLIO: 'stylistPortfolio',
+  STYLIST_FIND_CREATORS: 'stylistFindCreators',
+  // explorer path
   HAIR_STYLES: 'hairStyles',
   CREATORS: 'creators',
   DISCOVER_STYLISTS: 'discoverStylists',
@@ -56,6 +65,17 @@ const STEPS = {
   LOADING: 'loading',
   COMPLETE: 'complete',
 };
+
+const STYLIST_STEP_ORDER = [
+  STEPS.STYLIST_WORK_TYPE,
+  STEPS.STYLIST_EXPERIENCE,
+  STEPS.STYLIST_SPECIALTIES,
+  STEPS.STYLIST_BUSINESS_NAME,
+  STEPS.STYLIST_AVAILABILITY,
+  STEPS.STYLIST_BOOKING,
+  STEPS.STYLIST_PORTFOLIO,
+  STEPS.STYLIST_FIND_CREATORS,
+];
 
 // Linear base order used for back-button navigation on pre-branch steps
 const BASE_STEP_ORDER = [
@@ -74,7 +94,7 @@ const PROGRESS_STEPS = [
   STEPS.LOCATION,
   STEPS.PROFILE_PHOTO,
   STEPS.USER_TYPE,
-  STEPS.STYLIST_SETUP,
+  ...STYLIST_STEP_ORDER,
   STEPS.HAIR_STYLES,
   STEPS.CREATORS,
   STEPS.DISCOVER_STYLISTS,
@@ -109,9 +129,15 @@ const HAIR_STYLE_OPTIONS = [
 ];
 
 const STYLIST_SPECIALTY_OPTIONS = [
-  'Braids', 'Locs', 'Twists', 'Natural Hair', 'Silk Press',
-  'Color & Highlights', 'Protective Styles', 'Wigs & Extensions',
-  'Cuts & Fades', 'Wash & Go', 'Big Chop', 'Keratin / Relaxer',
+  'Locs & loc maintenance',
+  'Box braids & protective styles',
+  'Silk press & blowouts',
+  'Natural styles & wash & go',
+  'Twists & twist outs',
+  'Wigs & installs',
+  'Color & highlights',
+  'Cuts & fades',
+  'Keratin & relaxers',
 ];
 
 const STYLIST_FILTERS = ['All', 'Near Me', 'Locs', 'Braids', 'Natural'];
@@ -130,11 +156,19 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     location: '',
     profilePhoto: null,
     userType: null,
+    // explorer fields
     selectedStyles: [],
-    stylistSpecialties: [],
     followedCreators: [],
     followedStylists: [],
+    // stylist fields
+    stylistWorkType: null,
+    stylistExperience: null,
+    stylistSpecialties: [],
+    businessName: '',
+    stylistAvailability: null,
   });
+  const [services, setServices] = useState([{ name: '', price: '' }]);
+  const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [stylistFilter, setStylistFilter] = useState('All');
 
@@ -169,6 +203,11 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           userType: formData.userType,
           selectedStyles: formData.selectedStyles,
           stylistSpecialties: formData.stylistSpecialties,
+          stylistWorkType: formData.stylistWorkType,
+          stylistExperience: formData.stylistExperience,
+          businessName: formData.businessName,
+          stylistAvailability: formData.stylistAvailability,
+          services: services.filter(s => s.name.trim()),
         }
       );
       if (error) {
@@ -233,32 +272,40 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   };
 
   const goNext = () => {
+    const stylistIdx = STYLIST_STEP_ORDER.indexOf(currentStep);
+    if (stylistIdx !== -1) {
+      goToStep(stylistIdx < STYLIST_STEP_ORDER.length - 1
+        ? STYLIST_STEP_ORDER[stylistIdx + 1]
+        : STEPS.ENDING_BUFFER);
+      return;
+    }
     switch (currentStep) {
       case STEPS.USER_TYPE:
-        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_SETUP : STEPS.HAIR_STYLES);
+        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_WORK_TYPE : STEPS.HAIR_STYLES);
         break;
-      case STEPS.STYLIST_SETUP: goToStep(STEPS.ENDING_BUFFER); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.CREATORS); break;
       case STEPS.CREATORS: goToStep(STEPS.DISCOVER_STYLISTS); break;
       case STEPS.DISCOVER_STYLISTS: goToStep(STEPS.ENDING_BUFFER); break;
       case STEPS.ENDING_BUFFER: goToStep(STEPS.LOADING); break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
-        if (idx !== -1 && idx < BASE_STEP_ORDER.length - 1) {
-          goToStep(BASE_STEP_ORDER[idx + 1]);
-        }
+        if (idx !== -1 && idx < BASE_STEP_ORDER.length - 1) goToStep(BASE_STEP_ORDER[idx + 1]);
       }
     }
   };
 
   const goBack = () => {
+    const stylistIdx = STYLIST_STEP_ORDER.indexOf(currentStep);
+    if (stylistIdx !== -1) {
+      goToStep(stylistIdx > 0 ? STYLIST_STEP_ORDER[stylistIdx - 1] : STEPS.USER_TYPE);
+      return;
+    }
     switch (currentStep) {
-      case STEPS.STYLIST_SETUP: goToStep(STEPS.USER_TYPE); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.USER_TYPE); break;
       case STEPS.CREATORS: goToStep(STEPS.HAIR_STYLES); break;
       case STEPS.DISCOVER_STYLISTS: goToStep(STEPS.CREATORS); break;
       case STEPS.ENDING_BUFFER:
-        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_SETUP : STEPS.DISCOVER_STYLISTS);
+        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_FIND_CREATORS : STEPS.DISCOVER_STYLISTS);
         break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
@@ -285,6 +332,23 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         ? prev.stylistSpecialties.filter(s => s !== specialty)
         : [...prev.stylistSpecialties, specialty],
     }));
+  };
+
+  const addService = () => setServices(prev => [...prev, { name: '', price: '' }]);
+  const updateService = (idx, field, value) =>
+    setServices(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
+  const removeService = (idx) => setServices(prev => prev.filter((_, i) => i !== idx));
+
+  const pickPortfolioPhoto = async () => {
+    if (portfolioPhotos.length >= 6) return;
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission needed', 'Please allow access to your photo library.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!result.canceled) setPortfolioPhotos(prev => [...prev, result.assets[0].uri].slice(0, 6));
   };
 
   const toggleFollowCreator = (id) => {
@@ -586,34 +650,288 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </WhiteScreen>
   );
 
-  const renderStylistSetup = () => (
+  const renderStylistWorkType = () => (
+    <WhiteScreen>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>How do you work?</Text>
+      <Text style={styles.questionSubtitle}>Tell us about your setup so clients know what to expect.</Text>
+      <View style={styles.optionsContainer}>
+        {[
+          'Independent / Freelance',
+          'Salon-based',
+          'Mobile stylist (I come to you)',
+          'Suite / Studio rental',
+        ].map(opt => {
+          const selected = formData.stylistWorkType === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              style={[styles.optionButton, selected && styles.optionButtonSelected]}
+              onPress={() => update('stylistWorkType', opt)}
+            >
+              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <ContinueButton onPress={goNext} disabled={!formData.stylistWorkType} />
+    </WhiteScreen>
+  );
+
+  const renderStylistExperience = () => (
+    <WhiteScreen>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>How long have you been doing this?</Text>
+      <Text style={styles.questionSubtitle}>Your experience helps clients find the right fit.</Text>
+      <View style={styles.optionsContainer}>
+        {[
+          'Just starting out (0–2 years)',
+          'Getting established (3–5 years)',
+          'Seasoned stylist (6–10 years)',
+          'Industry veteran (10+ years)',
+        ].map(opt => {
+          const selected = formData.stylistExperience === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              style={[styles.optionButton, selected && styles.optionButtonSelected]}
+              onPress={() => update('stylistExperience', opt)}
+            >
+              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <ContinueButton onPress={goNext} disabled={false} />
+      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+        <Text style={styles.skipLinkText}>Skip for now</Text>
+      </TouchableOpacity>
+    </WhiteScreen>
+  );
+
+  const renderStylistSpecialties = () => (
     <WhiteScreen scrollable footer={<>
-      <ContinueButton onPress={goNext} disabled={formData.stylistSpecialties.length === 0} />
+      <ContinueButton onPress={goNext} disabled={false} />
       <TouchableOpacity style={styles.skipLink} onPress={goNext}>
         <Text style={styles.skipLinkText}>Skip for now</Text>
       </TouchableOpacity>
     </>}>
       {renderBack()}
       {renderProgress()}
-      <Text style={styles.questionTitle}>What are your specialties?</Text>
-      <Text style={styles.questionSubtitle}>Select all that apply — this helps clients find you.</Text>
-
-      <View style={styles.stylesGrid}>
-        {STYLIST_SPECIALTY_OPTIONS.map(specialty => {
-          const selected = formData.stylistSpecialties.includes(specialty);
+      <Text style={styles.questionTitle}>What do you specialize in?</Text>
+      <Text style={styles.questionSubtitle}>Select the styles and techniques that define your work.</Text>
+      <View style={styles.optionsContainer}>
+        {STYLIST_SPECIALTY_OPTIONS.map(opt => {
+          const selected = formData.stylistSpecialties.includes(opt);
           return (
             <TouchableOpacity
-              key={specialty}
-              style={[styles.styleChip, selected && styles.styleChipSelected]}
-              onPress={() => toggleStylistSpecialty(specialty)}
+              key={opt}
+              style={[styles.optionButton, selected && styles.optionButtonSelected]}
+              onPress={() => toggleStylistSpecialty(opt)}
             >
-              <Text style={[styles.styleChipText, selected && styles.styleChipTextSelected]}>{specialty}</Text>
+              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
     </WhiteScreen>
   );
+
+  const renderStylistBusinessName = () => (
+    <WhiteScreen>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>What is your business called?</Text>
+      <Text style={styles.questionSubtitle}>Add your salon or brand name so clients can find and recognize you.</Text>
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Name</Text>
+        <TextInput
+          style={styles.input}
+          value={formData.businessName}
+          onChangeText={t => update('businessName', t)}
+          placeholder="@"
+          placeholderTextColor="#999"
+          autoCapitalize="words"
+        />
+      </View>
+      <ContinueButton onPress={goNext} disabled={!formData.businessName.trim()} />
+    </WhiteScreen>
+  );
+
+  const renderStylistAvailability = () => (
+    <WhiteScreen>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Are you accepting new clients?</Text>
+      <Text style={styles.questionSubtitle}>Set your current availability so your CRWN profile stays accurate.</Text>
+      <View style={styles.optionsContainer}>
+        {[
+          'Yes, accepting new clients',
+          'Accepting clients by referral only',
+          'Currently on a waitlist',
+          'Not accepting new clients right now',
+        ].map(opt => {
+          const selected = formData.stylistAvailability === opt;
+          return (
+            <TouchableOpacity
+              key={opt}
+              style={[styles.optionButton, selected && styles.optionButtonSelected]}
+              onPress={() => update('stylistAvailability', opt)}
+            >
+              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{opt}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <ContinueButton onPress={goNext} disabled={false} />
+      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+        <Text style={styles.skipLinkText}>Skip for now</Text>
+      </TouchableOpacity>
+    </WhiteScreen>
+  );
+
+  const renderStylistBooking = () => (
+    <WhiteScreen scrollable footer={<>
+      <ContinueButton onPress={goNext} disabled={false} />
+      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+        <Text style={styles.skipLinkText}>Skip for now</Text>
+      </TouchableOpacity>
+    </>}>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Your services & pricing</Text>
+      <Text style={styles.questionSubtitle}>Add your styles and what you charge so clients know what to expect.</Text>
+
+      {services.map((service, idx) => (
+        <View key={idx} style={styles.serviceRow}>
+          <TextInput
+            style={styles.serviceNameInput}
+            value={service.name}
+            onChangeText={t => updateService(idx, 'name', t)}
+            placeholder="e.g. Small knotless braids"
+            placeholderTextColor="#999"
+          />
+          <View style={styles.servicePriceWrap}>
+            <Text style={styles.serviceDollar}>$</Text>
+            <TextInput
+              style={styles.servicePriceInput}
+              value={service.price}
+              onChangeText={t => updateService(idx, 'price', t.replace(/[^0-9]/g, ''))}
+              placeholder="250"
+              placeholderTextColor="#999"
+              keyboardType="numeric"
+            />
+          </View>
+          {services.length > 1 && (
+            <TouchableOpacity onPress={() => removeService(idx)} style={styles.serviceRemove}>
+              <Ionicons name="close" size={18} color="#999" />
+            </TouchableOpacity>
+          )}
+        </View>
+      ))}
+
+      <TouchableOpacity style={styles.addServiceBtn} onPress={addService}>
+        <Ionicons name="add" size={20} color={colors.forest} />
+        <Text style={styles.addServiceText}>Add service</Text>
+      </TouchableOpacity>
+    </WhiteScreen>
+  );
+
+  const renderStylistPortfolio = () => (
+    <WhiteScreen>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Show them what you can do.</Text>
+      <Text style={styles.questionSubtitle}>Add at least one photo of your work. This is your first impression on CRWN.</Text>
+
+      {portfolioPhotos.length === 0 ? (
+        <TouchableOpacity style={styles.portfolioUploadBox} onPress={pickPortfolioPhoto} activeOpacity={0.8}>
+          <View style={styles.portfolioUploadIcon}>
+            <Ionicons name="arrow-up" size={22} color="#fff" />
+          </View>
+          <Text style={styles.portfolioUploadTitle}>Tap to upload photos</Text>
+          <Text style={styles.portfolioUploadSub}>You can add up to 6 photos</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.portfolioGrid}>
+          {portfolioPhotos.map((uri, idx) => (
+            <View key={idx} style={styles.portfolioThumbWrap}>
+              <Image source={{ uri }} style={styles.portfolioThumb} />
+              <TouchableOpacity
+                style={styles.portfolioThumbRemove}
+                onPress={() => setPortfolioPhotos(prev => prev.filter((_, i) => i !== idx))}
+              >
+                <Ionicons name="close-circle" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {portfolioPhotos.length < 6 && (
+            <TouchableOpacity style={styles.portfolioAddMore} onPress={pickPortfolioPhoto}>
+              <Ionicons name="add" size={28} color="#C4B5A0" />
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
+
+      <ContinueButton onPress={goNext} disabled={false} />
+      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+        <Text style={styles.skipLinkText}>Skip for now</Text>
+      </TouchableOpacity>
+    </WhiteScreen>
+  );
+
+  const renderStylistFindCreators = () => {
+    const leftCreators = MOCK_CREATORS.filter((_, i) => i % 2 === 0);
+    const rightCreators = MOCK_CREATORS.filter((_, i) => i % 2 === 1);
+    const renderCreatorCard = (creator) => {
+      const followed = formData.followedCreators.includes(creator.id);
+      return (
+        <View key={creator.id} style={[styles.personCard, { height: creator.height }]}>
+          <LinearGradient colors={creator.colors} style={StyleSheet.absoluteFill} />
+          <View style={styles.personCardBottom}>
+            <View style={styles.personCardHeader}>
+              <View style={styles.personAvatar}>
+                <Text style={styles.personAvatarText}>{creator.username[0].toUpperCase()}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personUsername}>{creator.username}</Text>
+                <View style={styles.personTagChip}>
+                  <Text style={styles.personTagText}>{creator.tag}</Text>
+                </View>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.followBtn, followed && styles.followBtnActive]}
+              onPress={() => toggleFollowCreator(creator.id)}
+            >
+              <Text style={[styles.followBtnText, followed && styles.followBtnTextActive]}>
+                {followed ? '✓ Following' : '+ Follow'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    };
+    return (
+      <WhiteScreen scrollable footer={<>
+        <ContinueButton onPress={goNext} disabled={false} />
+        <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+          <Text style={styles.skipLinkText}>Skip for now</Text>
+        </TouchableOpacity>
+      </>}>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>Find creators to follow</Text>
+        <Text style={styles.questionSubtitle}>Get inspired by the community you're joining.</Text>
+        <View style={styles.masonryRow}>
+          <View style={styles.masonryCol}>{leftCreators.map(renderCreatorCard)}</View>
+          <View style={styles.masonryCol}>{rightCreators.map(renderCreatorCard)}</View>
+        </View>
+      </WhiteScreen>
+    );
+  };
 
   const renderHairStyles = () => (
     <WhiteScreen scrollable footer={<>
@@ -840,9 +1158,16 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       case STEPS.NAME:              return renderName();
       case STEPS.LOCATION:          return renderLocation();
       case STEPS.PROFILE_PHOTO:     return renderProfilePhoto();
-      case STEPS.USER_TYPE:         return renderUserType();
-      case STEPS.STYLIST_SETUP:     return renderStylistSetup();
-      case STEPS.HAIR_STYLES:       return renderHairStyles();
+      case STEPS.USER_TYPE:              return renderUserType();
+      case STEPS.STYLIST_WORK_TYPE:      return renderStylistWorkType();
+      case STEPS.STYLIST_EXPERIENCE:     return renderStylistExperience();
+      case STEPS.STYLIST_SPECIALTIES:    return renderStylistSpecialties();
+      case STEPS.STYLIST_BUSINESS_NAME:  return renderStylistBusinessName();
+      case STEPS.STYLIST_AVAILABILITY:   return renderStylistAvailability();
+      case STEPS.STYLIST_BOOKING:        return renderStylistBooking();
+      case STEPS.STYLIST_PORTFOLIO:      return renderStylistPortfolio();
+      case STEPS.STYLIST_FIND_CREATORS:  return renderStylistFindCreators();
+      case STEPS.HAIR_STYLES:            return renderHairStyles();
       case STEPS.CREATORS:          return renderCreators();
       case STEPS.DISCOVER_STYLISTS: return renderDiscoverStylists();
       case STEPS.ENDING_BUFFER:     return renderEndingBuffer();
@@ -1039,6 +1364,27 @@ const styles = StyleSheet.create({
   filterChipActive: { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
   filterChipText: { fontSize: 13, fontFamily: 'Figtree_500Medium', color: '#5E5E5E' },
   filterChipTextActive: { color: '#fff' },
+
+  // Services & pricing (booking step)
+  serviceRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 8 },
+  serviceNameInput: { flex: 1, borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingVertical: 11, paddingHorizontal: 14, fontSize: 14, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
+  servicePriceWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 11, width: 90 },
+  serviceDollar: { fontSize: 14, color: colors.textSecondary, marginRight: 2, fontFamily: 'Figtree_500Medium' },
+  servicePriceInput: { flex: 1, fontSize: 14, color: colors.textPrimary, fontFamily: 'Figtree_400Regular', padding: 0 },
+  serviceRemove: { padding: 4 },
+  addServiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, marginTop: 4 },
+  addServiceText: { fontSize: 14, color: colors.forest, fontFamily: 'Figtree_600SemiBold' },
+
+  // Portfolio upload
+  portfolioUploadBox: { borderWidth: 1.5, borderColor: '#D1D1D1', borderRadius: 16, paddingVertical: 48, alignItems: 'center', justifyContent: 'center', marginVertical: 24 },
+  portfolioUploadIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#F8B430', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
+  portfolioUploadTitle: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: colors.textPrimary, marginBottom: 4 },
+  portfolioUploadSub: { fontSize: 13, fontFamily: 'Figtree_400Regular', color: colors.textSecondary },
+  portfolioGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 20 },
+  portfolioThumbWrap: { position: 'relative', width: (SCREEN_WIDTH - 48 - 16) / 3, height: (SCREEN_WIDTH - 48 - 16) / 3 },
+  portfolioThumb: { width: '100%', height: '100%', borderRadius: 10 },
+  portfolioThumbRemove: { position: 'absolute', top: 4, right: 4 },
+  portfolioAddMore: { width: (SCREEN_WIDTH - 48 - 16) / 3, height: (SCREEN_WIDTH - 48 - 16) / 3, borderRadius: 10, borderWidth: 1.5, borderColor: '#D1D1D1', alignItems: 'center', justifyContent: 'center' },
 
   // Ending buffer
   endingContainer: { flex: 1, backgroundColor: '#F0EAE0', justifyContent: 'space-between' },
