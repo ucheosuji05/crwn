@@ -71,17 +71,39 @@ export const usePosts = (userId = null) => {
     }
   };
 
+  // Refresh without triggering the loading spinner so the feed doesn't flash
+  const silentRefetch = async () => {
+    try {
+      const result = userId
+        ? await postService.getPostsByUser(userId)
+        : await postService.getPosts();
+      if (!result.error) setPosts(result.data || []);
+    } catch (err) {
+      console.error('usePosts silentRefetch error:', err);
+    }
+  };
+
   useEffect(() => {
     fetchPosts();
+
+    let debounceTimer;
 
     const channel = supabase
       .channel(`posts-counts-${userId || 'all'}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, fetchPosts)
+      // post_media INSERT fires after images are uploaded — debounce handles multi-image posts
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_media' }, () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(silentRefetch, 800);
+      })
       .subscribe();
 
-    return () => supabase.removeChannel(channel);
+    return () => {
+      clearTimeout(debounceTimer);
+      supabase.removeChannel(channel);
+    };
   }, [userId]);
 
-  return { posts, loading, error, refresh: fetchPosts, deletePost, updatePost };
+  return { posts, loading, error, refresh: fetchPosts, silentRefetch, deletePost, updatePost };
 };

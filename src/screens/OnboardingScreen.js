@@ -19,6 +19,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { authService } from '../services/authService';
+import { profileService } from '../services/profileService';
 import { useAuth } from '../hooks/useAuth';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -185,8 +186,23 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
 
       setLoadingMessage('Setting up your hair profile...');
 
-      // Small delay for UX
-      await new Promise(resolve => setTimeout(resolve, 800));
+      // Save onboarding data to profile
+      await Promise.allSettled([
+        // Upload profile photo if selected
+        formData.profilePhoto && user?.id
+          ? profileService.uploadAvatar(user.id, formData.profilePhoto)
+          : Promise.resolve(),
+
+        // Save hair style preferences (explorer flow)
+        formData.selectedStyles.length > 0 && user?.id
+          ? profileService.updateHairProfile(user.id, { goals: formData.selectedStyles })
+          : Promise.resolve(),
+
+        // Save stylist specialties (stylist flow)
+        formData.userType === 'stylist' && formData.stylistSpecialties.length > 0 && user?.id
+          ? profileService.updateProfile(user.id, { specialties: formData.stylistSpecialties })
+          : Promise.resolve(),
+      ]);
 
       Animated.timing(loadingProgress, {
         toValue: 1,

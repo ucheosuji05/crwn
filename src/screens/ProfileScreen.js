@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform } from 'react-native';
+import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ export default function ProfileScreen({ route, navigation }) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
 
@@ -21,7 +22,12 @@ export default function ProfileScreen({ route, navigation }) {
   const isStackScreen = route?.name === 'UserProfile';
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.surface }, webWrap(WEB_MAX_WIDTHS.profile)]}>
+    <View style={[
+      styles.container,
+      { backgroundColor: colors.surface },
+      webWrap(WEB_MAX_WIDTHS.profile),
+      Platform.OS === 'web' && { height: windowHeight },
+    ]}>
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}

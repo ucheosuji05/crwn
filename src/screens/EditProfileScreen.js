@@ -9,20 +9,24 @@ import {
   Alert,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { profileService } from '../services/profileService';
 import { useTheme } from '../context/ThemeContext';
 
 export default function EditProfileScreen({ onBack, onSave }) {
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarUrl, setAvatarUrl] = useState(null);
+  const [uploading, setUploading] = useState(false);
 
   // Profile fields
   const [fullName, setFullName] = useState('');
@@ -53,6 +57,7 @@ export default function EditProfileScreen({ onBack, onSave }) {
       Alert.alert('Error', 'Failed to load profile');
     } else {
       // Set profile data
+      setAvatarUrl(data.avatar_url || null);
       setFullName(data.full_name || '');
       setUsername(data.username || '');
       setBio(data.bio || '');
@@ -77,6 +82,61 @@ export default function EditProfileScreen({ onBack, onSave }) {
       }
     }
     setLoading(false);
+  };
+
+  const pickImage = () => {
+    if (Platform.OS === 'web') {
+      chooseFromLibrary();
+      return;
+    }
+    Alert.alert('Change Profile Picture', 'Choose an option', [
+      { text: 'Take Photo',          onPress: takePhoto },
+      { text: 'Choose from Library', onPress: chooseFromLibrary },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  };
+
+  const takePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow camera access.');
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled) uploadAvatar(result.assets[0].uri);
+  };
+
+  const chooseFromLibrary = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow photo library access.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled) uploadAvatar(result.assets[0].uri);
+  };
+
+  const uploadAvatar = async (uri) => {
+    if (!user?.id) return;
+    setUploading(true);
+    const { url, error } = await profileService.uploadAvatar(user.id, uri);
+    if (error) {
+      Alert.alert('Error', 'Failed to upload photo. Please try again.');
+    } else {
+      setAvatarUrl(url);
+      await refreshProfile(user.id);
+    }
+    setUploading(false);
   };
 
   const handleSave = async () => {
@@ -173,6 +233,27 @@ export default function EditProfileScreen({ onBack, onSave }) {
       </View>
 
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        {/* Avatar */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity onPress={pickImage} activeOpacity={0.8} style={styles.avatarWrap}>
+            {uploading ? (
+              <View style={styles.avatarCircle}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={styles.avatarCircle} />
+            ) : (
+              <View style={[styles.avatarCircle, styles.avatarPlaceholder]}>
+                <Ionicons name="person" size={40} color={colors.textMuted} />
+              </View>
+            )}
+            <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
+              <Ionicons name="camera" size={13} color="#fff" />
+            </View>
+          </TouchableOpacity>
+          <Text style={[styles.changePhotoText, { color: colors.primary }]}>Change Photo</Text>
+        </View>
+
         {/* Basic Info */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
@@ -337,6 +418,43 @@ const makeStyles = (c) => StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  avatarSection: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    borderBottomWidth: 8,
+    borderBottomColor: c.surfaceAlt,
+  },
+  avatarWrap: {
+    position: 'relative',
+    marginBottom: 10,
+  },
+  avatarCircle: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: c.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarPlaceholder: {
+    backgroundColor: c.borderLight,
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: c.surface,
+  },
+  changePhotoText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_600SemiBold',
   },
   section: {
     padding: 16,

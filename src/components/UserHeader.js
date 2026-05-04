@@ -11,6 +11,7 @@ import {
   Modal,
   FlatList,
   Share,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -89,6 +90,10 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
   // ── Avatar upload (own profile only) ───────────────────────────────────────
 
   const pickImage = () => {
+    if (Platform.OS === 'web') {
+      chooseFromLibrary();
+      return;
+    }
     Alert.alert('Change Profile Picture', 'Choose an option', [
       { text: 'Take Photo',           onPress: takePhoto },
       { text: 'Choose from Library',  onPress: chooseFromLibrary },
@@ -244,6 +249,11 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
           ) : (
             <View style={[styles.avatarPlaceholder, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }]}>
               <Ionicons name="person" size={44} color="#9ca3af" />
+            </View>
+          )}
+          {isOwnProfile && !uploading && (
+            <View style={[styles.cameraBadge, { backgroundColor: colors.primary }]}>
+              <Ionicons name="camera" size={12} color="#fff" />
             </View>
           )}
         </TouchableOpacity>
@@ -407,6 +417,18 @@ const makeStyles = (c) => StyleSheet.create({
     backgroundColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: c.surface,
   },
 
   // ── Info block ──

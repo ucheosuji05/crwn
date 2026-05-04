@@ -349,7 +349,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
         onRequestClose={() => setSelectedPost(null)}
       >
         <Pressable style={styles.backdrop} onPress={() => setSelectedPost(null)}>
-          <Pressable style={styles.popupCard} onPress={() => {}}>
+          <Pressable style={[styles.popupCard, Platform.OS === 'web' && styles.popupCardWeb]} onPress={() => {}}>
             <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
               <PostCard
                 post={selectedPost}
@@ -555,5 +555,9 @@ const makeStyles = (c) => StyleSheet.create({
     backgroundColor: c.surface,
     borderRadius: 20,
     overflow: 'hidden',
+  },
+  popupCardWeb: {
+    maxWidth: 460,
+    maxHeight: SCREEN_HEIGHT * 0.82,
   },
 });
