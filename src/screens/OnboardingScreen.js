@@ -47,6 +47,7 @@ const STEPS = {
   LOCATION: 'location',
   PROFILE_PHOTO: 'profilePhoto',
   USER_TYPE: 'userType',
+  STYLIST_SETUP: 'stylistSetup',
   HAIR_STYLES: 'hairStyles',
   CREATORS: 'creators',
   DISCOVER_STYLISTS: 'discoverStylists',
@@ -72,6 +73,7 @@ const PROGRESS_STEPS = [
   STEPS.LOCATION,
   STEPS.PROFILE_PHOTO,
   STEPS.USER_TYPE,
+  STEPS.STYLIST_SETUP,
   STEPS.HAIR_STYLES,
   STEPS.CREATORS,
   STEPS.DISCOVER_STYLISTS,
@@ -105,6 +107,12 @@ const HAIR_STYLE_OPTIONS = [
   'Big Chop / TWA', 'Wigs & Extensions', 'Fades & Tapers',
 ];
 
+const STYLIST_SPECIALTY_OPTIONS = [
+  'Braids', 'Locs', 'Twists', 'Natural Hair', 'Silk Press',
+  'Color & Highlights', 'Protective Styles', 'Wigs & Extensions',
+  'Cuts & Fades', 'Wash & Go', 'Big Chop', 'Keratin / Relaxer',
+];
+
 const STYLIST_FILTERS = ['All', 'Near Me', 'Locs', 'Braids', 'Natural'];
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -122,6 +130,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     profilePhoto: null,
     userType: null,
     selectedStyles: [],
+    stylistSpecialties: [],
     followedCreators: [],
     followedStylists: [],
   });
@@ -158,6 +167,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           location: formData.location,
           userType: formData.userType,
           selectedStyles: formData.selectedStyles,
+          stylistSpecialties: formData.stylistSpecialties,
         }
       );
       if (error) {
@@ -209,8 +219,9 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const goNext = () => {
     switch (currentStep) {
       case STEPS.USER_TYPE:
-        goToStep(formData.userType === 'explorer' ? STEPS.HAIR_STYLES : STEPS.ENDING_BUFFER);
+        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_SETUP : STEPS.HAIR_STYLES);
         break;
+      case STEPS.STYLIST_SETUP: goToStep(STEPS.ENDING_BUFFER); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.CREATORS); break;
       case STEPS.CREATORS: goToStep(STEPS.DISCOVER_STYLISTS); break;
       case STEPS.DISCOVER_STYLISTS: goToStep(STEPS.ENDING_BUFFER); break;
@@ -226,11 +237,12 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
 
   const goBack = () => {
     switch (currentStep) {
+      case STEPS.STYLIST_SETUP: goToStep(STEPS.USER_TYPE); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.USER_TYPE); break;
       case STEPS.CREATORS: goToStep(STEPS.HAIR_STYLES); break;
       case STEPS.DISCOVER_STYLISTS: goToStep(STEPS.CREATORS); break;
       case STEPS.ENDING_BUFFER:
-        goToStep(formData.userType === 'explorer' ? STEPS.DISCOVER_STYLISTS : STEPS.USER_TYPE);
+        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_SETUP : STEPS.DISCOVER_STYLISTS);
         break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
@@ -247,6 +259,15 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       selectedStyles: prev.selectedStyles.includes(style)
         ? prev.selectedStyles.filter(s => s !== style)
         : [...prev.selectedStyles, style],
+    }));
+  };
+
+  const toggleStylistSpecialty = (specialty) => {
+    setFormData(prev => ({
+      ...prev,
+      stylistSpecialties: prev.stylistSpecialties.includes(specialty)
+        ? prev.stylistSpecialties.filter(s => s !== specialty)
+        : [...prev.stylistSpecialties, specialty],
     }));
   };
 
@@ -511,31 +532,70 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>How do you want to use CRWN?</Text>
-      <Text style={styles.questionSubtitle}>Select everything that applies, we'll personalize your experience around it.</Text>
+      <Text style={styles.questionSubtitle}>Choose one — you can always update this later.</Text>
 
-      <View style={styles.optionsContainer}>
-        {[
-          { value: 'explorer', label: 'Learn what works for my hair' },
-          { value: 'explorer', label: 'Document and track my journey' },
-          { value: 'explorer', label: 'Discover products for my hair type' },
-          { value: 'explorer', label: 'Get inspired by styles and looks' },
-          { value: 'explorer', label: 'Find and connect with stylists' },
-          { value: 'explorer', label: 'Share my journey with others' },
-        ].map(({ value, label }) => {
-          const selected = formData.userType === value && formData.userTypeLabel === label;
+      <View style={styles.userTypeFork}>
+        <TouchableOpacity
+          style={[styles.userTypeCard, formData.userType === 'explorer' && styles.userTypeCardSelected]}
+          onPress={() => update('userType', 'explorer')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.userTypeCardIcon}>✨</Text>
+          <Text style={styles.userTypeCardTitle}>I'm here to explore</Text>
+          <Text style={styles.userTypeCardDesc}>Discover styles, find stylists, and build your hair community.</Text>
+          {formData.userType === 'explorer' && (
+            <View style={styles.userTypeCheckmark}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.forest} />
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.userTypeCard, formData.userType === 'stylist' && styles.userTypeCardSelected]}
+          onPress={() => update('userType', 'stylist')}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.userTypeCardIcon}>✂️</Text>
+          <Text style={styles.userTypeCardTitle}>I'm a stylist</Text>
+          <Text style={styles.userTypeCardDesc}>Set up your stylist profile, showcase your work, and grow your clientele.</Text>
+          {formData.userType === 'stylist' && (
+            <View style={styles.userTypeCheckmark}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.forest} />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      <ContinueButton onPress={goNext} disabled={!formData.userType} />
+    </WhiteScreen>
+  );
+
+  const renderStylistSetup = () => (
+    <WhiteScreen scrollable footer={<>
+      <ContinueButton onPress={goNext} disabled={formData.stylistSpecialties.length === 0} />
+      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+        <Text style={styles.skipLinkText}>Skip for now</Text>
+      </TouchableOpacity>
+    </>}>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>What are your specialties?</Text>
+      <Text style={styles.questionSubtitle}>Select all that apply — this helps clients find you.</Text>
+
+      <View style={styles.stylesGrid}>
+        {STYLIST_SPECIALTY_OPTIONS.map(specialty => {
+          const selected = formData.stylistSpecialties.includes(specialty);
           return (
             <TouchableOpacity
-              key={label}
-              style={[styles.optionButton, selected && styles.optionButtonSelected]}
-              onPress={() => setFormData(prev => ({ ...prev, userType: value, userTypeLabel: label }))}
+              key={specialty}
+              style={[styles.styleChip, selected && styles.styleChipSelected]}
+              onPress={() => toggleStylistSpecialty(specialty)}
             >
-              <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{label}</Text>
+              <Text style={[styles.styleChipText, selected && styles.styleChipTextSelected]}>{specialty}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-
-      <ContinueButton onPress={goNext} disabled={!formData.userType} />
     </WhiteScreen>
   );
 
@@ -765,6 +825,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       case STEPS.LOCATION:          return renderLocation();
       case STEPS.PROFILE_PHOTO:     return renderProfilePhoto();
       case STEPS.USER_TYPE:         return renderUserType();
+      case STEPS.STYLIST_SETUP:     return renderStylistSetup();
       case STEPS.HAIR_STYLES:       return renderHairStyles();
       case STEPS.CREATORS:          return renderCreators();
       case STEPS.DISCOVER_STYLISTS: return renderDiscoverStylists();
@@ -883,12 +944,17 @@ const styles = StyleSheet.create({
   eyeButton: { paddingHorizontal: 12 },
   errorText: { color: '#ef4444', fontSize: 12, marginTop: 4 },
 
-  // Options (user type)
-  optionsContainer: { gap: 10, marginBottom: 24 },
-  optionButton: { borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingVertical: 16, paddingHorizontal: 20 },
-  optionButtonSelected: { borderColor: '#4F4032', backgroundColor: '#F5F0E8' },
-  optionText: { fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
-  optionTextSelected: { color: colors.textBrown, fontFamily: 'Figtree_500Medium' },
+  // User type fork
+  userTypeFork: { gap: 14, marginBottom: 28 },
+  userTypeCard: {
+    borderWidth: 1.5, borderColor: '#D1D1D1', borderRadius: 16,
+    padding: 20, position: 'relative',
+  },
+  userTypeCardSelected: { borderColor: '#3F523F', backgroundColor: '#F4F7F4' },
+  userTypeCardIcon: { fontSize: 28, marginBottom: 10 },
+  userTypeCardTitle: { fontSize: 17, fontFamily: 'LibreBaskerville_700Bold', color: colors.textPrimary, marginBottom: 6 },
+  userTypeCardDesc: { fontSize: 13, fontFamily: 'Figtree_400Regular', color: colors.textSecondary, lineHeight: 18 },
+  userTypeCheckmark: { position: 'absolute', top: 16, right: 16 },
 
   // Continue button
   continueButtonContainer: { marginTop: 'auto', paddingBottom: 12 },
