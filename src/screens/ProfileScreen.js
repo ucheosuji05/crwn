@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, useWindowDimensions } from 'react-native';
+import { useState, useCallback } from 'react';
+import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, useWindowDimensions, RefreshControl } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,6 +16,15 @@ export default function ProfileScreen({ route, navigation }) {
   const { height: windowHeight } = useWindowDimensions();
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    setProfileVersion(v => v + 1);
+    // Small delay so child components have time to re-mount before we clear the spinner
+    await new Promise(r => setTimeout(r, 600));
+    setRefreshing(false);
+  }, []);
 
   const viewedUserId = route?.params?.viewedUserId || user?.id;
   const isOwnProfile = viewedUserId === user?.id;
@@ -31,6 +40,14 @@ export default function ProfileScreen({ route, navigation }) {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       >
         {/* UserHeader no longer receives onBack — the overlay button below handles it */}
         <UserHeader
@@ -38,7 +55,7 @@ export default function ProfileScreen({ route, navigation }) {
           viewedUserId={viewedUserId}
           isOwnProfile={isOwnProfile}
         />
-        <ProfileTabs viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+        <ProfileTabs key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
       </ScrollView>
 
       {/* Back arrow — absolute overlay so ScrollView never swallows the touch */}

@@ -26,6 +26,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UnreadCountProvider } from './src/context/UnreadCountContext';
+import { ProviderModeProvider } from './src/context/ProviderModeContext';
 import { colors } from './src/theme/themes';
 
 // =============================================================================
@@ -106,7 +107,9 @@ export default function App() {
       <AuthProvider>
         <ThemeProvider>
           <UnreadCountProvider>
-            <AppContent />
+            <ProviderModeProvider>
+              <AppContent />
+            </ProviderModeProvider>
           </UnreadCountProvider>
         </ThemeProvider>
       </AuthProvider>
@@ -123,6 +126,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FDF9F0',
+    backgroundColor: '#FAFAFA',
   },
 });

@@ -51,12 +51,12 @@ export const colors = {
 export const lightTheme = {
   isDark: false,
   selected: '#5D1F1F',       // active/selected tint — maroon in light mode
-  background: '#FDF9F0',
-  backgroundAlt: '#EDE8E3',
+  background: '#FAFAFA',
+  backgroundAlt: '#F4F4F5',
   surface: '#FCFCFC',
-  surfaceAlt: '#f9f9f9',
+  surfaceAlt: '#F9F9F9',
   card: '#FCFCFC',
-  cardWarm: '#f5ede3',
+  cardWarm: '#F9F5F3',
   text: '#111827',
   textSecondary: '#6b7280',
   textMuted: '#9ca3af',

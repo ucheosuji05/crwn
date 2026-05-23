@@ -11,6 +11,7 @@ import {
   Image,
   ActivityIndicator,
   Modal,
+  RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -404,6 +405,14 @@ export default function MessagingScreen() {
           data={conversations}
           keyExtractor={(item) => item.id}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={loadingConvos}
+              onRefresh={loadConversations}
+              tintColor="#5D1F1F"
+              colors={['#5D1F1F']}
+            />
+          }
           renderItem={({ item }) => {
             const other = getOtherUser(item);
             const isUnread = unreadConvoIds.has(item.id);

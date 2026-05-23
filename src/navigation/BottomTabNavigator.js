@@ -11,12 +11,15 @@ import ExploreScreen from '../screens/ExploreScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import StylistsScreen from '../screens/StylistsScreen';
 import StylistDashboardScreen from '../screens/StylistDashboardScreen';
+import ProviderAnalyticsScreen from '../screens/ProviderAnalyticsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
+import MessagingScreen from '../screens/MessagingScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import NotificationsList from '../components/NotificationsList';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
+import { useProviderMode } from '../context/ProviderModeContext';
 
 const Tab = createBottomTabNavigator();
 
@@ -149,6 +152,7 @@ export default function BottomTabNavigator() {
   const { notifCount: unreadNotifCount } = useUnreadCount();
   const { colors } = useTheme();
   const { profile, profileLoaded } = useAuth();
+  const { isProviderMode } = useProviderMode();
   const isStylist = !!profile?.is_stylist;
   const isWeb = Platform.OS === 'web';
 
@@ -216,6 +220,20 @@ export default function BottomTabNavigator() {
             borderTopColor: colors.border,
           },
           tabBarIcon: ({ focused, color, size }) => {
+            // Provider mode overrides icons for slots 2-4
+            if (isStylist && isProviderMode) {
+              let iconName;
+              switch (route.name) {
+                case 'Crwn.':         iconName = focused ? 'compass'     : 'compass-outline';     break;
+                case 'Community':     iconName = focused ? 'stats-chart' : 'stats-chart-outline'; break;
+                case 'Stylists':      iconName = focused ? 'calendar'    : 'calendar-outline';    break;
+                case 'Notifications': iconName = focused ? 'chatbubble'  : 'chatbubble-outline';  break;
+                case 'Profile':       iconName = focused ? 'person'      : 'person-outline';      break;
+              }
+              return <Ionicons name={iconName} size={size} color={color} />;
+            }
+
+            // Default client-mode icons
             if (route.name === 'Notifications') {
               return (
                 <NotifIcon
@@ -246,19 +264,23 @@ export default function BottomTabNavigator() {
         </Tab.Screen>
 
         <Tab.Screen name="Community" options={{ headerShown: false }}>
-          {(props) => <CommunityScreen {...props} key={resetKeys.Community} />}
+          {(props) => isStylist && isProviderMode
+            ? <ProviderAnalyticsScreen {...props} key={resetKeys.Community} />
+            : <CommunityScreen {...props} key={resetKeys.Community} />}
         </Tab.Screen>
 
         <Tab.Screen name="Stylists" options={{ headerShown: false }}>
           {(props) => !profileLoaded
             ? <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}><ActivityIndicator color={colors.primary} /></View>
-            : isStylist
+            : isStylist && isProviderMode
               ? <StylistDashboardScreen {...props} key={resetKeys.Stylists} />
               : <StylistsScreen {...props} key={resetKeys.Stylists} />}
         </Tab.Screen>
 
         <Tab.Screen name="Notifications" options={{ headerShown: false }}>
-          {(props) => <NotificationsScreen {...props} key={resetKeys.Notifications} />}
+          {(props) => isStylist && isProviderMode
+            ? <MessagingScreen {...props} key={resetKeys.Notifications} />
+            : <NotificationsScreen {...props} key={resetKeys.Notifications} />}
         </Tab.Screen>
 
         <Tab.Screen name="Profile" options={{ headerShown: false }}>

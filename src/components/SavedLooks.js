@@ -628,7 +628,7 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
       gap: COLL_ROW_GAP,
     },
     collRow: { flexDirection: 'row', justifyContent: 'space-between' },
-    collCard: { width: collCardW, overflow: 'hidden' },
+    collCard: { width: collCardW },
 
     // Stacked photo thumbnails
     stackContainer: {
@@ -636,27 +636,50 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
       height: collCardH,
       position: 'relative',
       marginBottom: 10,
-      overflow: 'hidden',
+      // No overflow:hidden — lets back cards fan out without corner clipping
     },
     stackCard: {
       position: 'absolute',
       width: CW,
       height: CH,
       borderRadius: 14,
-      overflow: 'hidden',
+      overflow: 'hidden',      // keeps image + rounded corners intact
       backgroundColor: c.borderLight,
     },
-    // Front card — straight, on top
-    stackCardA: { bottom: 8, left: 2, zIndex: 3 },
-    // Mid card — slight clockwise tilt, peeks right
-    stackCardB: {
-      bottom: 3, left: 2, zIndex: 2,
-      transform: [{ translateX: CW * 0.08 }, { rotate: '5deg' }],
+    // Front card — straight, fully visible on top
+    stackCardA: {
+      bottom: 0,
+      left: 0,
+      zIndex: 3,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 3 },
+      shadowOpacity: 0.16,
+      shadowRadius: 8,
+      elevation: 6,
     },
-    // Back card — more tilt
+    // Mid card — subtle 3° clockwise tilt, peeks right
+    stackCardB: {
+      bottom: 0,
+      left: 0,
+      zIndex: 2,
+      transform: [{ translateX: CW * 0.07 }, { rotate: '3deg' }],
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.09,
+      shadowRadius: 4,
+      elevation: 3,
+    },
+    // Back card — gentle 6° tilt for depth
     stackCardC: {
-      bottom: 0, left: 2, zIndex: 1,
-      transform: [{ translateX: CW * 0.16 }, { rotate: '10deg' }],
+      bottom: 0,
+      left: 0,
+      zIndex: 1,
+      transform: [{ translateX: CW * 0.14 }, { rotate: '6deg' }],
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.05,
+      shadowRadius: 2,
+      elevation: 1,
     },
     stackPlaceholder: {
       flex: 1,

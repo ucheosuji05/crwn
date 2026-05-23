@@ -14,7 +14,7 @@ export const postService = {
         likes(count),
         comments(count)
       `)
-      .eq('is_public', true)
+      .or('is_public.eq.true,is_public.is.null')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
 

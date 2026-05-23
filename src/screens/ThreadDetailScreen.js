@@ -20,7 +20,7 @@ import { useTheme } from '../context/ThemeContext';
 
 const BRAND  = '#5D1F1F';
 const HONEY  = '#C9963A';
-const CHAMPA = '#FDF9F0';
+const CHAMPA = '#FAFAFA';
 const NEST_LINE = '#E5DDD5';
 
 function formatTimeAgo(dateString) {

@@ -8,6 +8,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../hooks/useAuth';
+import { useProviderMode } from '../context/ProviderModeContext';
 import { stylistService, normalizeStylist } from '../services/stylistService';
 import { Crown } from 'lucide-react-native';
 
@@ -127,6 +129,9 @@ function StylistCard({ item, styles, colors }) {
 
 export default function StylistsScreen() {
   const { colors } = useTheme();
+  const { profile } = useAuth();
+  const { toggleMode } = useProviderMode();
+  const isStylist = !!profile?.is_stylist;
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,6 +194,20 @@ export default function StylistsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
+
+      {/* Provider mode banner — visible only to stylists in client mode */}
+      {isStylist && (
+        <TouchableOpacity
+          style={[styles.providerBanner, { backgroundColor: colors.primaryLight || '#FDF1EE', borderBottomColor: colors.borderLight }]}
+          onPress={toggleMode}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="briefcase-outline" size={15} color={colors.primary} />
+          <Text style={[styles.providerBannerText, { color: colors.primary }]}>Switch to Provider Mode</Text>
+          <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+        </TouchableOpacity>
+      )}
+
       {/* Search icon + filter chips in one scrollable row */}
       <View style={styles.topBar}>
         <ScrollView
@@ -289,6 +308,19 @@ export default function StylistsScreen() {
 
 const makeStyles = (c) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: c.background },
+  providerBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+  },
+  providerBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Figtree_600SemiBold',
+  },
 
   // ── Top bar (chips + search icon row) ──
   topBar: {
