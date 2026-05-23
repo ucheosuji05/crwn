@@ -10,10 +10,13 @@ export const bookingService = {
         id,
         service_name,
         appointment_date,
+        appointment_time,
         status,
+        deposit_status,
+        duration_min,
         notes,
         created_at,
-        stylists:stylist_id (id, username, business_name, full_name)
+        stylist:stylist_id (id, username, business_name, full_name, avatar_url)
       `)
       .eq('user_id', userId)
       .order('appointment_date', { ascending: false });

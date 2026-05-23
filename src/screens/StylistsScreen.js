@@ -77,6 +77,14 @@ const SPECIALTY_FILTERS = ['All', 'Braids', 'Locs', 'Twists', 'Natural Hair', 'C
 
 // ── Stylist card ──────────────────────────────────────────────────────────────
 
+// Renders an image slot — shows a grey placeholder when the URI is missing
+function PhotoSlot({ uri, style, colors }) {
+  if (!uri) {
+    return <View style={[style, { backgroundColor: colors.borderLight }]} />;
+  }
+  return <Image source={{ uri }} style={style} />;
+}
+
 function StylistCard({ item, styles, colors }) {
   const navigation = useNavigation();
   const [p0, p1, p2] = item.photos;
@@ -85,10 +93,10 @@ function StylistCard({ item, styles, colors }) {
     <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => navigation.navigate('StylistProfile', { stylist: item })}>
       {/* Photo collage */}
       <View style={styles.photoGrid}>
-        <Image source={{ uri: p0 }} style={styles.photoMain} />
+        <PhotoSlot uri={p0} style={styles.photoMain} colors={colors} />
         <View style={styles.photoStack}>
-          <Image source={{ uri: p1 }} style={styles.photoSmall} />
-          <Image source={{ uri: p2 }} style={[styles.photoSmall, styles.photoSmallBottom]} />
+          <PhotoSlot uri={p1} style={styles.photoSmall} colors={colors} />
+          <PhotoSlot uri={p2} style={[styles.photoSmall, styles.photoSmallBottom]} colors={colors} />
         </View>
       </View>
 

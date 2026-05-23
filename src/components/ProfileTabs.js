@@ -88,6 +88,85 @@ function formatDate(dateStr) {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
+function formatTime(timeStr) {
+  if (!timeStr) return null;
+  const [h, m] = timeStr.split(':').map(Number);
+  if (isNaN(h)) return null;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const dh = h % 12 || 12;
+  const mm = m && m !== 0 ? `:${String(m).padStart(2, '0')}` : '';
+  return `${dh}${mm} ${period}`;
+}
+
+function formatDateShort(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+const STATUS_CONFIG = {
+  upcoming:  { label: 'Upcoming',  bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
+  pending:   { label: 'Pending',   bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
+  confirmed: { label: 'Confirmed', bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
+  completed: { label: 'Completed', bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF' },
+  cancelled: { label: 'Cancelled', bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
+};
+
+function ClientBookingCard({ booking, colors, styles }) {
+  const stylist     = booking.stylist || booking.stylists || {};
+  const name        = stylist.full_name || stylist.business_name || stylist.username || 'Stylist';
+  const avatarUrl   = stylist.avatar_url;
+  const date        = formatDateShort(booking.appointment_date);
+  const time        = formatTime(booking.appointment_time);
+  const isPaid      = booking.deposit_status === 'paid' || booking.deposit_status === 'Paid';
+  const statusKey   = booking.status?.toLowerCase() || 'upcoming';
+  const statusCfg   = STATUS_CONFIG[statusKey] || STATUS_CONFIG.upcoming;
+  const initial     = name.charAt(0).toUpperCase();
+
+  return (
+    <View style={[styles.bkCard, { borderColor: colors.borderLight }]}>
+      {/* Top row: avatar + name + status */}
+      <View style={styles.bkTopRow}>
+        {/* Avatar */}
+        {avatarUrl ? (
+          <Image source={{ uri: avatarUrl }} style={styles.bkAvatar} />
+        ) : (
+          <View style={[styles.bkAvatar, styles.bkAvatarPlaceholder, { backgroundColor: colors.primaryLight || '#FDF1EE' }]}>
+            <Text style={[styles.bkAvatarInitial, { color: colors.primary }]}>{initial}</Text>
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.bkStylistName, { color: colors.text }]} numberOfLines={1}>{name}</Text>
+          <Text style={[styles.bkServiceName, { color: colors.textSecondary }]} numberOfLines={1}>{booking.service_name}</Text>
+        </View>
+        {/* Status pill */}
+        <View style={[styles.bkStatusPill, { backgroundColor: statusCfg.bg }]}>
+          <View style={[styles.bkStatusDot, { backgroundColor: statusCfg.dot }]} />
+          <Text style={[styles.bkStatusText, { color: statusCfg.text }]}>{statusCfg.label}</Text>
+        </View>
+      </View>
+
+      {/* Bottom row: date + time + deposit badge */}
+      <View style={[styles.bkMetaRow, { borderTopColor: colors.borderLight }]}>
+        <Icon name="calendar-outline" size={13} color={colors.textMuted} />
+        <Text style={[styles.bkMeta, { color: colors.textMuted }]}>{date}</Text>
+        {time && (
+          <>
+            <View style={[styles.bkMetaDot, { backgroundColor: colors.borderLight }]} />
+            <Icon name="time-outline" size={13} color={colors.textMuted} />
+            <Text style={[styles.bkMeta, { color: colors.textMuted }]}>{time}</Text>
+          </>
+        )}
+        {isPaid && (
+          <View style={[styles.bkDepositBadge, { marginLeft: 'auto' }]}>
+            <Text style={styles.bkDepositText}>Deposit Paid</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
 export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const [activeTab, setActiveTab] = useState('posts');
   const [selectedPost, setSelectedPost] = useState(null);
@@ -310,7 +389,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
       case 'favorites':
         return <SavedLooks />;
 
-      case 'bookings':
+      case 'bookings': {
         if (!isOwnProfile) {
           return (
             <View style={styles.emptyState}>
@@ -325,48 +404,87 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
         if (bookings.length === 0) {
           return (
             <View style={styles.emptyState}>
+              <Icon name="calendar-outline" size={44} color={colors.border} />
               <Text style={styles.emptyTitle}>No bookings yet</Text>
               <Text style={styles.emptyText}>
-                {isOwnStylist ? 'Client bookings will appear here' : 'Your appointments will appear here'}
+                {isOwnStylist ? 'Client bookings will appear here' : 'Book a stylist to see your appointments here'}
               </Text>
             </View>
           );
         }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const upcoming = bookings.filter(b => {
+          const s = b.status?.toLowerCase();
+          if (s === 'cancelled' || s === 'completed') return false;
+          const d = b.appointment_date ? new Date(b.appointment_date + 'T00:00:00') : null;
+          return !d || d >= today;
+        });
+        const past = bookings.filter(b => {
+          const s = b.status?.toLowerCase();
+          if (s === 'cancelled' || s === 'completed') return true;
+          const d = b.appointment_date ? new Date(b.appointment_date + 'T00:00:00') : null;
+          return d && d < today;
+        });
+
+        const renderSection = (label, items) => {
+          if (!items.length) return null;
+          return (
+            <View style={styles.bkSection}>
+              <Text style={[styles.bkSectionLabel, { color: colors.textMuted }]}>{label}</Text>
+              {items.map(b => (
+                isOwnStylist
+                  // Stylist view: reuse simple card (their dashboard has the full view)
+                  ? (
+                    <View key={b.id} style={[styles.bkCard, { borderColor: colors.borderLight }]}>
+                      <View style={styles.bkTopRow}>
+                        <View style={[styles.bkAvatar, styles.bkAvatarPlaceholder, { backgroundColor: colors.primaryLight || '#FDF1EE' }]}>
+                          <Text style={[styles.bkAvatarInitial, { color: colors.primary }]}>
+                            {(b.client?.full_name || b.client?.username || 'C').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.bkStylistName, { color: colors.text }]} numberOfLines={1}>
+                            {b.client?.full_name || b.client?.username || 'Client'}
+                          </Text>
+                          <Text style={[styles.bkServiceName, { color: colors.textSecondary }]} numberOfLines={1}>{b.service_name}</Text>
+                        </View>
+                        <View style={[styles.bkStatusPill, { backgroundColor: (STATUS_CONFIG[b.status?.toLowerCase()] || STATUS_CONFIG.upcoming).bg }]}>
+                          <View style={[styles.bkStatusDot, { backgroundColor: (STATUS_CONFIG[b.status?.toLowerCase()] || STATUS_CONFIG.upcoming).dot }]} />
+                          <Text style={[styles.bkStatusText, { color: (STATUS_CONFIG[b.status?.toLowerCase()] || STATUS_CONFIG.upcoming).text }]}>
+                            {(STATUS_CONFIG[b.status?.toLowerCase()] || STATUS_CONFIG.upcoming).label}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.bkMetaRow, { borderTopColor: colors.borderLight }]}>
+                        <Icon name="calendar-outline" size={13} color={colors.textMuted} />
+                        <Text style={[styles.bkMeta, { color: colors.textMuted }]}>{formatDateShort(b.appointment_date)}</Text>
+                        {formatTime(b.appointment_time) && (
+                          <>
+                            <View style={[styles.bkMetaDot, { backgroundColor: colors.borderLight }]} />
+                            <Icon name="time-outline" size={13} color={colors.textMuted} />
+                            <Text style={[styles.bkMeta, { color: colors.textMuted }]}>{formatTime(b.appointment_time)}</Text>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  )
+                  // Client view: full ClientBookingCard
+                  : <ClientBookingCard key={b.id} booking={b} colors={colors} styles={styles} />
+              ))}
+            </View>
+          );
+        };
+
         return (
           <View style={styles.bookingsList}>
-            {bookings.map((booking) => {
-              const isUpcoming = booking.status === 'upcoming';
-              const isCancelled = booking.status === 'cancelled';
-              const displayName = isOwnStylist
-                ? (booking.client?.full_name || booking.client?.username || 'Client')
-                : (booking.stylists?.full_name || booking.stylists?.business_name || booking.stylists?.username || 'Unknown Stylist');
-              const badgeStyle = isUpcoming
-                ? styles.statusUpcoming
-                : isCancelled
-                  ? styles.statusCancelled
-                  : styles.statusCompleted;
-              const badgeTextStyle = isUpcoming
-                ? styles.statusUpcomingText
-                : isCancelled
-                  ? styles.statusCancelledText
-                  : styles.statusCompletedText;
-              return (
-                <View key={booking.id} style={styles.bookingCard}>
-                  <View style={styles.bookingRow}>
-                    <Text style={styles.bookingStylist}>{displayName}</Text>
-                    <View style={[styles.statusBadge, badgeStyle]}>
-                      <Text style={[styles.statusText, badgeTextStyle]}>
-                        {booking.status.charAt(0).toUpperCase() + booking.status.slice(1)}
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={styles.bookingService}>{booking.service_name}</Text>
-                  <Text style={styles.bookingDate}>{formatDate(booking.appointment_date)}</Text>
-                </View>
-              );
-            })}
+            {renderSection('Upcoming', upcoming)}
+            {renderSection('Past', past)}
           </View>
         );
+      }
 
       case 'hair':
         if (!isOwnProfile) {
@@ -539,67 +657,103 @@ const makeStyles = (c) => StyleSheet.create({
     height: 6,
   },
 
-  // Bookings
+  // Bookings list wrapper
   bookingsList: {
-    padding: 16,
-    gap: 12,
+    paddingBottom: 40,
   },
-  bookingCard: {
-    backgroundColor: c.surface,
-    borderRadius: 14,
-    padding: 16,
+
+  // ── New booking card styles ──────────────────────────────────────────────────
+  bkSection: {
+    paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 4,
+  },
+  bkSectionLabel: {
+    fontSize: 11,
+    fontFamily: 'Figtree_700Bold',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  bkCard: {
     borderWidth: 1,
-    borderColor: c.border,
-    gap: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 10,
+    backgroundColor: c.surface,
   },
-  bookingRow: {
+  bkTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+    padding: 14,
+  },
+  bkAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+  },
+  bkAvatarPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bkAvatarInitial: {
+    fontSize: 17,
+    fontFamily: 'Figtree_700Bold',
+  },
+  bkStylistName: {
+    fontSize: 15,
+    fontFamily: 'Figtree_700Bold',
     marginBottom: 2,
   },
-  bookingStylist: {
-    fontSize: 16,
-    fontFamily: 'Figtree_600SemiBold',
-    color: c.text,
-    flex: 1,
-  },
-  bookingService: {
-    fontSize: 14,
-    color: c.textSecondary,
+  bkServiceName: {
+    fontSize: 13,
     fontFamily: 'Figtree_500Medium',
   },
-  bookingDate: {
-    fontSize: 14,
-    color: c.textSecondary,
-    marginTop: 4,
-  },
-  statusBadge: {
+  bkStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: 20,
   },
-  statusUpcoming: {
-    backgroundColor: '#FEF3CD',
+  bkStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
-  statusCompleted: {
-    backgroundColor: c.borderLight,
-  },
-  statusCancelled: {
-    backgroundColor: '#fee2e2',
-  },
-  statusText: {
-    fontSize: 12,
+  bkStatusText: {
+    fontSize: 11,
     fontFamily: 'Figtree_600SemiBold',
   },
-  statusUpcomingText: {
-    color: '#9A6200',
+  bkMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  statusCompletedText: {
-    color: c.textSecondary,
+  bkMeta: {
+    fontSize: 12,
+    fontFamily: 'Figtree_500Medium',
   },
-  statusCancelledText: {
-    color: '#dc2626',
+  bkMetaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+  },
+  bkDepositBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#C8835A22',
+  },
+  bkDepositText: {
+    fontSize: 10,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#C8835A',
   },
 
   // Empty state

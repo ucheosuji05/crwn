@@ -232,145 +232,280 @@ function AddServiceModal({ visible, onClose, onSave, colors, styles }) {
 
 const TIME_OPTIONS = Array.from({ length: 17 }, (_, i) => i + 6); // 6 AM – 10 PM
 
+// Mini calendar grid used inside BlockTimeModal
+function MiniCalendar({ selectedDate, onSelectDate, colors }) {
+  const today = useMemo(() => { const d = new Date(); d.setHours(0,0,0,0); return d; }, []);
+  const [viewMonth, setViewMonth] = useState(() =>
+    selectedDate ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1)
+                 : new Date(today.getFullYear(), today.getMonth(), 1)
+  );
+
+  const cells = useMemo(() => {
+    const year  = viewMonth.getFullYear();
+    const month = viewMonth.getMonth();
+    const first = new Date(year, month, 1).getDay();
+    const total = new Date(year, month + 1, 0).getDate();
+    const out   = [];
+    for (let i = 0; i < first; i++) out.push(null);
+    for (let d = 1; d <= total; d++) out.push(new Date(year, month, d));
+    return out;
+  }, [viewMonth]);
+
+  const isSame = (a, b) => a && b &&
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth()    === b.getMonth()    &&
+    a.getDate()     === b.getDate();
+
+  return (
+    <View>
+      {/* Month navigation */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <TouchableOpacity onPress={() => setViewMonth(m => new Date(m.getFullYear(), m.getMonth() - 1, 1))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-back" size={20} color={colors.text} />
+        </TouchableOpacity>
+        <Text style={{ fontSize: 15, fontFamily: 'Figtree_700Bold', color: colors.text }}>
+          {MONTHS[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+        </Text>
+        <TouchableOpacity onPress={() => setViewMonth(m => new Date(m.getFullYear(), m.getMonth() + 1, 1))} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <Ionicons name="chevron-forward" size={20} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Day headers */}
+      <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+        {DAYS_SHORT.map(d => (
+          <Text key={d} style={{ flex: 1, textAlign: 'center', fontSize: 10, fontFamily: 'Figtree_600SemiBold', color: colors.textMuted, textTransform: 'uppercase' }}>{d}</Text>
+        ))}
+      </View>
+
+      {/* Date grid */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {cells.map((day, i) => {
+          if (!day) return <View key={`e-${i}`} style={{ width: '14.28%', height: 36 }} />;
+          const isToday    = isSame(day, today);
+          const isSelected = isSame(day, selectedDate);
+          const isPast     = day < today;
+          return (
+            <TouchableOpacity
+              key={day.toISOString()}
+              style={{
+                width: '14.28%', height: 36,
+                alignItems: 'center', justifyContent: 'center',
+              }}
+              onPress={() => onSelectDate(day)}
+              disabled={isPast}
+            >
+              <View style={{
+                width: 30, height: 30, borderRadius: 15,
+                alignItems: 'center', justifyContent: 'center',
+                backgroundColor: isSelected ? '#5D1F1F' : 'transparent',
+              }}>
+                <Text style={{
+                  fontSize: 13,
+                  fontFamily: isSelected ? 'Figtree_700Bold' : 'Figtree_500Medium',
+                  color: isSelected ? '#fff' : isToday ? '#C8835A' : isPast ? colors.borderLight : colors.text,
+                }}>
+                  {day.getDate()}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles }) {
-  const [date,      setDate]      = useState('');
-  const [allDay,    setAllDay]    = useState(true);
-  const [startHour, setStartHour] = useState(9);
-  const [endHour,   setEndHour]   = useState(17);
-  const [reason,    setReason]    = useState('');
-  const [saving,    setSaving]    = useState(false);
-  const [openPicker, setOpenPicker] = useState(null); // 'start' | 'end' | null
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [allDay,       setAllDay]       = useState(true);
+  const [startHour,    setStartHour]    = useState(9);
+  const [endHour,      setEndHour]      = useState(17);
+  const [reason,       setReason]       = useState('');
+  const [saving,       setSaving]       = useState(false);
 
   useEffect(() => {
-    if (visible && defaultDate) setDate(toDateStr(defaultDate));
+    if (visible) setSelectedDate(defaultDate || new Date());
   }, [visible, defaultDate]);
 
-  const reset = () => { setAllDay(true); setStartHour(9); setEndHour(17); setReason(''); setSaving(false); setOpenPicker(null); };
+  const reset = () => {
+    setAllDay(true); setStartHour(9); setEndHour(17);
+    setReason(''); setSaving(false);
+  };
 
   const handleSave = async () => {
-    if (!date.trim()) { Alert.alert('Required', 'Please enter a date.'); return; }
+    if (!selectedDate) { Alert.alert('Required', 'Please select a date.'); return; }
     if (!allDay && endHour <= startHour) { Alert.alert('Invalid', 'End time must be after start time.'); return; }
     setSaving(true);
-    await onSave({
-      date: date.trim(),
+    const result = await onSave({
+      date:      toDateStr(selectedDate),
       allDay,
       startTime: allDay ? null : `${String(startHour).padStart(2, '0')}:00:00`,
       endTime:   allDay ? null : `${String(endHour).padStart(2, '0')}:00:00`,
       reason:    reason.trim() || null,
     });
     setSaving(false);
-    reset();
-    onClose();
+    // Only close the modal when the save actually worked
+    if (result?.success) {
+      reset();
+      onClose();
+    }
   };
+
+  const displayDate = selectedDate
+    ? selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
+    : 'Select a date';
 
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { reset(); onClose(); }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={[styles.modalContainer, { backgroundColor: colors.surface }]}>
+
+          {/* Header */}
           <View style={styles.addServiceModalHeader}>
+            <TouchableOpacity onPress={() => { reset(); onClose(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close" size={22} color={colors.text} />
+            </TouchableOpacity>
             <Text style={styles.addServiceModalTitle}>Block Time Off</Text>
-            <TouchableOpacity onPress={() => { reset(); onClose(); }}>
-              <Ionicons name="close" size={24} color={colors.text} />
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={saving || !selectedDate}
+              style={{ opacity: saving || !selectedDate ? 0.4 : 1 }}
+            >
+              {saving
+                ? <ActivityIndicator size="small" color={colors.primary} />
+                : <Text style={{ fontSize: 15, fontFamily: 'Figtree_700Bold', color: colors.primary }}>Save</Text>
+              }
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
-            {/* Date */}
-            <Text style={styles.inputLabel}>Date</Text>
-            <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBackground }]}
-              placeholder="YYYY-MM-DD  e.g. 2026-06-15"
-              placeholderTextColor={colors.placeholder}
-              value={date}
-              onChangeText={setDate}
-            />
+          <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
 
-            {/* All day toggle */}
-            <View style={styles.blockAllDayRow}>
-              <View>
-                <Text style={[styles.blockAllDayLabel, { color: colors.text }]}>All Day</Text>
-                <Text style={[styles.blockAllDaySub, { color: colors.textMuted }]}>
-                  {allDay ? 'Entire day is blocked' : 'Specific hours only'}
-                </Text>
-              </View>
-              <Switch
-                value={allDay}
-                onValueChange={setAllDay}
-                trackColor={{ false: colors.borderLight, true: '#C8835A55' }}
-                thumbColor={allDay ? '#5D1F1F' : colors.textMuted}
+            {/* ── Selected date display ── */}
+            <View style={[styles.blockDateDisplay, { borderColor: colors.borderLight }]}>
+              <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+              <Text style={[styles.blockDateText, { color: selectedDate ? colors.text : colors.textMuted }]}>
+                {displayDate}
+              </Text>
+            </View>
+
+            {/* ── Inline mini calendar ── */}
+            <View style={[styles.blockCalCard, { borderColor: colors.borderLight }]}>
+              <MiniCalendar
+                selectedDate={selectedDate}
+                onSelectDate={setSelectedDate}
+                colors={colors}
               />
             </View>
 
-            {/* Time range — shown only when not all day */}
+            {/* ── Duration type ── */}
+            <Text style={[styles.blockSectionLabel, { color: colors.textMuted }]}>DURATION</Text>
+            <View style={[styles.blockSegment, { borderColor: colors.borderLight, backgroundColor: colors.inputBackground }]}>
+              <TouchableOpacity
+                style={[styles.blockSegBtn, allDay && { backgroundColor: '#5D1F1F' }]}
+                onPress={() => setAllDay(true)}
+              >
+                <Ionicons name="sunny-outline" size={14} color={allDay ? '#fff' : colors.textMuted} />
+                <Text style={[styles.blockSegBtnText, { color: allDay ? '#fff' : colors.textMuted }]}>All Day</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.blockSegBtn, !allDay && { backgroundColor: '#5D1F1F' }]}
+                onPress={() => setAllDay(false)}
+              >
+                <Ionicons name="time-outline" size={14} color={!allDay ? '#fff' : colors.textMuted} />
+                <Text style={[styles.blockSegBtnText, { color: !allDay ? '#fff' : colors.textMuted }]}>Custom Hours</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* ── Custom time range ── */}
             {!allDay && (
-              <View style={styles.blockTimeRow}>
-                {/* Start */}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Start Time</Text>
-                  <TouchableOpacity
-                    style={[styles.blockTimeBtn2, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
-                    onPress={() => setOpenPicker(openPicker === 'start' ? null : 'start')}
+              <View style={[styles.blockTimeCard, { borderColor: colors.borderLight }]}>
+                {/* Start time */}
+                <View style={styles.blockTimeSection}>
+                  <Text style={[styles.blockTimeSectionLabel, { color: colors.textMuted }]}>FROM</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
                   >
-                    <Text style={{ color: colors.text, fontSize: 14 }}>{fmtHour(startHour)}</Text>
-                    <Ionicons name="chevron-down" size={13} color={colors.textMuted} />
-                  </TouchableOpacity>
-                  {openPicker === 'start' && (
-                    <View style={[styles.timeDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled>
-                        {TIME_OPTIONS.map(h => (
-                          <TouchableOpacity key={h} style={styles.timeOption} onPress={() => { setStartHour(h); setOpenPicker(null); }}>
-                            <Text style={{ color: h === startHour ? colors.primary : colors.text, fontFamily: h === startHour ? 'Figtree_600SemiBold' : 'Figtree_400Regular', fontSize: 14 }}>{fmtHour(h)}</Text>
-                            {h === startHour && <Ionicons name="checkmark" size={14} color={colors.primary} />}
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
+                    {TIME_OPTIONS.map(h => (
+                      <TouchableOpacity
+                        key={`s-${h}`}
+                        style={[styles.blockTimeChip, { borderColor: colors.border },
+                          h === startHour && { backgroundColor: '#5D1F1F', borderColor: '#5D1F1F' }
+                        ]}
+                        onPress={() => { setStartHour(h); if (endHour <= h) setEndHour(h + 1); }}
+                      >
+                        <Text style={[styles.blockTimeChipText, { color: h === startHour ? '#fff' : colors.text }]}>
+                          {fmtHour(h)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 </View>
 
-                <View style={{ width: 12 }} />
+                <View style={[styles.blockTimeDivider, { backgroundColor: colors.borderLight }]} />
 
-                {/* End */}
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>End Time</Text>
-                  <TouchableOpacity
-                    style={[styles.blockTimeBtn2, { borderColor: colors.border, backgroundColor: colors.inputBackground }]}
-                    onPress={() => setOpenPicker(openPicker === 'end' ? null : 'end')}
+                {/* End time */}
+                <View style={styles.blockTimeSection}>
+                  <Text style={[styles.blockTimeSectionLabel, { color: colors.textMuted }]}>TO</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
                   >
-                    <Text style={{ color: colors.text, fontSize: 14 }}>{fmtHour(endHour)}</Text>
-                    <Ionicons name="chevron-down" size={13} color={colors.textMuted} />
-                  </TouchableOpacity>
-                  {openPicker === 'end' && (
-                    <View style={[styles.timeDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                      <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled>
-                        {TIME_OPTIONS.filter(h => h > startHour).map(h => (
-                          <TouchableOpacity key={h} style={styles.timeOption} onPress={() => { setEndHour(h); setOpenPicker(null); }}>
-                            <Text style={{ color: h === endHour ? colors.primary : colors.text, fontFamily: h === endHour ? 'Figtree_600SemiBold' : 'Figtree_400Regular', fontSize: 14 }}>{fmtHour(h)}</Text>
-                            {h === endHour && <Ionicons name="checkmark" size={14} color={colors.primary} />}
-                          </TouchableOpacity>
-                        ))}
-                      </ScrollView>
-                    </View>
-                  )}
+                    {TIME_OPTIONS.filter(h => h > startHour).map(h => (
+                      <TouchableOpacity
+                        key={`e-${h}`}
+                        style={[styles.blockTimeChip, { borderColor: colors.border },
+                          h === endHour && { backgroundColor: '#5D1F1F', borderColor: '#5D1F1F' }
+                        ]}
+                        onPress={() => setEndHour(h)}
+                      >
+                        <Text style={[styles.blockTimeChipText, { color: h === endHour ? '#fff' : colors.text }]}>
+                          {fmtHour(h)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* Summary */}
+                <View style={[styles.blockTimeSummary, { backgroundColor: colors.primaryLight || '#FDF1EE' }]}>
+                  <Ionicons name="time-outline" size={14} color={colors.primary} />
+                  <Text style={[styles.blockTimeSummaryText, { color: colors.primary }]}>
+                    {fmtHour(startHour)} – {fmtHour(endHour)}
+                  </Text>
                 </View>
               </View>
             )}
 
-            {/* Reason */}
-            <Text style={styles.inputLabel}>Reason (optional)</Text>
+            {/* ── Reason ── */}
+            <Text style={[styles.blockSectionLabel, { color: colors.textMuted, marginTop: 20 }]}>REASON (OPTIONAL)</Text>
             <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.inputBackground }]}
-              placeholder="e.g. Personal appointment, vacation..."
+              style={[styles.input, styles.blockReasonInput, { color: colors.text, borderColor: colors.borderLight, backgroundColor: colors.inputBackground }]}
+              placeholder="e.g. Personal time, holiday, travel..."
               placeholderTextColor={colors.placeholder}
               value={reason}
               onChangeText={setReason}
+              multiline
+              numberOfLines={3}
+              textAlignVertical="top"
             />
+
           </ScrollView>
 
-          <TouchableOpacity style={[styles.saveBtn, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
-            <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-            {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveBtnText}>Block This Time</Text>}
-          </TouchableOpacity>
+          {/* Save button */}
+          <View style={{ padding: 16, paddingBottom: Platform.OS === 'ios' ? 28 : 16 }}>
+            <TouchableOpacity style={[styles.saveBtn, (saving || !selectedDate) && { opacity: 0.5 }]} onPress={handleSave} disabled={saving || !selectedDate}>
+              <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+              {saving
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.saveBtnText}>Block This Time</Text>
+              }
+            </TouchableOpacity>
+          </View>
+
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -611,12 +746,20 @@ export default function StylistDashboardScreen() {
 
     if (!error && data) {
       setBlockedTimes(prev => [...prev, data]);
+      // Switch to calendar view and jump to the blocked date so it's immediately visible
+      const blockedDate = new Date(date + 'T00:00:00');
+      setBookingView('calendar');
+      setCalView('Month');
+      setSelectedDay(blockedDate);
+      setCalMonth(new Date(blockedDate.getFullYear(), blockedDate.getMonth(), 1));
+      return { success: true };
     } else {
-      console.warn('[BlockTime] Save failed — ensure blocked_times table exists:', error?.message);
-      Alert.alert(
-        'Setup Required',
-        'Add the blocked_times table to your Supabase database. See console for SQL.',
-      );
+      console.warn('[BlockTime] Save failed:', error?.message, error?.code);
+      const msg = error?.code === '42P01'
+        ? 'The blocked_times table hasn\'t been created yet.\n\nRun the SQL from the code comments in your Supabase SQL Editor to set it up.'
+        : error?.message || 'Something went wrong. Please try again.';
+      Alert.alert('Could not save', msg);
+      return { success: false };
     }
   };
 
@@ -1126,56 +1269,107 @@ export default function StylistDashboardScreen() {
     );
   };
 
-  const renderWeekView = () => (
-    <View>
-      <View style={styles.calNav}>
-        <TouchableOpacity onPress={() => setCalWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() - 7); return d; })}>
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </TouchableOpacity>
-        <Text style={styles.calNavTitle}>
-          {weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
-          {weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-        </Text>
-        <TouchableOpacity onPress={() => setCalWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() + 7); return d; })}>
-          <Ionicons name="chevron-forward" size={22} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.weekRow}>
-        {weekDays.map((day) => {
-          const isToday    = sameDay(day, today);
-          const isSelected = sameDay(day, selectedDay);
-          const count      = bookingsForDay(bookings, day).length;
-          return (
-            <TouchableOpacity key={day.toISOString()} style={[styles.weekCell, isSelected && styles.weekCellSelected]} onPress={() => setSelectedDay(day)}>
-              <Text style={[styles.weekDayLabel, isToday && { color: colors.primary }]}>{DAYS_SHORT[day.getDay()]}</Text>
-              <View style={[styles.weekDayNum, isSelected && { backgroundColor: colors.primary }]}>
-                <Text style={[styles.weekDayNumText, isSelected && { color: '#fff' }]}>{day.getDate()}</Text>
-              </View>
-              {count > 0 && (
-                <View style={[styles.weekBadge, { backgroundColor: colors.primary }]}>
-                  <Text style={styles.weekBadgeText}>{count}</Text>
+  const renderWeekView = () => {
+    const selDayBlocked  = blockedForDay(blockedTimes, selectedDay);
+    const selDayBookings = bookingsForDay(bookings, selectedDay);
+    return (
+      <View>
+        <View style={styles.calNav}>
+          <TouchableOpacity onPress={() => setCalWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() - 7); return d; })}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={styles.calNavTitle}>
+            {weekDays[0].toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} –{' '}
+            {weekDays[6].toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </Text>
+          <TouchableOpacity onPress={() => setCalWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() + 7); return d; })}>
+            <Ionicons name="chevron-forward" size={22} color={colors.text} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.weekRow}>
+          {weekDays.map((day) => {
+            const isToday    = sameDay(day, today);
+            const isSelected = sameDay(day, selectedDay);
+            const count      = bookingsForDay(bookings, day).length;
+            const isBlocked  = blockedForDay(blockedTimes, day).length > 0;
+            return (
+              <TouchableOpacity
+                key={day.toISOString()}
+                style={[styles.weekCell, isSelected && styles.weekCellSelected, isBlocked && !count && styles.weekCellOff]}
+                onPress={() => setSelectedDay(day)}
+              >
+                <Text style={[styles.weekDayLabel, isToday && { color: colors.primary }]}>{DAYS_SHORT[day.getDay()]}</Text>
+                <View style={[styles.weekDayNum, isSelected && { backgroundColor: colors.primary }]}>
+                  <Text style={[styles.weekDayNumText, isSelected && { color: '#fff' }]}>{day.getDate()}</Text>
                 </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+                {count > 0 && (
+                  <View style={[styles.weekBadge, { backgroundColor: colors.primary }]}>
+                    <Text style={styles.weekBadgeText}>{count}</Text>
+                  </View>
+                )}
+                {isBlocked && count === 0 && (
+                  <View style={[styles.weekBadge, { backgroundColor: '#9ca3af' }]}>
+                    <Text style={styles.weekBadgeText}>Off</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <View style={styles.calDayBookings}>
+          <Text style={styles.calDayBookingsTitle}>
+            {selectedDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </Text>
+          {/* Blocked time slots */}
+          {selDayBlocked.map(b => (
+            <View key={b.id} style={styles.blockedSlotRow}>
+              <View style={styles.blockedSlotLeft}>
+                <View style={[styles.blockedSlotIcon, { backgroundColor: '#9ca3af22' }]}>
+                  <Ionicons name="ban-outline" size={14} color="#9ca3af" />
+                </View>
+                <View>
+                  <Text style={[styles.blockedSlotTitle, { color: colors.text }]}>
+                    {b.all_day ? 'All Day Blocked' : `${formatTime(b.start_time)} – ${formatTime(b.end_time)}`}
+                  </Text>
+                  {b.reason ? <Text style={[styles.blockedSlotReason, { color: colors.textMuted }]}>{b.reason}</Text> : null}
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => Alert.alert('Remove Block', 'Remove this blocked time?', [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Remove', style: 'destructive', onPress: () => handleDeleteBlock(b.id) },
+                ])}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+              </TouchableOpacity>
+            </View>
+          ))}
+          {selDayBookings.length === 0 && selDayBlocked.length === 0
+            ? <Text style={styles.calEmptyText}>No bookings this day</Text>
+            : selDayBookings.map(b => (
+              <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles} onPress={() => openAppointmentDetail(b)} />
+            ))
+          }
+        </View>
       </View>
-      <View style={styles.calDayBookings}>
-        <Text style={styles.calDayBookingsTitle}>
-          {selectedDay.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </Text>
-        {bookingsForDay(bookings, selectedDay).length === 0
-          ? <Text style={styles.calEmptyText}>No bookings this day</Text>
-          : bookingsForDay(bookings, selectedDay).map(b => (
-            <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles} onPress={() => openAppointmentDetail(b)} />
-          ))
-        }
-      </View>
-    </View>
-  );
+    );
+  };
 
   const renderDayView = () => {
-    const dayBookings = bookingsForDay(bookings, selectedDay);
+    const dayBookings    = bookingsForDay(bookings, selectedDay);
+    const dayBlocked     = blockedForDay(blockedTimes, selectedDay);
+    const allDayBlocks   = dayBlocked.filter(b => b.all_day);
+    const partialBlocks  = dayBlocked.filter(b => !b.all_day && b.start_time && b.end_time);
+
+    const isHourBlocked = (h) =>
+      allDayBlocks.length > 0 ||
+      partialBlocks.some(b => {
+        const startH = parseInt(b.start_time.split(':')[0], 10);
+        const endH   = parseInt(b.end_time.split(':')[0], 10);
+        return h >= startH && h < endH;
+      });
+
     return (
       <View>
         <View style={styles.calNav}>
@@ -1189,16 +1383,44 @@ export default function StylistDashboardScreen() {
             <Ionicons name="chevron-forward" size={22} color={colors.text} />
           </TouchableOpacity>
         </View>
+
+        {/* All-day blocked banner */}
+        {allDayBlocks.map(b => (
+          <View key={b.id} style={styles.blockedBanner}>
+            <Ionicons name="ban-outline" size={14} color="#9ca3af" />
+            <Text style={styles.blockedBannerText}>
+              All Day Off{b.reason ? ` — ${b.reason}` : ''}
+            </Text>
+            <TouchableOpacity
+              onPress={() => Alert.alert('Remove Block', 'Remove this blocked time?', [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Remove', style: 'destructive', onPress: () => handleDeleteBlock(b.id) },
+              ])}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              style={{ marginLeft: 'auto' }}
+            >
+              <Ionicons name="trash-outline" size={14} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+        ))}
+
         {HOURS.map(h => {
           const label = h < 12 ? `${h} AM` : h === 12 ? '12 PM' : `${h - 12} PM`;
           const slotBookings = dayBookings.filter(b => {
             if (!b.appointment_time) return false;
-            return parseInt(b.appointment_time.split(':')[0]) === h;
+            return parseInt(b.appointment_time.split(':')[0], 10) === h;
           });
+          const hourOff = isHourBlocked(h);
           return (
-            <View key={h} style={styles.hourRow}>
-              <Text style={styles.hourLabel}>{label}</Text>
-              <View style={styles.hourLine} />
+            <View key={h} style={[styles.hourRow, hourOff && { backgroundColor: '#9ca3af08' }]}>
+              <Text style={[styles.hourLabel, hourOff && slotBookings.length === 0 && { color: '#9ca3af' }]}>{label}</Text>
+              <View style={[styles.hourLine, hourOff && { backgroundColor: '#9ca3af33' }]} />
+              {/* Grey "Off" bar when this hour is blocked and no booking is occupying it */}
+              {hourOff && slotBookings.length === 0 && (
+                <View style={[styles.hourBooking, { backgroundColor: '#9ca3af14', borderLeftColor: '#9ca3af', borderLeftWidth: 3 }]}>
+                  <Text style={{ fontSize: 11, fontFamily: 'Figtree_500Medium', color: '#9ca3af' }}>Unavailable</Text>
+                </View>
+              )}
               {slotBookings.map(b => (
                 <TouchableOpacity key={b.id} style={[styles.hourBooking, { backgroundColor: colors.primaryLight, borderLeftColor: colors.primary }]}
                   onPress={() => openAppointmentDetail(b)}>
@@ -1211,8 +1433,39 @@ export default function StylistDashboardScreen() {
             </View>
           );
         })}
-        {dayBookings.length === 0 && (
+
+        {dayBookings.length === 0 && dayBlocked.length === 0 && (
           <View style={styles.emptyState}><Text style={styles.calEmptyText}>No bookings this day</Text></View>
+        )}
+
+        {/* Partial block summary at bottom (shown beneath the hour grid) */}
+        {partialBlocks.length > 0 && (
+          <View style={[styles.calDayBookings, { marginTop: 8 }]}>
+            {partialBlocks.map(b => (
+              <View key={b.id} style={styles.blockedSlotRow}>
+                <View style={styles.blockedSlotLeft}>
+                  <View style={[styles.blockedSlotIcon, { backgroundColor: '#9ca3af22' }]}>
+                    <Ionicons name="ban-outline" size={14} color="#9ca3af" />
+                  </View>
+                  <View>
+                    <Text style={[styles.blockedSlotTitle, { color: colors.text }]}>
+                      {`${formatTime(b.start_time)} – ${formatTime(b.end_time)}`}
+                    </Text>
+                    {b.reason ? <Text style={[styles.blockedSlotReason, { color: colors.textMuted }]}>{b.reason}</Text> : null}
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => Alert.alert('Remove Block', 'Remove this blocked time?', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Remove', style: 'destructive', onPress: () => handleDeleteBlock(b.id) },
+                  ])}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
         )}
       </View>
     );
@@ -1637,11 +1890,14 @@ const makeStyles = (c) => StyleSheet.create({
   weekRow:       { flexDirection: 'row', marginBottom: 16, gap: 4 },
   weekCell:      { flex: 1, alignItems: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: c.surface, borderWidth: 1, borderColor: c.borderLight, gap: 4 },
   weekCellSelected: { borderColor: '#5D1F1F' },
+  weekCellOff:   { backgroundColor: '#F5F5F5' },
   weekDayLabel:  { fontSize: 10, fontFamily: 'Figtree_600SemiBold', color: c.textMuted, textTransform: 'uppercase' },
   weekDayNum:    { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   weekDayNumText:{ fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: c.text },
   weekBadge:     { minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   weekBadgeText: { fontSize: 9, color: '#fff', fontFamily: 'Figtree_700Bold' },
+  blockedBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#9ca3af18', borderWidth: 1, borderColor: '#9ca3af44', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8 },
+  blockedBannerText: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: '#9ca3af', flex: 1 },
   hourRow:       { flexDirection: 'row', alignItems: 'flex-start', minHeight: 44, marginBottom: 2 },
   hourLabel:     { width: 52, fontSize: 11, color: c.textMuted, fontFamily: 'Figtree_400Regular', paddingTop: 4 },
   hourLine:      { flex: 1, height: 1, backgroundColor: c.borderLight, marginTop: 10 },
@@ -1809,18 +2065,22 @@ const makeStyles = (c) => StyleSheet.create({
   servicePrice:  { fontSize: 18, fontFamily: 'Figtree_700Bold', color: c.text },
 
   // ── Block time modal ──
-  blockAllDayRow: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingVertical: 14, marginTop: 4,
-    borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.borderLight,
-    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.borderLight,
-  },
-  blockAllDayLabel: { fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
-  blockAllDaySub:   { fontSize: 12, fontFamily: 'Figtree_400Regular', marginTop: 2 },
-  blockTimeRow:     { flexDirection: 'row', marginTop: 4 },
-  blockTimeBtn2:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 1, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12 },
-  timeDropdown:     { position: 'absolute', top: '100%', left: 0, right: 0, borderWidth: 1, borderRadius: 10, zIndex: 20, marginTop: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 8, overflow: 'hidden' },
-  timeOption:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 10 },
+  blockDateDisplay:      { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 12 },
+  blockDateText:         { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: c.text, flex: 1 },
+  blockCalCard:          { borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 20 },
+  blockSectionLabel:     { fontSize: 11, fontFamily: 'Figtree_700Bold', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 10, color: c.textMuted },
+  blockSegment:          { flexDirection: 'row', borderWidth: 1, borderRadius: 12, padding: 4, marginBottom: 20 },
+  blockSegBtn:           { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10 },
+  blockSegBtnText:       { fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
+  blockTimeCard:         { borderWidth: 1, borderRadius: 14, overflow: 'hidden', marginBottom: 8 },
+  blockTimeSection:      { padding: 14 },
+  blockTimeSectionLabel: { fontSize: 10, fontFamily: 'Figtree_700Bold', letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8, color: c.textMuted },
+  blockTimeChip:         { borderWidth: 1, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  blockTimeChipText:     { fontSize: 13, fontFamily: 'Figtree_500Medium' },
+  blockTimeDivider:      { height: 1 },
+  blockTimeSummary:      { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 12, margin: 8, borderRadius: 10, backgroundColor: '#FDF1EE' },
+  blockTimeSummaryText:  { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: c.primary },
+  blockReasonInput:      { minHeight: 72, paddingTop: 12, textAlignVertical: 'top' },
 
   // ── Add service modal ──
   modalContainer:      { flex: 1 },
