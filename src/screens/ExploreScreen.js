@@ -132,6 +132,7 @@ export default function ExploreScreen() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
+  const postModalScrollRef = useRef(null);
 
   const { posts, loading, loadingMore, hasMore, loadMore, refresh, deletePost } = usePosts();
   const isLoadingMoreRef = useRef(false);
@@ -550,11 +551,12 @@ export default function ExploreScreen() {
             ]}
             onPress={() => {}}
           >
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+            <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false}>
               {selectedPost && (
                 <PostCard
                   post={selectedPost}
                   currentUserId={user?.id}
+                  scrollViewRef={postModalScrollRef}
                   onCommentsOpenChange={setPostCommentsOpen}
                   onDelete={async (postId, userId) => {
                     const result = await deletePost(postId, userId);

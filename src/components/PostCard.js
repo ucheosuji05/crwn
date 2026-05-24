@@ -31,6 +31,7 @@ export default function PostCard({
   onNavigateToProfile,
   onNavigateToStylist,
   onCommentsOpenChange,
+  scrollViewRef,
 }) {
   const controlsOpacity = useRef(new Animated.Value(0)).current;
   const fadeTimer = useRef(null);
@@ -231,8 +232,10 @@ export default function PostCard({
     const { data } = await postService.getComments(postId);
     setComments(data || []);
     setCommentsLoading(false);
-    // Auto-focus the input so the keyboard scrolls mobile to the comment section
-    setTimeout(() => commentInputRef.current?.focus(), 300);
+    // Scroll the modal's ScrollView down to reveal the comments section on mobile
+    if (!isWeb) {
+      setTimeout(() => scrollViewRef?.current?.scrollToEnd({ animated: true }), 100);
+    }
   };
 
   const handleSubmitComment = async () => {
@@ -393,7 +396,7 @@ export default function PostCard({
   );
 
   const commentsInputRow = (
-    <View style={[styles.commentInput, { borderTopColor: colors.borderLight, backgroundColor: colors.surface }]}>
+    <View style={[styles.commentInput, { borderTopColor: colors.borderLight, backgroundColor: colors.surface }, isWeb && { marginTop: 'auto' }]}>
       {/* Current user avatar */}
       {currentUserProfile?.avatar_url ? (
         <Image source={{ uri: currentUserProfile.avatar_url }} style={styles.cmtInputAvatar} />

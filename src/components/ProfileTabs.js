@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -191,6 +191,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const [activeTab, setActiveTab] = useState('posts');
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
+  const postModalScrollRef = useRef(null);
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
   const [isViewedStylist, setIsViewedStylist] = useState(false);
@@ -563,10 +564,11 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
             ]}
             onPress={() => {}}
           >
-            <ScrollView showsVerticalScrollIndicator={false} bounces={false} horizontal={false}>
+            <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false} horizontal={false}>
               <PostCard
                 post={selectedPost}
                 currentUserId={user?.id}
+                scrollViewRef={postModalScrollRef}
                 onCommentsOpenChange={setPostCommentsOpen}
                 onDelete={async (postId, userId) => {
                   const result = await deletePost(postId, userId);
