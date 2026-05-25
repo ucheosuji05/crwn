@@ -21,6 +21,8 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { useProviderMode } from '../context/ProviderModeContext';
 import { supabase } from '../config/supabase';
+import { notificationService } from '../services/notificationService';
+import { bookingService } from '../services/bookingService';
 
 const Tab = createBottomTabNavigator();
 
@@ -232,7 +234,7 @@ function InAppToast({ toast, anim, onDismiss, colors, isWeb }) {
 // ── Main navigator ─────────────────────────────────────────────────────────────
 
 export default function BottomTabNavigator() {
-  const { notifCount: unreadNotifCount, bookingNotifCount } = useUnreadCount();
+  const { notifCount: unreadNotifCount, bookingNotifCount, clearNotifs, clearBookingNotifs } = useUnreadCount();
   const { colors } = useTheme();
   const { profile, profileLoaded } = useAuth();
   const { isProviderMode } = useProviderMode();
@@ -259,7 +261,15 @@ export default function BottomTabNavigator() {
       tension: 120,
       friction: 22,
     }).start();
-  }, [slideAnim]);
+
+    // Clear badge counts immediately, then persist to DB in the background
+    clearNotifs();
+    clearBookingNotifs();
+    if (profile?.id) {
+      notificationService.markAllAsRead(profile.id).catch(() => {});
+      bookingService.markAllRead(profile.id).catch(() => {});
+    }
+  }, [slideAnim, clearNotifs, clearBookingNotifs, profile?.id]);
 
   const closeNotif = useCallback(() => {
     Animated.timing(slideAnim, {

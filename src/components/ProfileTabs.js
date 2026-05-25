@@ -105,11 +105,12 @@ function formatDateShort(dateStr) {
 }
 
 const STATUS_CONFIG = {
-  upcoming:  { label: 'Upcoming',  bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
-  pending:   { label: 'Pending',   bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
-  confirmed: { label: 'Confirmed', bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
-  completed: { label: 'Completed', bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF' },
-  cancelled: { label: 'Cancelled', bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
+  upcoming:               { label: 'Upcoming',        bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
+  pending:                { label: 'Pending',         bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
+  confirmed:              { label: 'Confirmed',       bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
+  completed:              { label: 'Completed',       bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF' },
+  cancelled:              { label: 'Cancelled',       bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
+  cancellation_requested: { label: 'Cancel Requested', bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
 };
 
 function ImageWithFallback({ uri }) {
@@ -132,7 +133,7 @@ function ImageWithFallback({ uri }) {
   );
 }
 
-function ClientBookingCard({ booking, colors, styles }) {
+function ClientBookingCard({ booking, colors, styles, onPress }) {
   const stylist     = booking.stylist || booking.stylists || {};
   const name        = stylist.full_name || stylist.business_name || stylist.username || 'Stylist';
   const avatarUrl   = stylist.avatar_url;
@@ -144,7 +145,7 @@ function ClientBookingCard({ booking, colors, styles }) {
   const initial     = name.charAt(0).toUpperCase();
 
   return (
-    <View style={[styles.bkCard, { borderColor: colors.borderLight }]}>
+    <TouchableOpacity style={[styles.bkCard, { borderColor: colors.borderLight }]} onPress={onPress} activeOpacity={0.85}>
       {/* Top row: avatar + name + status */}
       <View style={styles.bkTopRow}>
         {/* Avatar */}
@@ -164,6 +165,7 @@ function ClientBookingCard({ booking, colors, styles }) {
           <View style={[styles.bkStatusDot, { backgroundColor: statusCfg.dot }]} />
           <Text style={[styles.bkStatusText, { color: statusCfg.text }]}>{statusCfg.label}</Text>
         </View>
+        <Icon name="chevron-forward" size={16} color={colors.textMuted} />
       </View>
 
       {/* Bottom row: date + time + deposit badge */}
@@ -183,7 +185,7 @@ function ClientBookingCard({ booking, colors, styles }) {
           </View>
         )}
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
@@ -194,6 +196,11 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const postModalScrollRef = useRef(null);
   const [bookings, setBookings] = useState([]);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+  const [bkConfirmAction, setBkConfirmAction] = useState(null); // null | 'cancel_pending' | 'request_cancel'
+  const [bkActionLoading, setBkActionLoading] = useState(false);
+  const [bkActionSuccess, setBkActionSuccess] = useState(null); // null | 'cancel_pending' | 'request_cancel'
+  const [bkActionError, setBkActionError] = useState(null);
   const [isViewedStylist, setIsViewedStylist] = useState(false);
   const [taggedPosts, setTaggedPosts] = useState([]);
   const [taggedLoading, setTaggedLoading] = useState(false);
@@ -387,6 +394,305 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
     }
   }, [activeTab, isOwnProfile, isOwnStylist, user?.id]);
 
+  // ── Booking cancellation handlers ───────────────────────────────────────────
+
+  const handleCancelPending = async () => {
+    if (!selectedBooking) return;
+    setBkActionLoading(true);
+    setBkActionError(null);
+    const { error } = await bookingService.cancelPendingByClient(selectedBooking.id, {
+      stylistId: (selectedBooking.stylist || {}).id,
+      userId: user?.id,
+      serviceName: selectedBooking.service_name,
+    });
+    setBkActionLoading(false);
+    if (error) {
+      console.error('[cancelPendingByClient]', JSON.stringify(error));
+      setBkActionError(error.message || 'Something went wrong. Please try again.');
+    } else {
+      setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, status: 'cancelled' } : b));
+      setBkConfirmAction(null);
+      setBkActionSuccess('cancel_pending');
+    }
+  };
+
+  const handleRequestCancellation = async () => {
+    if (!selectedBooking) return;
+    setBkActionLoading(true);
+    setBkActionError(null);
+    const { error } = await bookingService.requestCancellation(selectedBooking.id, {
+      stylistId: (selectedBooking.stylist || {}).id,
+      userId: user?.id,
+      serviceName: selectedBooking.service_name,
+      appointmentDate: selectedBooking.appointment_date,
+    });
+    setBkActionLoading(false);
+    if (error) {
+      console.error('[requestCancellation]', JSON.stringify(error));
+      setBkActionError(error.message || 'Something went wrong. Please try again.');
+    } else {
+      setBookings(prev => prev.map(b => b.id === selectedBooking.id ? { ...b, status: 'cancellation_requested' } : b));
+      setBkConfirmAction(null);
+      setBkActionSuccess('request_cancel');
+    }
+  };
+
+  // ── Booking detail modal renderer ────────────────────────────────────────────
+
+  const renderBookingDetailModal = () => {
+    // Always derive from live bookings state so UI reflects updates immediately
+    const bk = selectedBooking
+      ? (bookings.find(b => b.id === selectedBooking.id) || selectedBooking)
+      : null;
+
+    const closeBkModal = () => { setSelectedBooking(null); setBkConfirmAction(null); setBkActionSuccess(null); setBkActionError(null); };
+
+    const stylist   = bk?.stylist || {};
+    const bkName    = stylist.full_name || stylist.username || 'Stylist';
+    const bkAvatar  = stylist.avatar_url;
+    const bkInitial = bkName.charAt(0).toUpperCase();
+    const bkStatus  = bk?.status?.toLowerCase() || 'upcoming';
+    const bkCfg     = STATUS_CONFIG[bkStatus] || STATUS_CONFIG.upcoming;
+    const isPending          = bkStatus === 'pending';
+    const isActive           = bkStatus === 'upcoming' || bkStatus === 'confirmed';
+    const isCancelRequested  = bkStatus === 'cancellation_requested';
+    const isCancelled        = bkStatus === 'cancelled';
+    const isCompleted        = bkStatus === 'completed';
+
+    return (
+      <Modal
+        visible={!!bk}
+        transparent
+        animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
+        onRequestClose={closeBkModal}
+      >
+        <Pressable
+          style={[styles.backdrop, Platform.OS !== 'web' && styles.bkBackdrop]}
+          onPress={closeBkModal}
+        >
+          <Pressable
+            style={[styles.bkDetailCard, Platform.OS === 'web' && styles.bkDetailCardWeb]}
+            onPress={() => {}}
+          >
+            {/* Drag handle on mobile */}
+            {Platform.OS !== 'web' && <View style={styles.bkDetailHandle} />}
+
+            {/* Header */}
+            <View style={[styles.bkDetailHeader, { borderBottomColor: colors.borderLight }]}>
+              <Text style={[styles.bkDetailTitle, { color: colors.text }]}>Booking Details</Text>
+              <TouchableOpacity onPress={closeBkModal} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Icon name="close" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView bounces={false} showsVerticalScrollIndicator={false} contentContainerStyle={styles.bkDetailBody}>
+
+              {/* Stylist row */}
+              {bk && (
+                <View style={styles.bkDetailStylistRow}>
+                  {bkAvatar ? (
+                    <Image source={{ uri: bkAvatar }} style={styles.bkDetailAvatar} />
+                  ) : (
+                    <View style={[styles.bkDetailAvatar, styles.bkAvatarPlaceholder, { backgroundColor: colors.primaryLight || '#FDF1EE' }]}>
+                      <Text style={[styles.bkAvatarInitial, { color: colors.primary }]}>{bkInitial}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.bkDetailStylistName, { color: colors.text }]}>{bkName}</Text>
+                    <Text style={[styles.bkDetailServiceName, { color: colors.textSecondary }]}>{bk.service_name}</Text>
+                  </View>
+                  <View style={[styles.bkStatusPill, { backgroundColor: bkCfg.bg }]}>
+                    <View style={[styles.bkStatusDot, { backgroundColor: bkCfg.dot }]} />
+                    <Text style={[styles.bkStatusText, { color: bkCfg.text }]}>{bkCfg.label}</Text>
+                  </View>
+                </View>
+              )}
+
+              {/* Date / Time */}
+              {bk && (
+                <View style={[styles.bkDetailMetaRow, { borderColor: colors.borderLight }]}>
+                  <View style={styles.bkDetailMetaItem}>
+                    <Icon name="calendar-outline" size={16} color={colors.textMuted} />
+                    <Text style={[styles.bkDetailMetaText, { color: colors.text }]}>
+                      {formatDate(bk.appointment_date) || 'No date set'}
+                    </Text>
+                  </View>
+                  {!!bk.appointment_time && (
+                    <View style={styles.bkDetailMetaItem}>
+                      <Icon name="time-outline" size={16} color={colors.textMuted} />
+                      <Text style={[styles.bkDetailMetaText, { color: colors.text }]}>
+                        {formatTime(bk.appointment_time)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Notes */}
+              {!!bk?.notes && (
+                <View style={[styles.bkDetailNotesRow, { borderColor: colors.borderLight }]}>
+                  <Text style={[styles.bkDetailNotesLabel, { color: colors.textMuted }]}>NOTES</Text>
+                  <Text style={[styles.bkDetailNotesText, { color: colors.textSecondary }]}>{bk.notes}</Text>
+                </View>
+              )}
+
+              {/* ── Success state ────────────────────────────────────────── */}
+
+              {bkActionSuccess === 'request_cancel' && (
+                <View style={styles.bkSuccessBox}>
+                  <View style={styles.bkSuccessIconWrap}>
+                    <Icon name="checkmark" size={22} color="#fff" />
+                  </View>
+                  <Text style={[styles.bkSuccessTitle, { color: colors.text }]}>Request Received!</Text>
+                  <Text style={[styles.bkSuccessSub, { color: colors.textMuted }]}>
+                    Your cancellation request has been sent. You'll be notified once the stylist responds.
+                  </Text>
+                  <TouchableOpacity style={styles.bkSuccessDoneBtn} onPress={closeBkModal}>
+                    <Text style={styles.bkSuccessDoneBtnText}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {bkActionSuccess === 'cancel_pending' && (
+                <View style={styles.bkSuccessBox}>
+                  <View style={[styles.bkSuccessIconWrap, { backgroundColor: '#6B7280' }]}>
+                    <Icon name="checkmark" size={22} color="#fff" />
+                  </View>
+                  <Text style={[styles.bkSuccessTitle, { color: colors.text }]}>Booking Cancelled</Text>
+                  <Text style={[styles.bkSuccessSub, { color: colors.textMuted }]}>
+                    Your booking request has been cancelled successfully.
+                  </Text>
+                  <TouchableOpacity style={[styles.bkSuccessDoneBtn, { backgroundColor: colors.border }]} onPress={closeBkModal}>
+                    <Text style={[styles.bkSuccessDoneBtnText, { color: colors.text }]}>Done</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* ── Action area ──────────────────────────────────────────── */}
+
+              {!bkActionSuccess && bkConfirmAction === null && (
+                <>
+                  {isPending && (
+                    <TouchableOpacity
+                      style={[styles.bkDetailActionBtn, { borderColor: '#EF4444' }]}
+                      onPress={() => setBkConfirmAction('cancel_pending')}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="close-circle-outline" size={18} color="#EF4444" />
+                      <Text style={[styles.bkDetailActionBtnText, { color: '#EF4444' }]}>Cancel Booking</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {isActive && (
+                    <TouchableOpacity
+                      style={[styles.bkDetailActionBtn, { borderColor: colors.border }]}
+                      onPress={() => setBkConfirmAction('request_cancel')}
+                      activeOpacity={0.85}
+                    >
+                      <Icon name="calendar-clear-outline" size={18} color={colors.textMuted} />
+                      <Text style={[styles.bkDetailActionBtnText, { color: colors.text }]}>Request Cancellation</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {isCancelRequested && (
+                    <View style={[styles.bkInfoBox, { backgroundColor: '#FEF9EC' }]}>
+                      <Icon name="hourglass-outline" size={15} color="#92601A" />
+                      <Text style={[styles.bkInfoBoxText, { color: '#92601A' }]}>
+                        Your cancellation request is awaiting the stylist's review.
+                      </Text>
+                    </View>
+                  )}
+
+                  {isCancelled && (
+                    <View style={[styles.bkInfoBox, { backgroundColor: '#F3F4F6' }]}>
+                      <Icon name="close-circle-outline" size={15} color="#6B7280" />
+                      <Text style={[styles.bkInfoBoxText, { color: '#6B7280' }]}>This booking was cancelled.</Text>
+                    </View>
+                  )}
+
+                  {isCompleted && (
+                    <View style={[styles.bkInfoBox, { backgroundColor: '#ECFDF5' }]}>
+                      <Icon name="checkmark-circle-outline" size={15} color="#065F46" />
+                      <Text style={[styles.bkInfoBoxText, { color: '#065F46' }]}>This appointment is complete.</Text>
+                    </View>
+                  )}
+                </>
+              )}
+
+              {/* ── Confirm: cancel pending ──────────────────────────────── */}
+              {!bkActionSuccess && bkConfirmAction === 'cancel_pending' && (
+                <View style={[styles.bkConfirmBox, { borderColor: colors.borderLight }]}>
+                  <Text style={[styles.bkConfirmTitle, { color: colors.text }]}>Cancel this booking?</Text>
+                  <Text style={[styles.bkConfirmSub, { color: colors.textMuted }]}>
+                    Since this request hasn't been accepted yet, it will be cancelled immediately — no stylist approval needed.
+                  </Text>
+                  {!!bkActionError && (
+                    <Text style={styles.bkActionErrorText}>{bkActionError}</Text>
+                  )}
+                  <View style={styles.bkConfirmBtns}>
+                    <TouchableOpacity
+                      style={[styles.bkConfirmKeep, { borderColor: colors.border }]}
+                      onPress={() => { setBkConfirmAction(null); setBkActionError(null); }}
+                      disabled={bkActionLoading}
+                    >
+                      <Text style={[styles.bkConfirmKeepText, { color: colors.text }]}>Keep It</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.bkConfirmDo}
+                      onPress={handleCancelPending}
+                      disabled={bkActionLoading}
+                    >
+                      {bkActionLoading
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={styles.bkConfirmDoText}>Yes, Cancel</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* ── Confirm: request cancellation ───────────────────────── */}
+              {!bkActionSuccess && bkConfirmAction === 'request_cancel' && (
+                <View style={[styles.bkConfirmBox, { borderColor: colors.borderLight }]}>
+                  <Text style={[styles.bkConfirmTitle, { color: colors.text }]}>Request cancellation?</Text>
+                  <View style={[styles.bkDisclaimerBox, { borderColor: '#F59E0B44', backgroundColor: '#FEF9EC' }]}>
+                    <Icon name="information-circle-outline" size={15} color="#92601A" />
+                    <Text style={[styles.bkDisclaimerText, { color: '#92601A' }]}>
+                      Cancellation policies vary by stylist. Your appointment stays booked until the stylist reviews and approves — they may decline the request.
+                    </Text>
+                  </View>
+                  {!!bkActionError && (
+                    <Text style={styles.bkActionErrorText}>{bkActionError}</Text>
+                  )}
+                  <View style={styles.bkConfirmBtns}>
+                    <TouchableOpacity
+                      style={[styles.bkConfirmKeep, { borderColor: colors.border }]}
+                      onPress={() => { setBkConfirmAction(null); setBkActionError(null); }}
+                      disabled={bkActionLoading}
+                    >
+                      <Text style={[styles.bkConfirmKeepText, { color: colors.text }]}>Go Back</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.bkConfirmDo}
+                      onPress={handleRequestCancellation}
+                      disabled={bkActionLoading}
+                    >
+                      {bkActionLoading
+                        ? <ActivityIndicator size="small" color="#fff" />
+                        : <Text style={styles.bkConfirmDoText}>Send Request</Text>
+                      }
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    );
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'posts':
@@ -480,7 +786,13 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
               {items.map(b => (
                 // Always show the client view — this tab shows YOUR bookings as a client.
                 // The provider dashboard handles the stylist-side view separately.
-                <ClientBookingCard key={b.id} booking={b} colors={colors} styles={styles} />
+                <ClientBookingCard
+                  key={b.id}
+                  booking={b}
+                  colors={colors}
+                  styles={styles}
+                  onPress={() => { setSelectedBooking(b); setBkConfirmAction(null); setBkActionSuccess(null); }}
+                />
               ))}
             </View>
           );
@@ -548,6 +860,9 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
       </View>
 
       <View style={styles.content}>{renderContent()}</View>
+
+      {/* Booking detail / cancellation modal */}
+      {renderBookingDetailModal()}
 
       {/* Post detail popup */}
       <Modal
@@ -792,6 +1107,241 @@ const makeStyles = (c) => StyleSheet.create({
     fontSize: 10,
     fontFamily: 'Figtree_600SemiBold',
     color: '#C8835A',
+  },
+
+  // ── Booking detail modal ─────────────────────────────────────────────────────
+  bkBackdrop: {
+    // Mobile: sheet slides up from bottom
+    justifyContent: 'flex-end',
+    padding: 0,
+    paddingTop: 80, // leave a gap at top so it doesn't go full-screen
+  },
+  bkDetailCard: {
+    // Mobile default — bottom sheet
+    backgroundColor: c.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '80%',
+    width: '100%',
+  },
+  bkDetailCardWeb: {
+    // Web — centered card
+    borderRadius: 20,
+    maxWidth: 440,
+    width: '100%',
+    maxHeight: '80%',
+    alignSelf: 'center',
+  },
+  bkDetailHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.border,
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  bkDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  bkDetailTitle: {
+    fontSize: 17,
+    fontFamily: 'Figtree_700Bold',
+  },
+  bkDetailBody: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 32,
+    gap: 14,
+  },
+  bkDetailStylistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  bkDetailAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  bkDetailStylistName: {
+    fontSize: 16,
+    fontFamily: 'Figtree_700Bold',
+    marginBottom: 2,
+  },
+  bkDetailServiceName: {
+    fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
+  },
+  bkDetailMetaRow: {
+    flexDirection: 'row',
+    gap: 20,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  bkDetailMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  bkDetailMetaText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_500Medium',
+  },
+  bkDetailNotesRow: {
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 6,
+  },
+  bkDetailNotesLabel: {
+    fontSize: 10,
+    fontFamily: 'Figtree_700Bold',
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  bkDetailNotesText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    lineHeight: 20,
+  },
+  bkDetailActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  bkDetailActionBtnText: {
+    fontSize: 15,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+  bkInfoBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 14,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  bkInfoBoxText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
+    lineHeight: 18,
+  },
+  bkConfirmBox: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+    marginTop: 4,
+  },
+  bkConfirmTitle: {
+    fontSize: 15,
+    fontFamily: 'Figtree_700Bold',
+  },
+  bkConfirmSub: {
+    fontSize: 13,
+    fontFamily: 'Figtree_400Regular',
+    lineHeight: 18,
+  },
+  bkDisclaimerBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  bkDisclaimerText: {
+    flex: 1,
+    fontSize: 12,
+    fontFamily: 'Figtree_400Regular',
+    lineHeight: 17,
+  },
+  bkConfirmBtns: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+  },
+  bkConfirmKeep: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
+  },
+  bkConfirmKeepText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+  bkConfirmDo: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+  },
+  bkConfirmDoText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#fff',
+  },
+  bkActionErrorText: {
+    fontSize: 12,
+    fontFamily: 'Figtree_500Medium',
+    color: '#EF4444',
+    textAlign: 'center',
+  },
+
+  // Success state
+  bkSuccessBox: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    paddingHorizontal: 8,
+    gap: 10,
+  },
+  bkSuccessIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  bkSuccessTitle: {
+    fontSize: 18,
+    fontFamily: 'Figtree_700Bold',
+    textAlign: 'center',
+  },
+  bkSuccessSub: {
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    textAlign: 'center',
+    lineHeight: 20,
+    paddingHorizontal: 8,
+  },
+  bkSuccessDoneBtn: {
+    marginTop: 8,
+    paddingVertical: 13,
+    paddingHorizontal: 48,
+    borderRadius: 14,
+    backgroundColor: '#10B981',
+  },
+  bkSuccessDoneBtnText: {
+    fontSize: 15,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#fff',
   },
 
   // Empty state

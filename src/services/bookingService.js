@@ -337,4 +337,100 @@ export const bookingService = {
 
     return { error };
   },
+
+  // ── Client-side cancellation ───────────────────────────────────────────────
+
+  /**
+   * Client immediately cancels a PENDING (not yet accepted) booking.
+   * No stylist approval required — the booking is cancelled straight away.
+   */
+  async cancelPendingByClient(bookingId, { stylistId, userId, serviceName } = {}) {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingId)
+      .eq('status', 'pending');   // guard: only works while still pending
+    // Note: no .select().single() — avoids PGRST116 when RLS filters the return
+
+    if (!error && stylistId) {
+      this.sendNotification(stylistId, {
+        title: 'Booking Withdrawn',
+        body:  `${serviceName} — request cancelled by client.`,
+        type:  'booking_declined',
+        bookingId,
+        actorId: userId,
+      });
+    }
+    return { error };
+  },
+
+  /**
+   * Client requests cancellation of an already-accepted booking.
+   * Sets status to 'cancellation_requested' and notifies the stylist.
+   * The appointment stays on the calendar until the stylist approves/denies.
+   */
+  async requestCancellation(bookingId, { stylistId, userId, serviceName, appointmentDate } = {}) {
+    const { error } = await supabase
+      .from('bookings')
+      .update({ status: 'cancellation_requested' })
+      .eq('id', bookingId)
+      .in('status', ['upcoming', 'confirmed']);
+    // Note: no .select().single() — avoids PGRST116 when RLS filters the return
+
+    if (!error && stylistId) {
+      const dateLabel = appointmentDate
+        ? new Date(appointmentDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        : '';
+      this.sendNotification(stylistId, {
+        title: 'Cancellation Request',
+        body:  `${serviceName}${dateLabel ? ` — ${dateLabel}` : ''} · Client requesting cancellation`,
+        type:  'cancellation_requested',
+        bookingId,
+        actorId: userId,
+      });
+    }
+    return { error };
+  },
+
+  /** Stylist approves a client's cancellation request → booking becomes 'cancelled' */
+  async approveCancellation(bookingId, { clientId, stylistId, serviceName } = {}) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ status: 'cancelled' })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (!error && data && clientId) {
+      this.sendNotification(clientId, {
+        title: 'Cancellation Approved',
+        body:  `Your ${serviceName} appointment has been cancelled.`,
+        type:  'booking_declined',
+        bookingId,
+        actorId: stylistId,
+      });
+    }
+    return { data, error };
+  },
+
+  /** Stylist denies a client's cancellation request → booking restored to 'upcoming' */
+  async denyCancellation(bookingId, { clientId, stylistId, serviceName } = {}) {
+    const { data, error } = await supabase
+      .from('bookings')
+      .update({ status: 'upcoming' })
+      .eq('id', bookingId)
+      .select()
+      .single();
+
+    if (!error && data && clientId) {
+      this.sendNotification(clientId, {
+        title: 'Cancellation Denied',
+        body:  `Your cancellation request for ${serviceName} was not approved. Your appointment is still scheduled.`,
+        type:  'booking_confirmed',
+        bookingId,
+        actorId: stylistId,
+      });
+    }
+    return { data, error };
+  },
 };

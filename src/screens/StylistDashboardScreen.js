@@ -141,20 +141,22 @@ function clientSince(dateStr) {
 // ── Sub-components ────────────────────────────────────────────────────────────
 
 const APPT_STATUS_CFG = {
-  pending:   { label: 'Pending',   bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
-  upcoming:  { label: 'Upcoming',  bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
-  confirmed: { label: 'Confirmed', bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
-  completed: { label: 'Completed', bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF' },
-  cancelled: { label: 'Cancelled', bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
+  pending:                { label: 'Pending',        bg: '#FEF9EC', text: '#92601A', dot: '#F59E0B' },
+  upcoming:               { label: 'Upcoming',       bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
+  confirmed:              { label: 'Confirmed',      bg: '#ECFDF5', text: '#065F46', dot: '#10B981' },
+  completed:              { label: 'Completed',      bg: '#F3F4F6', text: '#6B7280', dot: '#9CA3AF' },
+  cancelled:              { label: 'Cancelled',      bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
+  cancellation_requested: { label: 'Cancel Requested', bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
 };
 
-function AppointmentCard({ booking, colors, styles, onPress, onAccept, onDecline }) {
-  const clientName = booking.client?.full_name || booking.client?.username || 'Client';
-  const time       = formatTime(booking.appointment_time);
-  const duration   = formatDuration(booking.duration_min || booking.service?.duration_min);
-  const isPaid     = booking.deposit_status === 'paid' || booking.deposit_status === 'Paid';
-  const isPending  = booking.status === 'pending';
-  const statusCfg  = APPT_STATUS_CFG[booking.status?.toLowerCase()] || APPT_STATUS_CFG.pending;
+function AppointmentCard({ booking, colors, styles, onPress, onAccept, onDecline, onApproveCancellation, onDenyCancellation }) {
+  const clientName      = booking.client?.full_name || booking.client?.username || 'Client';
+  const time            = formatTime(booking.appointment_time);
+  const duration        = formatDuration(booking.duration_min || booking.service?.duration_min);
+  const isPaid          = booking.deposit_status === 'paid' || booking.deposit_status === 'Paid';
+  const isPending       = booking.status === 'pending';
+  const isCancelReq     = booking.status === 'cancellation_requested';
+  const statusCfg       = APPT_STATUS_CFG[booking.status?.toLowerCase()] || APPT_STATUS_CFG.pending;
 
   return (
     <TouchableOpacity style={styles.appointmentCard} onPress={onPress} activeOpacity={0.82}>
@@ -198,6 +200,29 @@ function AppointmentCard({ booking, colors, styles, onPress, onAccept, onDecline
             <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
             <Ionicons name="checkmark" size={14} color="#fff" />
             <Text style={[styles.apptActionText, { color: '#fff' }]}>Accept</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Approve / Deny inline buttons for cancellation requests */}
+      {isCancelReq && onApproveCancellation && onDenyCancellation && (
+        <View style={styles.apptActions}>
+          <TouchableOpacity
+            style={[styles.apptActionBtn, styles.apptDeclineBtn]}
+            onPress={(e) => { e.stopPropagation?.(); onDenyCancellation(booking.id); }}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="close" size={14} color="#ef4444" />
+            <Text style={[styles.apptActionText, { color: '#ef4444' }]}>Deny</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.apptActionBtn, styles.apptAcceptBtn]}
+            onPress={(e) => { e.stopPropagation?.(); onApproveCancellation(booking.id); }}
+            activeOpacity={0.75}
+          >
+            <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
+            <Ionicons name="checkmark" size={14} color="#fff" />
+            <Text style={[styles.apptActionText, { color: '#fff' }]}>Approve</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1045,6 +1070,36 @@ export default function StylistDashboardScreen() {
     loadBookings();
   }, [bookings, user?.id, loadBookings]);
 
+  // ── Client cancellation request: approve / deny ──────────────────────────────
+
+  /** Stylist approves a client's cancellation request → booking marked 'cancelled' */
+  const handleApproveCancellation = useCallback(async (bookingId) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    const { error } = await bookingService.approveCancellation(bookingId, {
+      clientId:    booking?.client?.id,
+      stylistId:   user?.id,
+      serviceName: booking?.service_name,
+    });
+    if (error) { Alert.alert('Error', 'Could not approve cancellation. Please try again.'); return; }
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'cancelled' } : b));
+    setApptDetailVisible(false);
+    setSelectedBooking(null);
+  }, [bookings, user?.id]);
+
+  /** Stylist denies a client's cancellation request → booking restored to 'upcoming' */
+  const handleDenyCancellation = useCallback(async (bookingId) => {
+    const booking = bookings.find(b => b.id === bookingId);
+    const { error } = await bookingService.denyCancellation(bookingId, {
+      clientId:    booking?.client?.id,
+      stylistId:   user?.id,
+      serviceName: booking?.service_name,
+    });
+    if (error) { Alert.alert('Error', 'Could not deny cancellation. Please try again.'); return; }
+    setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'upcoming' } : b));
+    setApptDetailVisible(false);
+    setSelectedBooking(null);
+  }, [bookings, user?.id]);
+
   // ── Service CRUD ─────────────────────────────────────────────────────────────
   const handleAddService = async (service) => {
     const { data, error } = await bookingService.addService(user.id, service);
@@ -1479,10 +1534,13 @@ export default function StylistDashboardScreen() {
   const renderBookingsList = () => {
     const todayStr          = toDateStr(today);
     const pendingBookings   = bookings.filter(b => b.status === 'pending');
+    const cancelRequested   = bookings.filter(b => b.status === 'cancellation_requested');
     // All accepted bookings — today AND future shown in upcoming section
     const upcomingBookings  = bookings
       .filter(b => (b.status === 'upcoming' || b.status === 'confirmed') && b.appointment_date >= todayStr)
       .sort((a, b) => (a.appointment_date || '').localeCompare(b.appointment_date || ''));
+
+    const hasAnything = pendingBookings.length > 0 || cancelRequested.length > 0 || upcomingBookings.length > 0;
 
     return (
       <ScrollView
@@ -1522,6 +1580,32 @@ export default function StylistDashboardScreen() {
               </View>
             )}
 
+            {/* ── Cancellation requests ── */}
+            {cancelRequested.length > 0 && (
+              <View style={styles.pendingSection}>
+                <View style={styles.pendingSectionHeader}>
+                  <View style={[styles.pendingBadge, { backgroundColor: '#FEF2F2' }]}>
+                    <View style={[styles.pendingBadgeDot, { backgroundColor: '#EF4444' }]} />
+                    <Text style={[styles.pendingSectionTitle, { color: '#991B1B' }]}>
+                      {cancelRequested.length} Cancellation Request{cancelRequested.length !== 1 ? 's' : ''}
+                    </Text>
+                  </View>
+                  <Text style={[styles.pendingSectionSub, { color: colors.textMuted }]}>Approve or deny</Text>
+                </View>
+                {cancelRequested.map(b => (
+                  <AppointmentCard
+                    key={b.id}
+                    booking={b}
+                    colors={colors}
+                    styles={styles}
+                    onPress={() => openAppointmentDetail(b)}
+                    onApproveCancellation={handleApproveCancellation}
+                    onDenyCancellation={handleDenyCancellation}
+                  />
+                ))}
+              </View>
+            )}
+
             {/* ── Upcoming confirmed bookings ── */}
             {upcomingBookings.length > 0 && (
               <>
@@ -1538,7 +1622,7 @@ export default function StylistDashboardScreen() {
               </>
             )}
 
-            {pendingBookings.length === 0 && upcomingBookings.length === 0 && (
+            {!hasAnything && (
               <View style={styles.emptyState}>
                 <Ionicons name="calendar-outline" size={40} color={colors.border} />
                 <Text style={styles.emptyTitle}>No upcoming bookings</Text>
@@ -1623,7 +1707,7 @@ export default function StylistDashboardScreen() {
             const isSelected   = sameDay(day, selectedDay);
             const isPast       = day < today;
             const dayBookings  = confirmedForDay(bookings, day);
-            const dayPending   = bookingsForDay(bookings, day).filter(b => b.status === 'pending');
+            const dayPending   = bookingsForDay(bookings, day).filter(b => b.status === 'pending' || b.status === 'cancellation_requested');
             const daySchedule  = scheduledForDay(workSchedules, day);
             const hasBookings  = dayBookings.length > 0;
             const hasPending   = dayPending.length > 0;
@@ -1741,9 +1825,16 @@ export default function StylistDashboardScreen() {
             onDecline={handleDeclineBooking}
           />
         ))}
+        {bookingsForDay(bookings, selectedDay).filter(b => b.status === 'cancellation_requested').map(b => (
+          <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles}
+            onPress={() => openAppointmentDetail(b)}
+            onApproveCancellation={handleApproveCancellation}
+            onDenyCancellation={handleDenyCancellation}
+          />
+        ))}
 
         {selDayBookings.length === 0 && selDayScheduled.length === 0 &&
-         bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending').length === 0 ? (
+         bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending' || b.status === 'cancellation_requested').length === 0 ? (
           <Text style={styles.calEmptyText}>No bookings this day</Text>
         ) : selDayBookings.map(b => (
           <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles} onPress={() => openAppointmentDetail(b)} />
@@ -1796,7 +1887,7 @@ export default function StylistDashboardScreen() {
             const isSelected   = sameDay(day, selectedDay);
             const isPastDay    = day < today;
             const count        = confirmedForDay(bookings, day).length;
-            const pendingCount = bookingsForDay(bookings, day).filter(b => b.status === 'pending').length;
+            const pendingCount = bookingsForDay(bookings, day).filter(b => b.status === 'pending' || b.status === 'cancellation_requested').length;
             const isScheduled  = scheduledForDay(workSchedules, day).length > 0;
             const hasAnyWS     = workSchedules.length > 0;
             const isGreyDay    = isPastDay || (hasAnyWS && !isScheduled);
@@ -1886,9 +1977,17 @@ export default function StylistDashboardScreen() {
               onDecline={handleDeclineBooking}
             />
           ))}
+          {/* Cancellation requests for this day */}
+          {bookingsForDay(bookings, selectedDay).filter(b => b.status === 'cancellation_requested').map(b => (
+            <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles}
+              onPress={() => openAppointmentDetail(b)}
+              onApproveCancellation={handleApproveCancellation}
+              onDenyCancellation={handleDenyCancellation}
+            />
+          ))}
 
           {selDayBookings.length === 0 && selDayScheduled.length === 0 &&
-           bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending').length === 0
+           bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending' || b.status === 'cancellation_requested').length === 0
             ? <Text style={styles.calEmptyText}>No bookings this day</Text>
             : selDayBookings.map(b => (
               <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles} onPress={() => openAppointmentDetail(b)} />
@@ -1902,6 +2001,7 @@ export default function StylistDashboardScreen() {
   const renderDayView = () => {
     const dayBookings      = confirmedForDay(bookings, selectedDay);  // only confirmed on timeline
     const dayPending       = bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending');
+    const dayCancelReq     = bookingsForDay(bookings, selectedDay).filter(b => b.status === 'cancellation_requested');
     const daySchedule      = scheduledForDay(workSchedules, selectedDay);
     const allDaySchedules  = daySchedule.filter(s => s.all_day);
     const partialSchedules = daySchedule.filter(s => !s.all_day && s.start_time && s.end_time);
@@ -2038,7 +2138,7 @@ export default function StylistDashboardScreen() {
           );
         })}
 
-        {dayBookings.length === 0 && daySchedule.length === 0 && dayPending.length === 0 && (
+        {dayBookings.length === 0 && daySchedule.length === 0 && dayPending.length === 0 && dayCancelReq.length === 0 && (
           <View style={styles.emptyState}><Text style={styles.calEmptyText}>No bookings this day</Text></View>
         )}
 
@@ -2056,6 +2156,25 @@ export default function StylistDashboardScreen() {
                 onPress={() => openAppointmentDetail(b)}
                 onAccept={handleAcceptBooking}
                 onDecline={handleDeclineBooking}
+              />
+            ))}
+          </View>
+        )}
+
+        {/* Cancellation requests section below hour grid */}
+        {dayCancelReq.length > 0 && (
+          <View style={[styles.calDayBookings, { marginTop: 4 }]}>
+            <View style={[styles.pendingBadge, { backgroundColor: '#FEF2F2', alignSelf: 'flex-start', marginBottom: 10 }]}>
+              <View style={[styles.pendingBadgeDot, { backgroundColor: '#EF4444' }]} />
+              <Text style={[styles.pendingSectionTitle, { color: '#991B1B' }]}>
+                Cancellation Requests
+              </Text>
+            </View>
+            {dayCancelReq.map(b => (
+              <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles}
+                onPress={() => openAppointmentDetail(b)}
+                onApproveCancellation={handleApproveCancellation}
+                onDenyCancellation={handleDenyCancellation}
               />
             ))}
           </View>
@@ -2103,8 +2222,10 @@ export default function StylistDashboardScreen() {
     const time        = formatTime(b.appointment_time);
     const duration    = formatDuration(b.duration_min);
     const isPaid      = b.deposit_status === 'paid' || b.deposit_status === 'Paid';
-    const isPending   = b.status === 'pending';
-    const statusCfg   = APPT_STATUS_CFG[b.status?.toLowerCase()] || APPT_STATUS_CFG.pending;
+    const isPending     = b.status === 'pending';
+    const isCancelReq   = b.status === 'cancellation_requested';
+    const isTerminal    = b.status === 'cancelled' || b.status === 'completed';
+    const statusCfg     = APPT_STATUS_CFG[b.status?.toLowerCase()] || APPT_STATUS_CFG.pending;
 
     const hairFields = [
       { label: 'Hair Type', value: clientProfile?.hair_type },
@@ -2226,6 +2347,21 @@ export default function StylistDashboardScreen() {
                       <Text style={styles.apptMessageBtnText}>Accept Booking</Text>
                     </TouchableOpacity>
                   </>
+                ) : isCancelReq ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.apptCloseBtn, { borderColor: colors.border }]}
+                      onPress={() => handleDenyCancellation(b.id)}
+                    >
+                      <Ionicons name="close" size={14} color={colors.text} />
+                      <Text style={[styles.apptCloseBtnText, { color: colors.text }]}>Deny</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.apptMessageBtn} onPress={() => handleApproveCancellation(b.id)}>
+                      <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={14} />
+                      <Ionicons name="checkmark" size={16} color="#fff" />
+                      <Text style={styles.apptMessageBtnText}>Approve Cancellation</Text>
+                    </TouchableOpacity>
+                  </>
                 ) : (
                   <>
                     {/* Reschedule — close detail first so the sheet doesn't open behind this modal */}
@@ -2258,7 +2394,7 @@ export default function StylistDashboardScreen() {
               </View>
 
               {/* Cancel appointment — inline confirmation (no Alert needed) */}
-              {!isPending && (
+              {!isPending && !isCancelReq && !isTerminal && (
                 confirmingCancel ? (
                   <View style={styles.cancelConfirmRow}>
                     <Text style={styles.cancelConfirmText}>Cancel this appointment?</Text>
