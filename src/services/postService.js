@@ -231,24 +231,117 @@ export const postService = {
     return { bookmarked: !!data };
   },
 
-  // Get comments for a post
+  // Get top-level comments for a post (excludes replies)
   async getComments(postId) {
-    const { data, error } = await supabase
+    // Try filtering top-level only (requires parent_id column)
+    let { data, error } = await supabase
       .from('comments')
       .select(`*, profiles:user_id (id, username, avatar_url, full_name)`)
       .eq('post_id', postId)
+      .is('parent_id', null)
       .order('created_at', { ascending: true });
+    // Graceful fallback if parent_id column isn't migrated yet
+    if (error?.code === '42703') {
+      ({ data, error } = await supabase
+        .from('comments')
+        .select(`*, profiles:user_id (id, username, avatar_url, full_name)`)
+        .eq('post_id', postId)
+        .order('created_at', { ascending: true }));
+    }
     return { data, error };
   },
 
-  // Add a comment
-  async addComment(userId, postId, content) {
+  // Get paginated replies for a parent comment
+  async getReplies(postId, parentId, offset = 0, limit = 9) {
+    try {
+      const { data, error, count } = await supabase
+        .from('comments')
+        .select(`*, profiles:user_id (id, username, avatar_url, full_name)`, { count: 'exact' })
+        .eq('post_id', postId)
+        .eq('parent_id', parentId)
+        .order('created_at', { ascending: true })
+        .range(offset, offset + limit - 1);
+      if (error?.code === '42703') return { data: [], total: 0, error: null };
+      return { data: data || [], total: count ?? 0, error };
+    } catch (_) { return { data: [], total: 0, error: null }; }
+  },
+
+  // Batch-fetch reply counts for a list of comment IDs
+  async getReplyCounts(commentIds) {
+    if (!commentIds.length) return {};
+    try {
+      const { data, error } = await supabase
+        .from('comments')
+        .select('parent_id')
+        .in('parent_id', commentIds);
+      if (error) return {};
+      const counts = {};
+      for (const row of (data || [])) {
+        counts[row.parent_id] = (counts[row.parent_id] || 0) + 1;
+      }
+      return counts;
+    } catch (_) { return {}; }
+  },
+
+  // Add a comment or reply (parentId = null for top-level)
+  async addComment(userId, postId, content, parentId = null) {
     const { data, error } = await supabase
       .from('comments')
-      .insert([{ user_id: userId, post_id: postId, content }])
+      .insert([{ user_id: userId, post_id: postId, content, parent_id: parentId || null }])
       .select(`*, profiles:user_id (id, username, avatar_url, full_name)`)
       .single();
     return { data, error };
+  },
+
+  // Like / unlike a comment
+  async likeComment(userId, commentId) {
+    try {
+      const { error } = await supabase
+        .from('comment_likes')
+        .insert([{ user_id: userId, comment_id: commentId }]);
+      return { error };
+    } catch (_) { return { error: null }; }
+  },
+
+  async unlikeComment(userId, commentId) {
+    try {
+      const { error } = await supabase
+        .from('comment_likes')
+        .delete()
+        .eq('user_id', userId)
+        .eq('comment_id', commentId);
+      return { error };
+    } catch (_) { return { error: null }; }
+  },
+
+  // Which of the given comment IDs has the user liked?
+  async getMyCommentLikes(userId, commentIds) {
+    if (!commentIds.length) return [];
+    try {
+      const { data } = await supabase
+        .from('comment_likes')
+        .select('comment_id')
+        .eq('user_id', userId)
+        .in('comment_id', commentIds);
+      return (data || []).map(r => r.comment_id);
+    } catch (_) { return []; }
+  },
+
+  // Batch like counts for a list of comment IDs
+  async getCommentLikeCounts(commentIds) {
+    if (!commentIds.length) return {};
+    try {
+      const { data } = await supabase
+        .from('comment_likes')
+        .select('comment_id')
+        .in('comment_id', commentIds);
+      if (!data) return {};
+      const counts = {};
+      for (const row of data) {
+        counts[row.comment_id] = (counts[row.comment_id] || 0) + 1;
+      }
+      return counts;
+    } catch (_) { return {}; }
   },
 
   // Delete a comment

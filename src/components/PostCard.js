@@ -49,6 +49,12 @@ export default function PostCard({
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [submittingComment, setSubmittingComment] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null); // null | { parentId, username }
+  const [expandedReplies, setExpandedReplies] = useState({}); // parentId -> { items, total, loading }
+  const [commentLiked, setCommentLiked] = useState({}); // commentId -> bool
+  const [commentLikeCounts, setCommentLikeCounts] = useState({}); // commentId -> number
+  const [replyCounts, setReplyCounts] = useState({}); // commentId -> number
+  const [postColumnHeight, setPostColumnHeight] = useState(0); // measured height of post column (web)
   const [savePickerVisible, setSavePickerVisible] = useState(false);
   const [pickerCollections, setPickerCollections] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
@@ -230,8 +236,23 @@ export default function PostCard({
     onCommentsOpenChange?.(true);
     setCommentsLoading(true);
     const { data } = await postService.getComments(postId);
-    setComments(data || []);
+    const topLevel = data || [];
+    setComments(topLevel);
     setCommentsLoading(false);
+    // Batch-load reply counts + comment likes for all loaded comments
+    if (topLevel.length > 0) {
+      const ids = topLevel.map(c => c.id);
+      const [rcMap, likedIds, lcMap] = await Promise.all([
+        postService.getReplyCounts(ids),
+        user?.id ? postService.getMyCommentLikes(user.id, ids) : Promise.resolve([]),
+        postService.getCommentLikeCounts(ids),
+      ]);
+      setReplyCounts(prev => ({ ...prev, ...rcMap }));
+      const likedMap = {};
+      (likedIds || []).forEach(id => { likedMap[id] = true; });
+      setCommentLiked(prev => ({ ...prev, ...likedMap }));
+      setCommentLikeCounts(prev => ({ ...prev, ...lcMap }));
+    }
     // Scroll the modal's ScrollView down to reveal the comments section on mobile
     if (!isWeb) {
       setTimeout(() => scrollViewRef?.current?.scrollToEnd({ animated: true }), 100);
@@ -241,21 +262,46 @@ export default function PostCard({
   const handleSubmitComment = async () => {
     if (!commentText.trim() || !user?.id) return;
     setSubmittingComment(true);
-    const { data, error } = await postService.addComment(user.id, postId, commentText.trim());
+    const parentId = replyingTo?.parentId || null;
+    const { data, error } = await postService.addComment(user.id, postId, commentText.trim(), parentId);
     if (error) {
       console.error('Comment insert failed:', JSON.stringify(error));
       Alert.alert('Error', error.message || 'Failed to post comment');
     } else if (data) {
-      setComments(prev => [...prev, data]);
       setCommentText('');
+      if (parentId) {
+        // Append reply to the expanded thread
+        setExpandedReplies(prev => {
+          const ex = prev[parentId] || { items: [], total: 0, loading: false };
+          return { ...prev, [parentId]: { ...ex, items: [...ex.items, data], total: ex.total + 1 } };
+        });
+        setReplyCounts(prev => ({ ...prev, [parentId]: (prev[parentId] || 0) + 1 }));
+        setReplyingTo(null);
+      } else {
+        setComments(prev => [...prev, data]);
+      }
     }
     setSubmittingComment(false);
   };
 
-  const handleDeleteComment = (commentId) => {
+  const handleDeleteComment = (commentId, parentId = null) => {
     const doDelete = async () => {
       const { error } = await postService.deleteComment(commentId, user.id);
-      if (!error) setComments(prev => prev.filter(c => c.id !== commentId));
+      if (!error) {
+        if (parentId) {
+          setExpandedReplies(prev => {
+            const ex = prev[parentId];
+            if (!ex) return prev;
+            return {
+              ...prev,
+              [parentId]: { ...ex, items: ex.items.filter(r => r.id !== commentId), total: Math.max(0, ex.total - 1) },
+            };
+          });
+          setReplyCounts(prev => ({ ...prev, [parentId]: Math.max(0, (prev[parentId] || 0) - 1) }));
+        } else {
+          setComments(prev => prev.filter(c => c.id !== commentId));
+        }
+      }
     };
     if (Platform.OS === 'web') {
       if (window.confirm('Delete this comment?')) doDelete();
@@ -264,6 +310,67 @@ export default function PostCard({
         { text: 'Cancel', style: 'cancel' },
         { text: 'Delete', style: 'destructive', onPress: doDelete },
       ]);
+    }
+  };
+
+  const handleLikeComment = async (commentId) => {
+    if (!user?.id) return;
+    const isLiked = !!commentLiked[commentId];
+    setCommentLiked(prev => ({ ...prev, [commentId]: !isLiked }));
+    setCommentLikeCounts(prev => ({
+      ...prev,
+      [commentId]: Math.max(0, (prev[commentId] || 0) + (isLiked ? -1 : 1)),
+    }));
+    if (isLiked) {
+      await postService.unlikeComment(user.id, commentId);
+    } else {
+      await postService.likeComment(user.id, commentId);
+    }
+  };
+
+  const handleToggleReplies = async (parentId) => {
+    if (expandedReplies[parentId]) {
+      setExpandedReplies(prev => { const n = { ...prev }; delete n[parentId]; return n; });
+      return;
+    }
+    setExpandedReplies(prev => ({ ...prev, [parentId]: { items: [], total: 0, loading: true } }));
+    const { data, total } = await postService.getReplies(postId, parentId, 0, 9);
+    const items = data || [];
+    setExpandedReplies(prev => ({ ...prev, [parentId]: { items, total: total ?? items.length, loading: false } }));
+    if (items.length > 0 && user?.id) {
+      const ids = items.map(r => r.id);
+      const [likedIds, lcMap] = await Promise.all([
+        postService.getMyCommentLikes(user.id, ids),
+        postService.getCommentLikeCounts(ids),
+      ]);
+      const likedMap = {};
+      (likedIds || []).forEach(id => { likedMap[id] = true; });
+      setCommentLiked(prev => ({ ...prev, ...likedMap }));
+      setCommentLikeCounts(prev => ({ ...prev, ...lcMap }));
+    }
+  };
+
+  const handleLoadMoreReplies = async (parentId) => {
+    const existing = expandedReplies[parentId];
+    if (!existing || existing.loading) return;
+    const offset = existing.items.length;
+    setExpandedReplies(prev => ({ ...prev, [parentId]: { ...existing, loading: true } }));
+    const { data, total } = await postService.getReplies(postId, parentId, offset, 9);
+    const newItems = data || [];
+    setExpandedReplies(prev => {
+      const ex = prev[parentId] || { items: [], total: 0 };
+      return { ...prev, [parentId]: { items: [...ex.items, ...newItems], total: total ?? ex.total, loading: false } };
+    });
+    if (newItems.length > 0 && user?.id) {
+      const ids = newItems.map(r => r.id);
+      const [likedIds, lcMap] = await Promise.all([
+        postService.getMyCommentLikes(user.id, ids),
+        postService.getCommentLikeCounts(ids),
+      ]);
+      const likedMap = {};
+      (likedIds || []).forEach(id => { likedMap[id] = true; });
+      setCommentLiked(prev => ({ ...prev, ...likedMap }));
+      setCommentLikeCounts(prev => ({ ...prev, ...lcMap }));
     }
   };
 
@@ -349,6 +456,100 @@ export default function PostCard({
   };
 
   // ── Comments panel — shared between mobile inline + web side column ─────────
+  const renderCommentItem = (item, isReply = false, parentId = null) => {
+    const likeCount = commentLikeCounts[item.id] || 0;
+    const isLiked = !!commentLiked[item.id];
+    const replyCount = !isReply ? (replyCounts[item.id] || 0) : 0;
+    const expanded = !isReply ? expandedReplies[item.id] : null;
+
+    return (
+      <View key={item.id} style={[styles.commentItem, isReply && styles.replyItem]}>
+        <View style={[
+          styles.commentAvatar,
+          isReply && styles.replyAvatar,
+          { backgroundColor: colors.surfaceAlt || colors.borderLight },
+        ]}>
+          {item.profiles?.avatar_url ? (
+            <Image
+              source={{ uri: item.profiles.avatar_url }}
+              style={[styles.commentAvatarImg, isReply && styles.replyAvatarImg]}
+            />
+          ) : (
+            <Text style={[styles.commentAvatarInitial, { color: colors.textSecondary }]}>
+              {(item.profiles?.username || '?')[0].toUpperCase()}
+            </Text>
+          )}
+        </View>
+        <View style={styles.commentBody}>
+          <View style={styles.commentBubble}>
+            <Text style={[styles.commentUsername, { color: colors.primary }]}>
+              @{item.profiles?.username || 'user'}
+            </Text>
+            <Text style={[styles.commentText, { color: colors.text }]}>{item.content}</Text>
+          </View>
+          {/* Like + Reply + Delete row */}
+          <View style={styles.cmtActionsRow}>
+            <TouchableOpacity onPress={() => handleLikeComment(item.id)} style={styles.cmtLikeBtn} activeOpacity={0.7}>
+              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#ef4444' : colors.textMuted} />
+              {likeCount > 0 && <Text style={[styles.cmtLikeCount, { color: colors.textMuted }]}>{likeCount}</Text>}
+            </TouchableOpacity>
+            {!isReply && (
+              <TouchableOpacity
+                onPress={() => {
+                  setReplyingTo({ parentId: item.id, username: item.profiles?.username || 'user' });
+                  setTimeout(() => commentInputRef.current?.focus(), 50);
+                }}
+                style={styles.cmtReplyBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.cmtReplyText, { color: colors.textMuted }]}>Reply</Text>
+              </TouchableOpacity>
+            )}
+            {item.user_id === user?.id && (
+              <TouchableOpacity
+                onPress={() => handleDeleteComment(item.id, parentId)}
+                style={styles.cmtDeleteBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="trash-outline" size={12} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+          {/* View / hide replies toggle (top-level only) */}
+          {!isReply && replyCount > 0 && (
+            <TouchableOpacity onPress={() => handleToggleReplies(item.id)} style={styles.viewRepliesBtn} activeOpacity={0.7}>
+              <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={13} color={colors.primary} />
+              <Text style={[styles.viewRepliesText, { color: colors.primary }]}>
+                {expanded ? 'Hide replies' : `View ${replyCount} ${replyCount === 1 ? 'reply' : 'replies'}`}
+              </Text>
+            </TouchableOpacity>
+          )}
+          {/* Expanded replies */}
+          {!isReply && expanded && (
+            <View style={[styles.repliesContainer, { borderLeftColor: colors.borderLight }]}>
+              {expanded.loading && expanded.items.length === 0 ? (
+                <ActivityIndicator size="small" color={colors.primary} style={{ paddingVertical: 8 }} />
+              ) : (
+                <>
+                  {expanded.items.map(reply => renderCommentItem(reply, true, item.id))}
+                  {expanded.loading ? (
+                    <ActivityIndicator size="small" color={colors.primary} style={{ paddingVertical: 6 }} />
+                  ) : expanded.items.length < expanded.total ? (
+                    <TouchableOpacity onPress={() => handleLoadMoreReplies(item.id)} style={styles.loadMoreRepliesBtn} activeOpacity={0.7}>
+                      <Text style={[styles.loadMoreRepliesText, { color: colors.primary }]}>
+                        {`Load ${Math.min(9, expanded.total - expanded.items.length)} more ${expanded.total - expanded.items.length === 1 ? 'reply' : 'replies'}`}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : null}
+                </>
+              )}
+            </View>
+          )}
+        </View>
+      </View>
+    );
+  };
+
   const makeCommentsList = (webPanel = false) => (
     commentsLoading ? (
       <ActivityIndicator style={{ padding: 28 }} color={colors.primary} />
@@ -358,77 +559,78 @@ export default function PostCard({
         <Text style={[styles.noComments, { color: colors.textMuted }]}>No comments yet.</Text>
         <Text style={[styles.noCommentsSub, { color: colors.textMuted }]}>Be the first to comment!</Text>
       </View>
+    ) : webPanel ? (
+      // Web side panel — wrapper View fills column space reliably, ScrollView inside scrolls
+      <View style={styles.webCmtListWrap}>
+        <ScrollView
+          style={styles.webCmtListScroll}
+          contentContainerStyle={{ paddingBottom: 8 }}
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+        >
+          {comments.map(item => renderCommentItem(item, false, null))}
+        </ScrollView>
+      </View>
     ) : (
+      // Mobile inline — grows to content, capped by maxHeight so the feed doesn't blow out
       <ScrollView
-        style={[styles.inlineCmtList, webPanel && { flex: 1, maxHeight: undefined }]}
+        style={styles.inlineCmtList}
         contentContainerStyle={{ paddingBottom: 8 }}
         nestedScrollEnabled
         keyboardShouldPersistTaps="handled"
       >
-        {comments.map(item => (
-          <View key={item.id} style={styles.commentItem}>
-            <View style={[styles.commentAvatar, { backgroundColor: colors.surfaceAlt || colors.borderLight }]}>
-              {item.profiles?.avatar_url ? (
-                <Image source={{ uri: item.profiles.avatar_url }} style={styles.commentAvatarImg} />
-              ) : (
-                <Text style={[styles.commentAvatarInitial, { color: colors.textSecondary }]}>
-                  {(item.profiles?.username || '?')[0].toUpperCase()}
-                </Text>
-              )}
-            </View>
-            <View style={styles.commentBody}>
-              <View style={styles.commentBubble}>
-                <Text style={[styles.commentUsername, { color: colors.primary }]}>
-                  @{item.profiles?.username || 'user'}
-                </Text>
-                <Text style={[styles.commentText, { color: colors.text }]}>{item.content}</Text>
-              </View>
-            </View>
-            {item.user_id === user?.id && (
-              <TouchableOpacity onPress={() => handleDeleteComment(item.id)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Ionicons name="trash-outline" size={15} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-        ))}
+        {comments.map(item => renderCommentItem(item, false, null))}
       </ScrollView>
     )
   );
 
   const commentsInputRow = (
-    <View style={[styles.commentInput, { borderTopColor: colors.borderLight, backgroundColor: colors.surface }, isWeb && { marginTop: 'auto' }]}>
-      {/* Current user avatar */}
-      {currentUserProfile?.avatar_url ? (
-        <Image source={{ uri: currentUserProfile.avatar_url }} style={styles.cmtInputAvatar} />
-      ) : (
-        <View style={[styles.cmtInputAvatar, styles.cmtInputAvatarPlaceholder, { backgroundColor: colors.primary }]}>
-          <Text style={styles.cmtInputAvatarInitial}>
-            {(currentUserProfile?.username || user?.email || '?')[0].toUpperCase()}
+    <View>
+      {replyingTo && (
+        <View style={[styles.replyBanner, { backgroundColor: colors.surfaceAlt || colors.borderLight, borderTopColor: colors.borderLight }]}>
+          <Text style={[styles.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>
+            Replying to{' '}
+            <Text style={{ color: colors.primary, fontFamily: 'Figtree_600SemiBold' }}>@{replyingTo.username}</Text>
           </Text>
+          <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
         </View>
       )}
-      <TextInput
-        ref={commentInputRef}
-        style={[styles.commentTextInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
-        placeholder="Add a comment…"
-        placeholderTextColor={colors.placeholder}
-        value={commentText}
-        onChangeText={setCommentText}
-        multiline
-      />
-      {/* Send button — always visible, primary colour when text is ready */}
-      <TouchableOpacity
-        onPress={handleSubmitComment}
-        disabled={submittingComment}
-        style={[styles.cmtSendBtn, { backgroundColor: commentText.trim() ? colors.primary : colors.border }]}
-        activeOpacity={0.75}
-      >
-        {submittingComment ? (
-          <ActivityIndicator size="small" color="#fff" />
+      <View style={[styles.commentInput, { borderTopColor: colors.borderLight, backgroundColor: colors.surface }]}>
+        {/* Current user avatar */}
+        {currentUserProfile?.avatar_url ? (
+          <Image source={{ uri: currentUserProfile.avatar_url }} style={styles.cmtInputAvatar} />
         ) : (
-          <Ionicons name="send" size={16} color="#fff" />
+          <View style={[styles.cmtInputAvatar, styles.cmtInputAvatarPlaceholder, { backgroundColor: colors.primary }]}>
+            <Text style={styles.cmtInputAvatarInitial}>
+              {(currentUserProfile?.username || user?.email || '?')[0].toUpperCase()}
+            </Text>
+          </View>
         )}
-      </TouchableOpacity>
+        <TextInput
+          ref={commentInputRef}
+          style={[styles.commentTextInput, { backgroundColor: colors.inputBackground, borderColor: colors.border, color: colors.text }]}
+          placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : 'Add a comment…'}
+          placeholderTextColor={colors.placeholder}
+          value={commentText}
+          onChangeText={setCommentText}
+          multiline
+        />
+        {/* Send button — always visible, primary colour when text is ready */}
+        <TouchableOpacity
+          onPress={handleSubmitComment}
+          disabled={submittingComment}
+          style={[styles.cmtSendBtn, { backgroundColor: commentText.trim() ? colors.primary : colors.border }]}
+          activeOpacity={0.75}
+        >
+          {submittingComment ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Ionicons name="send" size={16} color="#fff" />
+          )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -451,7 +653,11 @@ export default function PostCard({
 
   // Web side panel
   const webCommentsPanel = (
-    <View style={[styles.webCmtPanel, { backgroundColor: colors.surface, borderLeftColor: colors.borderLight }]}>
+    <View style={[
+      styles.webCmtPanel,
+      { backgroundColor: colors.surface, borderLeftColor: colors.borderLight },
+      postColumnHeight > 0 && { height: postColumnHeight },
+    ]}>
       {/* Panel header */}
       <View style={[styles.webCmtPanelHeader, { borderBottomColor: colors.borderLight }]}>
         <Text style={[styles.webCmtPanelTitle, { color: colors.text }]}>
@@ -469,7 +675,12 @@ export default function PostCard({
   return (
     <View style={[styles.container, isWeb && commentsExpanded && styles.webPostRow]}>
       {/* ── Left / main post section ── */}
-      <View style={isWeb && commentsExpanded ? styles.webPostLeft : undefined}>
+      <View
+        style={isWeb && commentsExpanded ? styles.webPostLeft : undefined}
+        onLayout={(e) => {
+          if (isWeb && commentsExpanded) setPostColumnHeight(e.nativeEvent.layout.height);
+        }}
+      >
 
       {/* Profile Header */}
       <View style={styles.header}>
@@ -1017,7 +1228,7 @@ const makeStyles = (c) => StyleSheet.create({
   // Web: side-by-side — card expands to fit both panels, nothing shrinks or clips
   webPostRow: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
   },
   // Post left: fixed at the same width as the normal single-post modal (460px)
   // so the photo never changes size — comments panel simply extends the card to the right
@@ -1032,9 +1243,19 @@ const makeStyles = (c) => StyleSheet.create({
     width: 320,
     flexShrink: 0,
     flexGrow: 0,
+    alignSelf: 'stretch',       // always match post column height
     borderLeftWidth: StyleSheet.hairlineWidth,
     flexDirection: 'column',
     display: 'flex',
+  },
+  // Wrapper that fills the column space between header and input
+  // (flex:1 on a View is more reliable than flex:1 directly on ScrollView in RN Web)
+  webCmtListWrap: {
+    flex: 1,
+    minHeight: 0,               // lets flex children shrink past content size on web
+  },
+  webCmtListScroll: {
+    flex: 1,
   },
   webCmtPanelHeader: {
     flexDirection: 'row',
@@ -1162,6 +1383,96 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
+  },
+
+  // "Replying to @user" banner above the input
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  replyBannerText: {
+    fontSize: 13,
+    flex: 1,
+    marginRight: 8,
+  },
+
+  // Comment action row (Like · Reply · Delete)
+  cmtActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingLeft: 12,
+    gap: 14,
+  },
+  cmtLikeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  cmtLikeCount: {
+    fontSize: 12,
+    fontFamily: 'Figtree_500Medium',
+  },
+  cmtReplyBtn: {},
+  cmtReplyText: {
+    fontSize: 12,
+    fontFamily: 'Figtree_500Medium',
+  },
+  cmtDeleteBtn: {
+    marginLeft: 'auto',
+    marginRight: 4,
+  },
+
+  // View / hide replies toggle
+  viewRepliesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+    paddingLeft: 12,
+  },
+  viewRepliesText: {
+    fontSize: 12,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+
+  // Nested replies container (indented with left border)
+  repliesContainer: {
+    marginLeft: 12,
+    marginTop: 4,
+    borderLeftWidth: 2,
+    paddingLeft: 8,
+  },
+
+  // Reply items (smaller avatar, tighter padding)
+  replyItem: {
+    paddingHorizontal: 0,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  replyAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  replyAvatarImg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+
+  // "Load N more replies" button
+  loadMoreRepliesBtn: {
+    paddingVertical: 8,
+    paddingLeft: 12,
+  },
+  loadMoreRepliesText: {
+    fontSize: 12,
+    fontFamily: 'Figtree_600SemiBold',
   },
 
   // Add-to-collection banner
