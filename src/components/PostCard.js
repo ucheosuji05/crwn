@@ -32,6 +32,7 @@ export default function PostCard({
   onNavigateToStylist,
   onCommentsOpenChange,
   scrollViewRef,
+  initialCommentsOpen = false,
 }) {
   const controlsOpacity = useRef(new Animated.Value(0)).current;
   const fadeTimer = useRef(null);
@@ -45,6 +46,8 @@ export default function PostCard({
   const [imgErrors, setImgErrors] = useState({});   // index → true when load fails
   const [menuVisible, setMenuVisible] = useState(false);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
+  // Auto-open comments once on mount when navigated from a notification
+  const didAutoOpenComments = useRef(false);
   const [comments, setComments] = useState([]);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -157,6 +160,14 @@ export default function PostCard({
   const authorAvatar = isOwnPost
     ? (currentUserProfile?.avatar_url ?? profiles?.avatar_url)
     : profiles?.avatar_url;
+
+  // Auto-open comments when arriving from a notification
+  useEffect(() => {
+    if (initialCommentsOpen && !didAutoOpenComments.current && postId && postId !== '1') {
+      didAutoOpenComments.current = true;
+      handleOpenComments();
+    }
+  }, [postId, initialCommentsOpen]);
 
   // Initialize like/bookmark state and counts from DB
   useEffect(() => {

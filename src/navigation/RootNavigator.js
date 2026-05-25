@@ -1,4 +1,5 @@
 import React from 'react';
+import { Platform } from 'react-native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { CardStyleInterpolators } from '@react-navigation/stack';
 import BottomTabNavigator from './BottomTabNavigator';
@@ -6,8 +7,14 @@ import ProfileScreen from '../screens/ProfileScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import MessagingScreen from '../screens/MessagingScreen';
 import StylistProfileScreen from '../screens/StylistProfileScreen';
+import PostDetailScreen from '../screens/PostDetailScreen';
 
 const Stack = createStackNavigator();
+
+// On web the horizontal-swipe gesture handler intercepts scroll events, so
+// we disable it.  The back arrow on the profile/detail screens handles
+// navigation instead.
+const isWeb = Platform.OS === 'web';
 
 export default function RootNavigator() {
   return (
@@ -17,7 +24,7 @@ export default function RootNavigator() {
         name="UserProfile"
         component={ProfileScreen}
         options={{
-          gestureEnabled: true,
+          gestureEnabled: !isWeb,
           gestureDirection: 'horizontal',
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
@@ -25,13 +32,13 @@ export default function RootNavigator() {
       <Stack.Screen
         name="CreatePost"
         component={CreatePostScreen}
-        options={{ presentation: 'modal', gestureEnabled: true, gestureDirection: 'vertical' }}
+        options={{ presentation: 'modal', gestureEnabled: !isWeb, gestureDirection: 'vertical' }}
       />
       <Stack.Screen
         name="StylistProfile"
         component={StylistProfileScreen}
         options={{
-          gestureEnabled: true,
+          gestureEnabled: !isWeb,
           gestureDirection: 'horizontal',
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}
@@ -41,7 +48,16 @@ export default function RootNavigator() {
         component={MessagingScreen}
         options={{
           presentation: 'card',
-          gestureEnabled: true,
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="PostDetail"
+        component={PostDetailScreen}
+        options={{
+          gestureEnabled: !isWeb,
           gestureDirection: 'horizontal',
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
         }}

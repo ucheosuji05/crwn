@@ -18,10 +18,11 @@ import ScreenHeader from './ScreenHeader';
 // ── Type configs ──────────────────────────────────────────────────────────────
 
 const SOCIAL_TYPE_CONFIG = {
-  like:    { icon: 'heart',      color: '#ef4444' },
-  crown:   { icon: 'star',       color: '#F8B430' },
-  comment: { icon: 'chatbubble', color: null },
-  follow:  { icon: 'person-add', color: null },
+  like:    { icon: 'heart',           color: '#ef4444' },
+  crown:   { icon: 'star',            color: '#F8B430' },
+  comment: { icon: 'chatbubble',      color: null },
+  reply:   { icon: 'chatbubble-ellipses', color: null },
+  follow:  { icon: 'person-add',      color: null },
 };
 
 const BOOKING_TYPE_CONFIG = {
@@ -48,6 +49,7 @@ function socialActionText(type, actorName) {
     case 'like':    return [actorName, 'liked your post'];
     case 'crown':   return [actorName, 'crowned your post'];
     case 'comment': return [actorName, 'commented on your post'];
+    case 'reply':   return [actorName, 'replied to your comment'];
     case 'follow':  return [actorName, 'started following you'];
     default:        return [actorName, 'interacted with you'];
   }
@@ -125,25 +127,78 @@ export default function NotificationsList({ panelMode = false }) {
   // ── Tap handler ──────────────────────────────────────────────────────────────
 
   const handlePress = async (item) => {
-    // Mark as read
+    // Mark as read (optimistic)
     if (!item.is_read) {
       setNotifications(prev =>
         prev.map(n => n.id === item.id ? { ...n, is_read: true } : n)
       );
       if (item._source === 'social') {
-        await notificationService.markAsRead(item.id);
+        notificationService.markAsRead(item.id);
         decrementNotif();
       } else {
-        await bookingService.markBookingNotificationRead(item.id);
+        bookingService.markBookingNotificationRead(item.id);
         decrementBookingNotif();
       }
     }
-    // Navigate
-    if (item._source === 'booking' && item.actor?.id) {
-      // Booking notifications come from stylists — go to their profile
-      navigation.navigate('StylistProfile', { stylist: { id: item.actor.id } });
-    } else if (item._source === 'social' && item.actor?.id) {
-      navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+
+    // ── Deep-link navigation ──────────────────────────────────────────────────
+
+    if (item._source === 'booking') {
+      // Booking: go to the stylist's profile
+      if (item.actor?.id) {
+        navigation.navigate('StylistProfile', { stylist: { id: item.actor.id } });
+      }
+      return;
+    }
+
+    // Social notifications
+    switch (item.type) {
+      case 'like':
+      case 'crown':
+        // Someone liked/crowned a post → open that post
+        if (item.post_id) {
+          navigation.navigate('PostDetail', { postId: item.post_id });
+        } else if (item.actor?.id) {
+          navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+        }
+        break;
+
+      case 'comment':
+        // Someone commented on a post → open post with comments expanded
+        if (item.post_id) {
+          navigation.navigate('PostDetail', { postId: item.post_id, openComments: true });
+        } else if (item.thread_id) {
+          navigation.navigate('Community', { screen: 'Community', params: { openThreadId: item.thread_id } });
+        } else if (item.actor?.id) {
+          navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+        }
+        break;
+
+      case 'reply':
+        // Someone replied to a comment on a post → open post with comments expanded
+        if (item.post_id) {
+          navigation.navigate('PostDetail', { postId: item.post_id, openComments: true });
+        } else if (item.thread_id) {
+          navigation.navigate('Community', { openThreadId: item.thread_id });
+        } else if (item.actor?.id) {
+          navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+        }
+        break;
+
+      case 'follow':
+        // Someone followed you → open their profile
+        if (item.actor?.id) {
+          navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+        }
+        break;
+
+      default:
+        // Fallback: open actor profile or the post if we have one
+        if (item.post_id) {
+          navigation.navigate('PostDetail', { postId: item.post_id });
+        } else if (item.actor?.id) {
+          navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+        }
     }
   };
 

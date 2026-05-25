@@ -15,6 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bookingService } from '../services/bookingService';
 import { postService } from '../services/postService';
+import { profileService } from '../services/profileService';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
 
@@ -841,6 +842,8 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [postsLoading, setPostsLoading]       = useState(false);
   // Full profile fetched from DB (used when navigating with minimal params)
   const [fetchedProfile, setFetchedProfile]   = useState(null);
+  const [following, setFollowing]             = useState(false);
+  const [followLoading, setFollowLoading]     = useState(false);
   const { user } = useAuth();
 
   const stylist = fetchedProfile
@@ -906,6 +909,27 @@ export default function StylistProfileScreen({ route, navigation }) {
       setTaggedLoading(false);
     });
   }, [activeTab, stylistId]);
+
+  // Check initial follow state
+  useEffect(() => {
+    if (!user?.id || !stylistId) return;
+    profileService.isFollowing(user.id, stylistId).then(({ isFollowing }) => {
+      setFollowing(!!isFollowing);
+    });
+  }, [user?.id, stylistId]);
+
+  const handleFollow = async () => {
+    if (!user?.id || followLoading) return;
+    setFollowLoading(true);
+    if (following) {
+      setFollowing(false);
+      await profileService.unfollowUser(user.id, stylistId);
+    } else {
+      setFollowing(true);
+      await profileService.followUser(user.id, stylistId);
+    }
+    setFollowLoading(false);
+  };
 
   const openBooking = (svc = null) => {
     setBookingService(svc);
@@ -1080,15 +1104,31 @@ export default function StylistProfileScreen({ route, navigation }) {
           </View>
 
           <View style={styles.buttons}>
-            <TouchableOpacity style={styles.bookBtn} onPress={() => openBooking()}>
-              <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+            {/* Follow */}
+            <TouchableOpacity
+              style={[styles.followBtn, following && styles.followingBtn]}
+              onPress={handleFollow}
+              activeOpacity={0.8}
+              disabled={followLoading}
+            >
+              <Text style={[styles.followBtnText, following && styles.followingBtnText]}>
+                {following ? 'Following' : 'Follow'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Book */}
+            <TouchableOpacity style={styles.bookBtn} onPress={() => openBooking()} activeOpacity={0.85}>
+              <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
               <Text style={styles.bookBtnText}>Book</Text>
             </TouchableOpacity>
+
+            {/* Message icon */}
             <TouchableOpacity
-              style={styles.messageBtn}
+              style={styles.msgIconBtn}
               onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
+              activeOpacity={0.75}
             >
-              <Text style={styles.messageBtnText}>Message</Text>
+              <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1170,11 +1210,17 @@ const makeStyles = (c) => StyleSheet.create({
   statDivider: { width: 1, height: 32, backgroundColor: c.border },
   statNumber: { fontSize: 18, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 2 },
   statLabel: { fontSize: 12, color: c.textSecondary },
-  buttons: { flexDirection: 'row', gap: 12, marginBottom: 16, width: '100%' },
+  buttons: { flexDirection: 'row', gap: 10, marginBottom: 16, width: '100%', alignItems: 'center' },
+  // Follow button — solid dark fill when not following, outlined when following
+  followBtn: { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5D1F1F' },
+  followingBtn: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#5D1F1F' },
+  followBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
+  followingBtnText: { color: '#5D1F1F' },
+  // Book button
   bookBtn: { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   bookBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
-  messageBtn: { flex: 1, borderRadius: 10, borderWidth: 1.5, borderColor: c.primary, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
-  messageBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: c.primary },
+  // Message icon button — square outlined icon to the right of Book
+  msgIconBtn: { width: 46, height: 46, borderRadius: 10, borderWidth: 1.5, borderColor: c.primary, alignItems: 'center', justifyContent: 'center' },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.surface },
   tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabText: { fontSize: 15, color: c.textSecondary, fontFamily: 'Figtree_500Medium' },

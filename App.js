@@ -5,6 +5,13 @@ import { View, Text, ActivityIndicator, StyleSheet, StatusBar } from 'react-nati
 // Explicit fontFamily overrides (e.g. LibreBaskerville on headers) take precedence.
 if (!Text.defaultProps) Text.defaultProps = {};
 Text.defaultProps.style = { fontFamily: 'Figtree_400Regular' };
+
+// Remove the browser's default focus outline (black box) from all text inputs on web.
+if (typeof document !== 'undefined') {
+  const s = document.createElement('style');
+  s.textContent = 'input:focus,textarea:focus{outline:none!important;box-shadow:none!important;}';
+  document.head.appendChild(s);
+}
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';

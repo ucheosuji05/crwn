@@ -6,6 +6,9 @@ export const notificationService = {
       .from('notifications')
       .select(`
         *,
+        post_id,
+        comment_id,
+        thread_id,
         actor:actor_id (
           id,
           username,

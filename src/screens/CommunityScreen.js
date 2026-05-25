@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import ThreadList from '../components/ThreadList';
 import ThreadDetailScreen from './ThreadDetailScreen';
 import CreateThreadScreen from './CreateThreadScreen';
 import { useThreads } from '../hooks/useThreads';
+import { supabase } from '../config/supabase';
 
 // Three views the community tab can show
 const VIEW = {
@@ -20,7 +21,7 @@ const VIEW = {
  * and owns the shared thread+upvote state so that upvotes made in the detail
  * view are immediately reflected when the user goes back to the list.
  */
-export default function CommunityScreen() {
+export default function CommunityScreen({ route }) {
   const { colors } = useTheme();
   const [view, setView]                   = useState(VIEW.LIST);
   const [selectedThread, setSelectedThread] = useState(null);
@@ -36,6 +37,32 @@ export default function CommunityScreen() {
     prependThread,
     removeThread,
   } = useThreads();
+
+  // Open a specific thread by ID when navigated from a notification
+  useEffect(() => {
+    const threadId = route?.params?.openThreadId;
+    if (!threadId) return;
+    // Try the already-loaded list first; fall back to a direct DB fetch
+    const cached = threads.find(t => t.id === threadId);
+    if (cached) {
+      setSelectedThread(cached);
+      setView(VIEW.DETAIL);
+    } else {
+      supabase
+        .from('threads')
+        .select(`
+          *,
+          profiles:user_id (id, username, avatar_url, full_name),
+          upvotes:thread_upvotes(count),
+          replies:thread_replies(count)
+        `)
+        .eq('id', threadId)
+        .single()
+        .then(({ data }) => {
+          if (data) { setSelectedThread(data); setView(VIEW.DETAIL); }
+        });
+    }
+  }, [route?.params?.openThreadId]);
 
   // ── Navigation handlers ───────────────────────────────────────────────────
 

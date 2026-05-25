@@ -25,6 +25,27 @@ export const postService = {
     return { data: sorted ?? data, error };
   },
 
+  // Get a single post by ID (used by PostDetailScreen)
+  async getPostById(postId) {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        profiles:user_id (id, username, full_name, avatar_url, is_stylist),
+        stylists:profiles!posts_stylist_id_fkey (id, username, full_name),
+        post_media (id, media_url, media_type, position),
+        likes(count),
+        comments(count)
+      `)
+      .eq('id', postId)
+      .single();
+
+    if (data) {
+      data.post_media = (data.post_media || []).sort((a, b) => a.position - b.position);
+    }
+    return { data, error };
+  },
+
   // Get posts by specific user (for Profile page)
   async getPostsByUser(userId) {
     const { data, error } = await supabase
