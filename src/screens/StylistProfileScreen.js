@@ -942,7 +942,6 @@ export default function StylistProfileScreen({ route, navigation }) {
     if (postsLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
     if (stylistPosts.length === 0) return (
       <View style={styles.emptyState}>
-        <Ionicons name="images-outline" size={36} color={colors.border} />
         <Text style={styles.emptyTitle}>No posts yet</Text>
         <Text style={styles.emptyText}>This stylist hasn't posted yet</Text>
       </View>
@@ -981,7 +980,6 @@ export default function StylistProfileScreen({ route, navigation }) {
     if (servicesLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
     if (services.length === 0) return (
       <View style={styles.emptyState}>
-        <Ionicons name="cut-outline" size={36} color={colors.border} />
         <Text style={styles.emptyTitle}>No services yet</Text>
         <Text style={styles.emptyText}>This stylist hasn't added services yet</Text>
       </View>
@@ -1020,7 +1018,6 @@ export default function StylistProfileScreen({ route, navigation }) {
       case 'Reviews':
         return (
           <View style={styles.emptyState}>
-            <Ionicons name="star-outline" size={36} color={colors.border} />
             <Text style={styles.emptyTitle}>{reviewCount} Reviews</Text>
             <Text style={styles.emptyText}>Reviews will appear here</Text>
           </View>
@@ -1029,7 +1026,6 @@ export default function StylistProfileScreen({ route, navigation }) {
         if (taggedLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
         if (taggedPosts.length === 0) return (
           <View style={styles.emptyState}>
-            <Ionicons name="cut-outline" size={36} color={colors.border} />
             <Text style={styles.emptyTitle}>No tagged posts yet</Text>
             <Text style={styles.emptyText}>Posts where clients tag this stylist will appear here</Text>
           </View>
@@ -1087,13 +1083,31 @@ export default function StylistProfileScreen({ route, navigation }) {
 
         <View style={styles.info}>
           <Text style={styles.name}>{name}</Text>
-          <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-            <Text style={styles.metaText}>{location}</Text>
-            <Text style={styles.metaDot}>•</Text>
-            <Crown size={14} color={HONEY} />
-            <Text style={styles.metaText}>({reviewCount} reviews)</Text>
-          </View>
+
+          {/* Location + Specialty — same row */}
+          {(!!location || specialties.length > 0) && (
+            <View style={styles.metaRow}>
+              {!!location && (
+                <>
+                  <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
+                  <Text style={styles.metaText}>{location}</Text>
+                </>
+              )}
+              {specialties.map((spec, i) => (
+                <View key={i} style={styles.specialtyTag}>
+                  <Text style={styles.specialtyTagText}>{spec}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Reviews */}
+          {reviewCount > 0 && (
+            <View style={[styles.metaRow, { marginBottom: 16 }]}>
+              <Crown size={13} color={HONEY} />
+              <Text style={styles.metaText}>{rating > 0 ? `${Number(rating).toFixed(1)}  ·  ` : ''}{reviewCount} review{reviewCount !== 1 ? 's' : ''}</Text>
+            </View>
+          )}
 
           <View style={styles.stats}>
             <View style={styles.stat}><Text style={styles.statNumber}>{photos.length}</Text><Text style={styles.statLabel}>Posts</Text></View>
@@ -1202,9 +1216,18 @@ const makeStyles = (c) => StyleSheet.create({
   avatarPlaceholder: { backgroundColor: c.border, alignItems: 'center', justifyContent: 'center' },
   info: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
   name: { fontSize: 24, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 6 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 20 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   metaText: { fontSize: 13, color: c.textSecondary, fontFamily: 'Figtree_400Regular' },
   metaDot: { fontSize: 13, color: c.textSecondary, marginHorizontal: 2 },
+  specialtyTag: {
+    paddingHorizontal: 11, paddingVertical: 4,
+    borderRadius: 20,
+    backgroundColor: '#EDEDED',
+    borderWidth: 1, borderColor: '#5e5e5e33',
+  },
+  specialtyTagText: {
+    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#5e5e5e',
+  },
   stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   stat: { alignItems: 'center', paddingHorizontal: 24 },
   statDivider: { width: 1, height: 32, backgroundColor: c.border },

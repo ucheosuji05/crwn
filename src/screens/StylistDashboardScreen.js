@@ -1624,7 +1624,6 @@ export default function StylistDashboardScreen() {
 
             {!hasAnything && (
               <View style={styles.emptyState}>
-                <Ionicons name="calendar-outline" size={40} color={colors.border} />
                 <Text style={styles.emptyTitle}>No upcoming bookings</Text>
                 <Text style={styles.emptyText}>Share your profile to start getting booked</Text>
               </View>
@@ -2557,7 +2556,6 @@ export default function StylistDashboardScreen() {
         : services.length === 0
           ? (
             <View style={styles.emptyState}>
-              <Ionicons name="cut-outline" size={40} color={colors.border} />
               <Text style={styles.emptyTitle}>No services yet</Text>
               <Text style={styles.emptyText}>Add your first service to let clients know what you offer</Text>
             </View>

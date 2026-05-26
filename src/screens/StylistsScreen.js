@@ -296,7 +296,6 @@ export default function StylistsScreen() {
           )}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="cut-outline" size={48} color={colors.border} />
               <Text style={styles.emptyTitle}>No stylists found</Text>
               <Text style={styles.emptySubtitle}>
                 {searchQuery || activeFilter !== 'All'

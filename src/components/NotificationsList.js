@@ -324,7 +324,6 @@ export default function NotificationsList({ panelMode = false }) {
       }
       ListEmptyComponent={
         <View style={styles.center}>
-          <Ionicons name="notifications-outline" size={52} color={colors.border} />
           <Text style={styles.emptyText}>No notifications yet</Text>
         </View>
       }

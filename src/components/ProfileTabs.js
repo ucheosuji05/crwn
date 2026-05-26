@@ -751,7 +751,6 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
         if (bookings.length === 0) {
           return (
             <View style={styles.emptyState}>
-              <Icon name="calendar-outline" size={44} color={colors.border} />
               <Text style={styles.emptyTitle}>No bookings yet</Text>
               <Text style={styles.emptyText}>
                 {isOwnStylist ? 'Client bookings will appear here' : 'Book a stylist to see your appointments here'}
@@ -810,7 +809,6 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
         if (!isOwnProfile) {
           return (
             <View style={styles.emptyState}>
-              <Icon name="lock-closed-outline" size={40} color="#d1d5db" />
               <Text style={styles.emptyTitle}>Private</Text>
               <Text style={styles.emptyText}>Hair profile is only visible to the owner</Text>
             </View>

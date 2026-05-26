@@ -406,9 +406,6 @@ export default function MessagingScreen() {
         </View>
       ) : conversations.length === 0 ? (
         <View style={styles.emptyState}>
-          <View style={styles.emptyIcon}>
-            <Ionicons name="chatbubble-ellipses-outline" size={48} color="#d1d5db" />
-          </View>
           <Text style={styles.emptyTitle}>No messages yet</Text>
           <Text style={styles.emptySubtitle}>
             Start a conversation with someone in the community.
