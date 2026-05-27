@@ -1385,7 +1385,7 @@ export default function StylistDashboardScreen() {
             <View style={styles.detailSection}>
               <Text style={styles.detailSectionLabel}>RECENT COMMENTS</Text>
               {recentComments.map(c => (
-                <View key={c.id} style={styles.commentRow}>
+                <View key={`cmt-${c.id}`} style={styles.commentRow}>
                   <View style={styles.commentAvatar}>
                     {c.profiles?.avatar_url
                       ? <Image source={{ uri: c.profiles.avatar_url }} style={{ width: 32, height: 32, borderRadius: 16 }} />

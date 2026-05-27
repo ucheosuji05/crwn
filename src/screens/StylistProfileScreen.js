@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bookingService } from '../services/bookingService';
 import { postService } from '../services/postService';
 import { profileService } from '../services/profileService';
+import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
 
@@ -846,6 +847,10 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [followLoading, setFollowLoading]     = useState(false);
   const { user } = useAuth();
 
+  useEffect(() => {
+    if (Platform.OS === 'web') injectScrollbarCSS();
+  }, []);
+
   const stylist = fetchedProfile
     ? { ...routeStylist, ...fetchedProfile }
     : routeStylist;
@@ -951,7 +956,7 @@ export default function StylistProfileScreen({ route, navigation }) {
     return (
       <View style={styles.gridContainer}>
         {rows.map((row, rowIndex) => (
-          <View key={rowIndex} style={styles.gridRow}>
+          <View key={`row-${rowIndex}`} style={styles.gridRow}>
             {row.map((post) => {
               const thumb = post.post_media?.[0]?.media_url;
               return (
@@ -1035,7 +1040,7 @@ export default function StylistProfileScreen({ route, navigation }) {
         return (
           <View style={styles.gridContainer}>
             {taggedRows.map((row, rowIndex) => (
-              <View key={rowIndex} style={styles.gridRow}>
+              <View key={`row-${rowIndex}`} style={styles.gridRow}>
                 {row.map((item) => {
                   const thumb = item.post_media?.[0]?.media_url;
                   return (
@@ -1068,10 +1073,10 @@ export default function StylistProfileScreen({ route, navigation }) {
     }
   };
 
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: BANNER_HEIGHT }} />
+  // ── Shared inner content (used in both web <div> and native <ScrollView>) ──
+  const profileContent = (
+    <>
+      <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: BANNER_HEIGHT }} />
 
         <View style={[styles.avatarRow, { marginTop: -(AVATAR_SIZE / 2) }]}>
           <View style={[styles.avatarRing, { width: AVATAR_SIZE + 4, height: AVATAR_SIZE + 4, borderRadius: (AVATAR_SIZE + 4) / 2, backgroundColor: colors.surface }]}>
@@ -1160,7 +1165,30 @@ export default function StylistProfileScreen({ route, navigation }) {
         </View>
 
         {renderTabContent()}
-      </ScrollView>
+    </>
+  );
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      {Platform.OS === 'web' ? (
+        /* ── Web: native <div> with CSS 100vh so content can actually overflow ── */
+        <div
+          className="crwn-profile-scroll-div"
+          style={{
+            height: '100vh',
+            overflowY: 'scroll',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(0,0,0,0.25) transparent',
+          }}
+        >
+          {profileContent}
+        </div>
+      ) : (
+        /* ── Native: plain ScrollView ── */
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          {profileContent}
+        </ScrollView>
+      )}
 
       <TouchableOpacity style={[styles.backBtn, { top: insets.top + 8 }]} onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
         <Ionicons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />

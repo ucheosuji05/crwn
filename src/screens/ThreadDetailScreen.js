@@ -143,7 +143,7 @@ function ReplyNode({
         <View style={[styles.nestedBlock, depth === 0 ? styles.nestedBlockRoot : styles.nestedBlockDeep]}>
           {reply.children.map(child => (
             <ReplyNode
-              key={child.id}
+              key={`reply-${child.id}`}
               reply={child}
               depth={depth + 1}
               upvotedIds={upvotedIds}
@@ -286,7 +286,9 @@ export default function ThreadDetailScreen({
       console.error('createReply error:', error);
       Alert.alert('Error', 'Could not post your reply. Please try again.');
     } else if (data) {
-      setReplies(prev => [...prev, data]);
+      // Deduplicate — prevent the same reply appearing twice if a realtime event
+      // and the optimistic append race each other.
+      setReplies(prev => prev.some(r => r.id === data.id) ? prev : [...prev, data]);
       setReplyText('');
       setReplyingTo(null);
       showToast();
@@ -410,7 +412,7 @@ export default function ThreadDetailScreen({
             ) : (
               replyTree.map(r => (
                 <ReplyNode
-                  key={r.id}
+                  key={`reply-${r.id}`}
                   reply={r}
                   depth={0}
                   upvotedIds={upvotedReplyIds}

@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, useWindowDimensions, RefreshControl, ActivityIndicator } from 'react-native';
-import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, RefreshControl, ActivityIndicator } from 'react-native';
+import { WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,12 +15,16 @@ export default function ProfileScreen({ route, navigation }) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
+
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   // null = still checking, false = regular user, true = stylist (redirecting)
   const [checkingRole, setCheckingRole] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') injectScrollbarCSS();
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -62,32 +67,44 @@ export default function ProfileScreen({ route, navigation }) {
   }
 
   return (
-    <View style={[
-      styles.container,
-      { backgroundColor: colors.surface },
-      webWrap(WEB_MAX_WIDTHS.profile),
-      Platform.OS === 'web' && { height: windowHeight },
-    ]}>
-      <ScrollView
-        style={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.primary}
-            colors={[colors.primary]}
-          />
-        }
-      >
-        {/* UserHeader no longer receives onBack — the overlay button below handles it */}
-        <UserHeader
-          key={profileVersion}
-          viewedUserId={viewedUserId}
-          isOwnProfile={isOwnProfile}
-        />
-        <ProfileTabs key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
-      </ScrollView>
+    <View style={[styles.container, { backgroundColor: colors.surface }]}>
+      {Platform.OS === 'web' ? (
+        /* ── Web: native <div> with CSS 100vh — guarantees real viewport height
+           so scrollHeight > clientHeight and the scrollbar thumb appears.      */
+        <div
+          className="crwn-profile-scroll-div"
+          style={{
+            height: '100vh',
+            overflowY: 'scroll',
+            maxWidth: WEB_MAX_WIDTHS.profile,
+            width: '100%',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            scrollbarWidth: 'thin',
+            scrollbarColor: 'rgba(0,0,0,0.25) transparent',
+          }}
+        >
+          <UserHeader key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <ProfileTabs key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+        </div>
+      ) : (
+        /* ── Native: keep ScrollView with pull-to-refresh */
+        <ScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.primary}
+              colors={[colors.primary]}
+            />
+          }
+        >
+          <UserHeader key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <ProfileTabs key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+        </ScrollView>
+      )}
 
       {/* Back arrow — absolute overlay so ScrollView never swallows the touch */}
       {isStackScreen && (

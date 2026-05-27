@@ -289,12 +289,18 @@ export default function PostCard({
         // Append reply to the expanded thread
         setExpandedReplies(prev => {
           const ex = prev[parentId] || { items: [], total: 0, loading: false };
+          // Deduplicate — prevent the same reply appearing twice if a realtime
+          // event or re-fetch races with the optimistic append.
+          const alreadyHas = ex.items.some(r => r.id === data.id);
+          if (alreadyHas) return prev;
           return { ...prev, [parentId]: { ...ex, items: [...ex.items, data], total: ex.total + 1 } };
         });
         setReplyCounts(prev => ({ ...prev, [parentId]: (prev[parentId] || 0) + 1 }));
         setReplyingTo(null);
       } else {
-        setComments(prev => [...prev, data]);
+        // Deduplicate — prevent the same comment appearing twice (race condition
+        // between optimistic append and a background refresh).
+        setComments(prev => prev.some(c => c.id === data.id) ? prev : [...prev, data]);
       }
     }
     setSubmittingComment(false);
@@ -375,7 +381,9 @@ export default function PostCard({
     const newItems = data || [];
     setExpandedReplies(prev => {
       const ex = prev[parentId] || { items: [], total: 0 };
-      return { ...prev, [parentId]: { items: [...ex.items, ...newItems], total: total ?? ex.total, loading: false } };
+      const existingIds = new Set(ex.items.map(r => r.id));
+      const fresh = newItems.filter(r => !existingIds.has(r.id));
+      return { ...prev, [parentId]: { items: [...ex.items, ...fresh], total: total ?? ex.total, loading: false } };
     });
     if (newItems.length > 0 && user?.id) {
       const ids = newItems.map(r => r.id);
@@ -479,7 +487,7 @@ export default function PostCard({
     const expanded = !isReply ? expandedReplies[item.id] : null;
 
     return (
-      <View key={item.id} style={[styles.commentItem, isReply && styles.replyItem]}>
+      <View key={`cmt-${item.id}`} style={[styles.commentItem, isReply && styles.replyItem]}>
         <View style={[
           styles.commentAvatar,
           isReply && styles.replyAvatar,

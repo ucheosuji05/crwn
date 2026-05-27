@@ -331,7 +331,7 @@ export default function SavedLooks() {
     for (let i = 0; i < items.length; i += nCollCols) {
       const row = items.slice(i, i + nCollCols);
       rows.push(
-        <View key={i} style={styles.collRow}>
+        <View key={`coll-row-${i}`} style={styles.collRow}>
           {row.map(item => {
             if (item === 'all') return renderCollectionCard('all');
             if (item === 'new') return renderNewCollectionCard();
@@ -390,7 +390,7 @@ export default function SavedLooks() {
     for (let i = 0; i < posts.length; i += nPostCols) {
       const slice = posts.slice(i, i + nPostCols);
       rows.push(
-        <View key={i} style={styles.postRow}>
+        <View key={`post-row-${i}`} style={styles.postRow}>
           {slice.map(p => renderPostTile(p, selectable))}
           {slice.length < nPostCols && Array(nPostCols - slice.length).fill(null).map((_, j) => (
             <View key={`ep-${j}`} style={[styles.postTile, { backgroundColor: 'transparent' }]} />
