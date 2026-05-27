@@ -100,10 +100,21 @@ export const postService = {
             const response = await fetch(file.uri);
             const blob = await response.blob();
             contentType = blob.type || 'image/jpeg';
+            // HEIC/HEIF is not renderable in web browsers — treat as JPEG
+            // (the ensureJpeg() step in CreatePostScreen should have already
+            //  converted these, but guard here too just in case)
+            if (contentType.includes('heic') || contentType.includes('heif')) {
+              contentType = 'image/jpeg';
+            }
             fileExt = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
             uploadData = blob;
           } else {
             fileExt = file.uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+            // HEIC should have been converted by ensureJpeg() before reaching here,
+            // but normalise the extension/type if it somehow wasn't.
+            if (fileExt === 'heic' || fileExt === 'heif') {
+              fileExt = 'jpg';
+            }
             contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
             uploadData = await new Promise((resolve, reject) => {
               const xhr = new XMLHttpRequest();
@@ -415,6 +426,14 @@ export const postService = {
       .eq('user_id', userId)
       .order('created_at', { ascending: false });
 
-    return { data, error };
+    // Sort each post's media by position (same as other queries)
+    const sorted = data?.map(b => ({
+      ...b,
+      posts: b.posts ? {
+        ...b.posts,
+        post_media: (b.posts.post_media || []).sort((a, b) => a.position - b.position),
+      } : b.posts,
+    }));
+    return { data: sorted ?? data, error };
   },
 };

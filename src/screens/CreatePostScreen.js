@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { postService } from '../services/postService';
 import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
@@ -37,6 +38,27 @@ export default function CreatePostScreen({ navigation }) {
   const [stylistSearching, setStylistSearching] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Convert HEIC/HEIF images to JPEG so they display correctly on web browsers.
+  // Safari and Chrome cannot render .heic files, so we convert before upload.
+  const ensureJpeg = async (asset) => {
+    const uri = asset.uri || '';
+    const ext = uri.split('.').pop()?.toLowerCase().split('?')[0];
+    const mimeType = asset.mimeType || asset.type || '';
+    const isHeic = ext === 'heic' || ext === 'heif'
+      || mimeType.includes('heic') || mimeType.includes('heif');
+    if (!isHeic) return asset;
+    try {
+      const result = await ImageManipulator.manipulateAsync(
+        uri,
+        [],
+        { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG }
+      );
+      return { ...asset, uri: result.uri, mimeType: 'image/jpeg' };
+    } catch {
+      return asset; // fallback: use original if conversion fails
+    }
+  };
+
   const pickImages = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -49,12 +71,13 @@ export default function CreatePostScreen({ navigation }) {
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       aspect: [4, 5],
-      quality: 0.8,
-      selectionLimit: 10, // Max 10 images
+      quality: 0.85,
+      selectionLimit: 10,
     });
 
     if (!result.canceled) {
-      setImages([...images, ...result.assets]);
+      const converted = await Promise.all(result.assets.map(ensureJpeg));
+      setImages([...images, ...converted]);
     }
   };
 
@@ -70,11 +93,12 @@ export default function CreatePostScreen({ navigation }) {
       mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 5],
-      quality: 0.8,
+      quality: 0.85,
     });
 
     if (!result.canceled) {
-      setImages([...images, result.assets[0]]);
+      const [converted] = await Promise.all([ensureJpeg(result.assets[0])]);
+      setImages([...images, converted]);
     }
   };
 

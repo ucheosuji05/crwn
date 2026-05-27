@@ -775,8 +775,8 @@ export default function PostCard({
             }}
           >
             {mediaItems.map((item, i) => {
-              // On web `height: '100%'` can compute to 0 inside a horizontal ScrollView
-              // when parent height is inferred from aspectRatio. Explicit px fixes it.
+              // Provide explicit pixel dimensions once we know the container width.
+              // image style uses aspectRatio:1 as a fallback for the first render.
               const imgSize = slideWidth > 0 ? { width: slideWidth, height: slideWidth } : null;
               const failed  = imgErrors[i];
               return (
@@ -796,7 +796,10 @@ export default function PostCard({
                       source={item}
                       style={[styles.image, imgSize]}
                       resizeMode="cover"
-                      onError={() => setImgErrors(prev => ({ ...prev, [i]: true }))}
+                      onError={() => {
+                        console.warn('[PostCard] image failed to load:', item?.uri);
+                        setImgErrors(prev => ({ ...prev, [i]: true }));
+                      }}
                     />
                   )}
                 </TouchableOpacity>
@@ -806,7 +809,8 @@ export default function PostCard({
 
           {mediaItems.length > 1 && (
             <>
-              <Animated.View style={[styles.carouselControls, { opacity: controlsOpacity }]} pointerEvents="box-none">
+              {/* On web keep arrows always visible; on native they fade in on tap */}
+              <Animated.View style={[styles.carouselControls, { opacity: isWeb ? 1 : controlsOpacity }]} pointerEvents="box-none">
                 <TouchableOpacity
                   style={[styles.arrowBtn, { opacity: currentIndex === 0 ? 0.3 : 1 }]}
                   onPress={handlePrev}
@@ -1084,6 +1088,7 @@ const makeStyles = (c) => StyleSheet.create({
     width: '100%',
     aspectRatio: 1,
     position: 'relative',
+    overflow: 'hidden',
   },
   slide: {
     width: '100%',
@@ -1091,7 +1096,10 @@ const makeStyles = (c) => StyleSheet.create({
   },
   image: {
     width: '100%',
-    height: '100%',
+    // aspectRatio instead of height:'100%' so the image always has a computed
+    // height on web even before onLayout fires (CSS height:100% doesn't resolve
+    // when the parent only has aspect-ratio without an explicit px height).
+    aspectRatio: 1,
     backgroundColor: c.borderLight,
     borderRadius: 12,
   },
