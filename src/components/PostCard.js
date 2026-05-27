@@ -753,7 +753,10 @@ export default function PostCard({
           )}
           <View style={styles.authorInfo}>
             <Text style={styles.authorName}>{authorName}</Text>
-            <Text style={styles.timeAgo}>{timeAgo}</Text>
+            <Text style={styles.timeAgo}>
+              @{authorUsername}
+              {timeAgo ? ` · ${timeAgo}` : ''}
+            </Text>
           </View>
         </TouchableOpacity>
         <TouchableOpacity onPress={handleMenuPress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>

@@ -20,6 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SearchBar from '../components/SearchBar';
 import PostCard from '../components/PostCard';
+import PostFeedViewerModal from '../components/PostFeedViewerModal';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
 import { usePosts } from '../hooks/usePosts';
 import { useAuth } from '../hooks/useAuth';
@@ -130,9 +131,13 @@ export default function ExploreScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  // Web popup card
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
   const postModalScrollRef = useRef(null);
+  // Mobile full-screen viewer
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex,   setViewerIndex]   = useState(0);
 
   const { posts, loading, loadingMore, hasMore, loadMore, refresh, deletePost } = usePosts();
   const isLoadingMoreRef = useRef(false);
@@ -151,6 +156,24 @@ export default function ExploreScreen() {
         );
       })
     : posts;
+
+  // Fast O(1) lookup: post.id → its index in filteredPosts (used by renderTileInner)
+  const postIndexMap = useMemo(
+    () => new Map(filteredPosts.map((p, i) => [p.id, i])),
+    [filteredPosts],
+  );
+
+  const openPost = (item) => {
+    if (Platform.OS !== 'web') {
+      // Mobile: full-screen viewer starting at this post
+      const idx = postIndexMap.get(item.id) ?? 0;
+      setViewerIndex(idx);
+      setViewerVisible(true);
+    } else {
+      // Web: existing floating popup card
+      setSelectedPost(item);
+    }
+  };
 
   const scrapbookRows = useMemo(() => buildRows(filteredPosts), [filteredPosts]);
 
@@ -207,7 +230,7 @@ export default function ExploreScreen() {
     const stylistName = item.stylists?.full_name || item.stylists?.username;
     return (
       <TouchableOpacity
-        onPress={() => setSelectedPost(item)}
+        onPress={() => openPost(item)}
         activeOpacity={0.88}
       >
         <View style={[styles.tileImage, { height }]}>
@@ -536,55 +559,80 @@ export default function ExploreScreen() {
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
 
-      {/* ── Post popup (floating card, matches ProfileTabs style) ── */}
-      <Modal
-        visible={!!selectedPost}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setSelectedPost(null)}
-      >
-        <Pressable style={styles.backdrop} onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}>
-          <Pressable
-            style={[
-              styles.popupCard,
-              Platform.OS === 'web' && (postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb),
-            ]}
-            onPress={() => {}}
-          >
-            <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false}>
-              {selectedPost && (
-                <PostCard
-                  post={selectedPost}
-                  currentUserId={user?.id}
-                  scrollViewRef={postModalScrollRef}
-                  onCommentsOpenChange={setPostCommentsOpen}
-                  onDelete={async (postId, userId) => {
-                    const result = await deletePost(postId, userId);
-                    if (result?.success) { setSelectedPost(null); setPostCommentsOpen(false); }
-                    return result;
-                  }}
-                  onNavigateToProfile={(userId) => {
-                    setSelectedPost(null);
-                    setPostCommentsOpen(false);
-                    navigation.navigate('UserProfile', { viewedUserId: userId });
-                  }}
-                  onNavigateToStylist={(stylistId) => {
-                    const st = selectedPost?.stylists;
-                    setSelectedPost(null);
-                    setPostCommentsOpen(false);
-                    navigation.navigate('StylistProfile', {
-                      stylist: {
-                        id: stylistId,
-                        name: st?.full_name || st?.username || 'Stylist',
-                      },
-                    });
-                  }}
-                />
-              )}
-            </ScrollView>
+      {/* ── Mobile: full-screen post viewer (tap tile → viewer, scroll for next) ── */}
+      {Platform.OS !== 'web' && (
+        <PostFeedViewerModal
+          visible={viewerVisible}
+          posts={filteredPosts}
+          initialIndex={viewerIndex}
+          onClose={() => setViewerVisible(false)}
+          onDelete={async (postId, userId) => {
+            const result = await deletePost(postId, userId);
+            if (result?.success) setViewerVisible(false);
+            return result;
+          }}
+          onNavigateToProfile={(userId) => {
+            setViewerVisible(false);
+            setTimeout(() => navigation.navigate('UserProfile', { viewedUserId: userId }), 250);
+          }}
+          onNavigateToStylist={(stylistId) => {
+            setViewerVisible(false);
+            setTimeout(() => navigation.navigate('StylistProfile', { stylist: { id: stylistId } }), 250);
+          }}
+        />
+      )}
+
+      {/* ── Web: floating popup card (unchanged) ── */}
+      {Platform.OS === 'web' && (
+        <Modal
+          visible={!!selectedPost}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setSelectedPost(null)}
+        >
+          <Pressable style={styles.backdrop} onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}>
+            <Pressable
+              style={[
+                styles.popupCard,
+                postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb,
+              ]}
+              onPress={() => {}}
+            >
+              <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false}>
+                {selectedPost && (
+                  <PostCard
+                    post={selectedPost}
+                    currentUserId={user?.id}
+                    scrollViewRef={postModalScrollRef}
+                    onCommentsOpenChange={setPostCommentsOpen}
+                    onDelete={async (postId, userId) => {
+                      const result = await deletePost(postId, userId);
+                      if (result?.success) { setSelectedPost(null); setPostCommentsOpen(false); }
+                      return result;
+                    }}
+                    onNavigateToProfile={(userId) => {
+                      setSelectedPost(null);
+                      setPostCommentsOpen(false);
+                      navigation.navigate('UserProfile', { viewedUserId: userId });
+                    }}
+                    onNavigateToStylist={(stylistId) => {
+                      const st = selectedPost?.stylists;
+                      setSelectedPost(null);
+                      setPostCommentsOpen(false);
+                      navigation.navigate('StylistProfile', {
+                        stylist: {
+                          id: stylistId,
+                          name: st?.full_name || st?.username || 'Stylist',
+                        },
+                      });
+                    }}
+                  />
+                )}
+              </ScrollView>
+            </Pressable>
           </Pressable>
-        </Pressable>
-      </Modal>
+        </Modal>
+      )}
     </View>
   );
 }
