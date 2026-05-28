@@ -145,15 +145,19 @@ export default function ExploreScreen() {
 
   const isSearching = query.trim().length > 0;
 
+  // Returns true when `q` matches the beginning of any word in `str`
+  const wordStartsWith = (str, q) =>
+    str ? str.toLowerCase().split(/[\s\-_]+/).some(w => w.startsWith(q)) : false;
+
   const filteredPosts = isSearching
     ? posts.filter((p) => {
-        const q = query.toLowerCase();
-        return (
-          p.caption?.toLowerCase().includes(q) ||
-          p.description?.toLowerCase().includes(q) ||
-          p.profiles?.username?.toLowerCase().includes(q) ||
-          p.profiles?.full_name?.toLowerCase().includes(q)
-        );
+        const q = query.toLowerCase().replace(/^#/, '');
+        const matchesUser =
+          wordStartsWith(p.profiles?.username, q) ||
+          wordStartsWith(p.profiles?.full_name, q);
+        const matchesTag =
+          Array.isArray(p.tags) && p.tags.some(t => wordStartsWith(t, q));
+        return matchesUser || matchesTag;
       })
     : posts;
 
@@ -179,25 +183,40 @@ export default function ExploreScreen() {
 
   // Search dropdown data
   const matchingUsers = isSearching
-    ? [
-        ...new Map(
-          filteredPosts
-            .filter((p) => p.profiles)
-            .map((p) => [p.user_id, { userId: p.user_id, ...p.profiles }])
-        ).values(),
-      ].slice(0, 5)
+    ? (() => {
+        const q = query.toLowerCase().replace(/^#/, '');
+        return [
+          ...new Map(
+            posts
+              .filter((p) => p.profiles && (
+                wordStartsWith(p.profiles.username, q) ||
+                wordStartsWith(p.profiles.full_name, q)
+              ))
+              .map((p) => [p.user_id, { userId: p.user_id, ...p.profiles }])
+          ).values(),
+        ].slice(0, 5);
+      })()
     : [];
 
-  const matchingPosts = isSearching
-    ? filteredPosts
-        .filter((p) => {
-          const q = query.toLowerCase();
-          return (
-            p.caption?.toLowerCase().includes(q) ||
-            p.description?.toLowerCase().includes(q)
-          );
-        })
-        .slice(0, 5)
+  const matchingTags = isSearching
+    ? (() => {
+        const q = query.toLowerCase().replace(/^#/, '');
+        if (!q) return [];
+        const counts = new Map();
+        posts.forEach(p => {
+          if (Array.isArray(p.tags)) {
+            p.tags.forEach(t => {
+              if (wordStartsWith(t, q)) {
+                counts.set(t, (counts.get(t) || 0) + 1);
+              }
+            });
+          }
+        });
+        return [...counts.entries()]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 6)
+          .map(([tag, count]) => ({ tag, count }));
+      })()
     : [];
 
   const toggleSearch = useCallback(() => {
@@ -480,28 +499,26 @@ export default function ExploreScreen() {
                 </>
               )}
 
-              {matchingPosts.length > 0 && (
+              {matchingTags.length > 0 && (
                 <>
-                  <Text style={styles.dropdownSection}>Posts</Text>
-                  {matchingPosts.map((p) => (
+                  <Text style={styles.dropdownSection}>Tags</Text>
+                  {matchingTags.map(({ tag, count }) => (
                     <TouchableOpacity
-                      key={p.id}
+                      key={tag}
                       style={styles.dropdownRow}
-                      onPress={() => handleSelectResult(p.user_id, p.profiles?.is_stylist)}
+                      onPress={() => setQuery(`#${tag}`)}
                     >
-                      <Ionicons name="document-text-outline" size={18} color="#9ca3af" style={{ marginRight: 12 }} />
+                      <Ionicons name="pricetag-outline" size={18} color="#9ca3af" style={{ marginRight: 12 }} />
                       <View style={styles.dropdownRowText}>
-                        <Text style={styles.dropdownCaption} numberOfLines={1}>
-                          {p.caption || p.description || 'Post'}
-                        </Text>
-                        <Text style={styles.dropdownMeta}>by @{p.profiles?.username || 'user'}</Text>
+                        <Text style={styles.dropdownUsername}>#{tag}</Text>
+                        <Text style={styles.dropdownMeta}>{count} post{count !== 1 ? 's' : ''}</Text>
                       </View>
                     </TouchableOpacity>
                   ))}
                 </>
               )}
 
-              {matchingUsers.length === 0 && matchingPosts.length === 0 && (
+              {matchingUsers.length === 0 && matchingTags.length === 0 && (
                 <View style={styles.dropdownEmpty}>
                   <Text style={styles.dropdownEmptyText}>No results for "{query}"</Text>
                 </View>
