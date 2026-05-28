@@ -35,6 +35,8 @@ export default function PostCard({
   initialCommentsOpen = false,
 }) {
   const controlsOpacity = useRef(new Animated.Value(0)).current;
+  const heartAnim = useRef(new Animated.Value(0)).current;
+  const lastTapTime = useRef(0);
   const fadeTimer = useRef(null);
   const carouselRef = useRef(null);
   const commentInputRef = useRef(null);
@@ -241,6 +243,32 @@ export default function PostCard({
   };
 
   const isWeb = Platform.OS === 'web';
+
+  const handleImageTap = () => {
+    const now = Date.now();
+    if (now - lastTapTime.current < 300) {
+      // Double tap — like if not already liked, then show heart
+      if (!liked) handleLike();
+      heartAnim.setValue(0);
+      Animated.sequence([
+        Animated.spring(heartAnim, {
+          toValue: 1,
+          useNativeDriver: true,
+          friction: 3,
+          tension: 40,
+        }),
+        Animated.delay(500),
+        Animated.timing(heartAnim, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      showControls();
+    }
+    lastTapTime.current = now;
+  };
 
   const handleOpenComments = async () => {
     if (commentsExpanded) {
@@ -794,7 +822,7 @@ export default function PostCard({
                 <TouchableOpacity
                   key={`${postId}-slide-${i}`}
                   activeOpacity={1}
-                  onPress={showControls}
+                  onPress={handleImageTap}
                   style={[styles.slide, slideWidth ? { width: slideWidth, height: slideWidth } : null]}
                 >
                   {failed ? (
@@ -817,6 +845,26 @@ export default function PostCard({
               );
             })}
           </ScrollView>
+
+          {/* Double-tap heart animation */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              StyleSheet.absoluteFill,
+              styles.heartOverlay,
+              {
+                opacity: heartAnim,
+                transform: [{
+                  scale: heartAnim.interpolate({
+                    inputRange: [0, 0.5, 1],
+                    outputRange: [0.3, 1.4, 1],
+                  }),
+                }],
+              },
+            ]}
+          >
+            <Ionicons name="heart" size={90} color="#ef4444" />
+          </Animated.View>
 
           {mediaItems.length > 1 && (
             <>
@@ -1117,6 +1165,11 @@ const makeStyles = (c) => StyleSheet.create({
   imgError: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heartOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
   },
   carouselControls: {
     position: 'absolute',
