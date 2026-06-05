@@ -2,6 +2,7 @@
   "expo": {
     "name": "CRWN MVP",
     "slug": "crwn-mvp",
+    "privacy": "public",
     "platforms": [
       "ios",
       "android",
