@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, ScrollView, ActivityIndicator,
-  TouchableOpacity, StyleSheet,
+  TouchableOpacity, StyleSheet, Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,9 +16,10 @@ export default function PostDetailScreen({ route, navigation }) {
   const { user } = useAuth();
   const scrollRef = useRef(null);
 
-  const [post, setPost]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [post, setPost]         = useState(null);
+  const [loading, setLoading]   = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!postId) { setLoading(false); setNotFound(true); return; }
@@ -66,9 +67,24 @@ export default function PostDetailScreen({ route, navigation }) {
             onNavigateToProfile={(userId) =>
               navigation.navigate('UserProfile', { viewedUserId: userId })
             }
+            onDelete={async (id, userId) => {
+              setDeleting(true);
+              const { error } = await postService.deletePost(id, userId);
+              setDeleting(false);
+              if (error) return { success: false, error };
+              navigation.goBack();
+              return { success: true };
+            }}
           />
         </ScrollView>
       )}
+      {/* Deleting overlay */}
+      <Modal visible={deleting} transparent animationType="none">
+        <View style={styles.deletingOverlay}>
+          <ActivityIndicator color="#fff" size="large" />
+          <Text style={styles.deletingText}>Deleting…</Text>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -96,5 +112,17 @@ const styles = StyleSheet.create({
   notFoundText: {
     fontSize: 15,
     fontFamily: 'Figtree_500Medium',
+  },
+  deletingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  deletingText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Figtree_600SemiBold',
   },
 });

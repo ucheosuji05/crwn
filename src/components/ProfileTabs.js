@@ -227,6 +227,13 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const isOwnStylist = isOwnProfile && !!authProfile?.is_stylist;
   const { posts, loading, refresh, deletePost } = usePosts(viewedUserId);
 
+  // Refresh posts whenever the profile screen regains focus (e.g. returning
+  // from PostDetail after a delete)
+  useEffect(() => {
+    const unsub = navigation.addListener('focus', refresh);
+    return unsub;
+  }, [navigation, refresh]);
+
   // ── Scrapbook tile renderers ────────────────────────────────────────────────
   const openPost = (item) => {
     if (Platform.OS !== 'web') {

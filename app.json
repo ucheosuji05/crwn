@@ -13,10 +13,21 @@
       "**/*"
     ],
     "updates": {
-      "enabled": false
+      "enabled": false,
+      "url": "https://u.expo.dev/e3eed5ea-2ccd-4f33-b260-59d3aba14152"
     },
     "plugins": [
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "e3eed5ea-2ccd-4f33-b260-59d3aba14152"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "android": {},
+    "ios": {}
   }
 }
