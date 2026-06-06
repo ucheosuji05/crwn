@@ -2,6 +2,7 @@
   "expo": {
     "name": "CRWN MVP",
     "slug": "crwn-mvp",
+    "privacy": "public",
     "platforms": [
       "ios",
       "android",
@@ -13,7 +14,7 @@
       "**/*"
     ],
     "updates": {
-      "enabled": false,
+      "enabled": true,
       "url": "https://u.expo.dev/e3eed5ea-2ccd-4f33-b260-59d3aba14152"
     },
     "plugins": [
