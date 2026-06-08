@@ -13,7 +13,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
-import { s, SCREEN_HEIGHT } from '../utils/responsive';
+import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../utils/responsive';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons as Icon } from '@expo/vector-icons';
 import SavedLooks from './SavedLooks';
 import HairProfile from './HairProfile';
@@ -27,59 +28,58 @@ import { bookingService } from '../services/bookingService';
 import { postService } from '../services/postService';
 import { reviewService } from '../services/reviewService';
 import { supabase } from '../config/supabase';
-import { Crown } from 'lucide-react-native';
+import { Crown, Scissors } from 'lucide-react-native';
 
 const HONEY = '#D4930A';
 
-// ── Scrapbook layout (mirrors ExploreScreen) ─────────────────────────────────
-const SIDE_PAD = 12;
-const GAP = 12;
+// ── Masonry layout (mirrors ExploreScreen's true masonry grid) ───────────────
+const MASONRY_PAD = 12;
+const MASONRY_GAP = 10;
+const MASONRY_RADIUS = 16;
+const MASONRY_DEFAULT_AR = 1;
+const MASONRY_MAX_HW = 1.6;
+const MASONRY_HW_LANDSCAPE_MAX = 0.8; // shorter than this (height:width) → landscape, spans full width
+const MASONRY_COLUMN_WIDTH = (SCREEN_WIDTH - MASONRY_PAD * 2 - MASONRY_GAP) / 2;
 
-const H = {
-  feature:  [s(340), s(310), s(360), s(325), s(350)],
-  full:     [s(255), s(230), s(275), s(245), s(260)],
-  banner:   [s(145), s(160), s(135), s(155), s(148)],
-  pair:     [s(195), s(215), s(180), s(225), s(205)],
-  trio:     [s(158), s(172), s(148), s(182), s(163)],
-  tall:     [s(235), s(255), s(218), s(245), s(228)],
-  stacked:  [s(118), s(108), s(125), s(112), s(120)],
-  quad:     [s(148), s(135), s(158), s(143), s(152)],
-};
+// Shortest-column-first masonry, sized off each image's natural aspect ratio
+// (capped at 1.6:1 height:width so resizeMode 'cover' never crops too tightly).
+// Mirrors the Explore feed: landscape posts span the full width once both
+// columns are roughly level, and never land back to back.
+function computeProfileMasonry(posts, columnWidth, imageDimensions) {
+  const gap = MASONRY_GAP;
+  const fullWidth = columnWidth * 2 + gap;
+  let leftH = 0;
+  let rightH = 0;
+  let lastWasFull = false;
+  const items = [];
+  posts.forEach(post => {
+    const dims = imageDimensions[post.id];
+    const ar = dims ? dims.width / dims.height : MASONRY_DEFAULT_AR;
+    const hw = 1 / ar;
+    const renderAr = Math.max(ar, 1 / MASONRY_MAX_HW);
 
-const nth = (arr, i) => arr[i % arr.length];
-
-const PATTERN = [
-  'full', 'pair', 'wide-thin', 'trio', 'feature', 'stacked-right',
-  'large-small', 'quad', 'banner', 'thin-wide', 'trio', 'stacked-left',
-  'pair', 'feature', 'wide-thin', 'full', 'stacked-right', 'small-large',
-  'trio', 'banner', 'quad', 'large-small', 'stacked-left', 'full',
-  'pair', 'thin-wide', 'feature', 'trio',
-];
-
-const NEEDS = {
-  feature: 1, full: 1, banner: 1,
-  pair: 2, 'large-small': 2, 'small-large': 2, 'wide-thin': 2, 'thin-wide': 2,
-  trio: 3, 'stacked-right': 3, 'stacked-left': 3,
-  quad: 4,
-};
-
-function buildRows(posts) {
-  const rows = [];
-  let i = 0, pi = 0;
-  while (i < posts.length) {
-    const remaining = posts.length - i;
-    let type = PATTERN[pi % PATTERN.length];
-    pi++;
-    const need = NEEDS[type];
-    if (remaining < need) {
-      if (remaining >= 3) type = 'trio';
-      else if (remaining >= 2) type = 'pair';
-      else type = 'full';
+    if (!lastWasFull && hw < MASONRY_HW_LANDSCAPE_MAX && Math.abs(leftH - rightH) <= 20) {
+      const top = Math.max(leftH, rightH);
+      const height = fullWidth / renderAr;
+      items.push({ post, column: 'full', top, height });
+      const nextH = top + height + gap;
+      leftH = nextH;
+      rightH = nextH;
+      lastWasFull = true;
+      return;
     }
-    rows.push({ type, posts: posts.slice(i, i + NEEDS[type]), startIndex: i });
-    i += NEEDS[type];
-  }
-  return rows;
+
+    lastWasFull = false;
+    const height = columnWidth / renderAr;
+    if (leftH <= rightH) {
+      items.push({ post, column: 'left', top: leftH, height });
+      leftH += height + gap;
+    } else {
+      items.push({ post, column: 'right', top: rightH, height });
+      rightH += height + gap;
+    }
+  });
+  return { items, totalHeight: Math.max(leftH, rightH, gap) - gap };
 }
 
 const ALL_TABS = [
@@ -212,6 +212,8 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const [isViewedStylist, setIsViewedStylist] = useState(false);
   const [taggedPosts, setTaggedPosts] = useState([]);
   const [taggedLoading, setTaggedLoading] = useState(false);
+  const [postImageDims, setPostImageDims] = useState({});
+  const dimsFetchedRef = useRef(new Set());
   const [unreadCount, setUnreadCount] = useState(0);
   // Review modal state
   const [reviewModalBooking, setReviewModalBooking] = useState(null);
@@ -234,141 +236,84 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
     return unsub;
   }, [navigation, refresh]);
 
-  // ── Scrapbook tile renderers ────────────────────────────────────────────────
+  // ── Masonry grid renderers (mirrors ExploreScreen's masonry feed) ───────────
   const openPost = (item) => {
     if (Platform.OS !== 'web') {
-      navigation.navigate('PostDetail', { postId: item.id });
+      // Tag the origin profile so PostDetail's back arrow can return here
+      // directly. Use push (not navigate) so opening a post always slides
+      // in from the right, even if a PostDetail instance is already on the stack.
+      navigation.push('PostDetail', {
+        postId: item.id,
+        profileOrigin: { userId: viewedUserId, isStylist: isViewedStylist },
+      });
     } else {
       setSelectedPost(item);
     }
   };
 
-  const renderTileInner = (item, height) => {
-    const firstImage = item.post_media?.[0]?.media_url;
-    const stylistName = item.stylists?.full_name || item.stylists?.username;
-    return (
-      <TouchableOpacity onPress={() => openPost(item)} activeOpacity={0.88}>
-        <View style={[styles.tileImage, { height }]}>
-          {firstImage ? (
-            <ImageWithFallback uri={firstImage} />
-          ) : (
-            <View style={styles.tileImagePlaceholder} />
-          )}
-          {(item.post_media?.length ?? 0) > 1 && (
-            <View style={styles.photoDots}>
-              {Array.from({ length: Math.min(item.post_media.length, 5) }).map((_, i) => (
-                <View key={`${item.id}-dot-${i}`} style={[styles.photoDot, i === 0 && styles.photoDotActive]} />
-              ))}
-            </View>
-          )}
-        </View>
-        {stylistName ? (
-          <View style={styles.tileFooter}>
-            <View style={styles.tileFooterRow}>
-              <Icon name="cut-outline" size={10} color={colors.primary} />
-              <Text style={styles.tileFooterStylist} numberOfLines={1}>{stylistName}</Text>
-            </View>
-          </View>
-        ) : null}
-      </TouchableOpacity>
-    );
-  };
+  // Fetch each post image's natural dimensions so masonry tiles can be sized
+  // off their real aspect ratio (capped at 1.6:1), exactly like Explore.
+  useEffect(() => {
+    [...posts, ...taggedPosts].forEach(post => {
+      const uri = post.post_media?.[0]?.media_url;
+      if (!uri || dimsFetchedRef.current.has(post.id)) return;
+      dimsFetchedRef.current.add(post.id);
+      Image.getSize(uri,
+        (w, h) => setPostImageDims(prev => ({ ...prev, [post.id]: { width: w, height: h } })),
+        () => setPostImageDims(prev => ({ ...prev, [post.id]: { width: 1, height: 1 } })),
+      );
+    });
+  }, [posts, taggedPosts]);
 
-  const renderRow = (row) => {
-    const { type, posts: rPosts, startIndex: si } = row;
-    switch (type) {
-      case 'feature':
-        return <View key={`row-${si}`} style={styles.tileShadow}>{renderTileInner(rPosts[0], nth(H.feature, si))}</View>;
-      case 'full':
-        return <View key={`row-${si}`} style={styles.tileShadow}>{renderTileInner(rPosts[0], nth(H.full, si))}</View>;
-      case 'banner':
-        return <View key={`row-${si}`} style={styles.tileShadow}>{renderTileInner(rPosts[0], nth(H.banner, si))}</View>;
-      case 'pair':
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[0], nth(H.pair, si))}</View>
-            <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[1], nth(H.pair, si + 1))}</View>
-          </View>
-        );
-      case 'trio':
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            {rPosts.map((item, i) => (
-              <View key={item.id} style={[styles.flex1, styles.tileShadow]}>{renderTileInner(item, nth(H.trio, si + i))}</View>
-            ))}
-          </View>
-        );
-      case 'large-small':
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[{ flex: 3 }, styles.tileShadow]}>{renderTileInner(rPosts[0], nth(H.tall, si))}</View>
-            <View style={[{ flex: 2 }, styles.tileShadow]}>{renderTileInner(rPosts[1], nth(H.tall, si))}</View>
-          </View>
-        );
-      case 'small-large':
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[{ flex: 2 }, styles.tileShadow]}>{renderTileInner(rPosts[0], nth(H.tall, si))}</View>
-            <View style={[{ flex: 3 }, styles.tileShadow]}>{renderTileInner(rPosts[1], nth(H.tall, si))}</View>
-          </View>
-        );
-      case 'wide-thin':
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[{ flex: 4 }, styles.tileShadow]}>{renderTileInner(rPosts[0], nth(H.tall, si))}</View>
-            <View style={[{ flex: 2 }, styles.tileShadow]}>{renderTileInner(rPosts[1], nth(H.tall, si))}</View>
-          </View>
-        );
-      case 'thin-wide':
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[{ flex: 2 }, styles.tileShadow]}>{renderTileInner(rPosts[0], nth(H.tall, si))}</View>
-            <View style={[{ flex: 4 }, styles.tileShadow]}>{renderTileInner(rPosts[1], nth(H.tall, si))}</View>
-          </View>
-        );
-      case 'stacked-right': {
-        const sh = nth(H.stacked, si);
-        const totalH = sh * 2 + GAP;
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[0], totalH)}</View>
-            <View style={[styles.flex1, { gap: GAP }]}>
-              <View style={styles.tileShadow}>{renderTileInner(rPosts[1], sh)}</View>
-              <View style={styles.tileShadow}>{renderTileInner(rPosts[2], sh)}</View>
-            </View>
-          </View>
-        );
-      }
-      case 'stacked-left': {
-        const sh = nth(H.stacked, si);
-        const totalH = sh * 2 + GAP;
-        return (
-          <View key={`row-${si}`} style={styles.row}>
-            <View style={[styles.flex1, { gap: GAP }]}>
-              <View style={styles.tileShadow}>{renderTileInner(rPosts[0], sh)}</View>
-              <View style={styles.tileShadow}>{renderTileInner(rPosts[1], sh)}</View>
-            </View>
-            <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[2], totalH)}</View>
-          </View>
-        );
-      }
-      case 'quad': {
-        const qh = nth(H.quad, si);
-        return (
-          <View key={`row-${si}`} style={{ gap: GAP }}>
-            <View style={styles.row}>
-              <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[0], qh)}</View>
-              <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[1], qh)}</View>
-            </View>
-            <View style={styles.row}>
-              <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[2], qh)}</View>
-              <View style={[styles.flex1, styles.tileShadow]}>{renderTileInner(rPosts[3], qh)}</View>
-            </View>
-          </View>
-        );
-      }
-      default: return null;
-    }
+  const renderMasonryGrid = (items) => {
+    const layout = computeProfileMasonry(items, MASONRY_COLUMN_WIDTH, postImageDims);
+    return (
+      <View style={[styles.masonryCanvas, { height: layout.totalHeight }]}>
+        {layout.items.map(({ post, column, top, height }) => {
+          const left = column === 'left' ? 0 : column === 'full' ? 0 : MASONRY_COLUMN_WIDTH + MASONRY_GAP;
+          const width = column === 'full' ? MASONRY_COLUMN_WIDTH * 2 + MASONRY_GAP : MASONRY_COLUMN_WIDTH;
+          const uri = post.post_media?.[0]?.media_url;
+          const stylistName = post.stylists?.full_name || post.stylists?.username;
+          return (
+            <TouchableOpacity
+              key={post.id}
+              style={[styles.masonryCard, { width, height, left, top }]}
+              onPress={() => openPost(post)}
+              activeOpacity={0.88}
+            >
+              {uri ? (
+                <ImageWithFallback uri={uri} />
+              ) : (
+                <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.borderLight }]} />
+              )}
+
+              {stylistName && (
+                <>
+                  <LinearGradient
+                    colors={['transparent', 'rgba(26,22,18,0.9)']}
+                    locations={[0, 1]}
+                    style={styles.stylistGradient}
+                    pointerEvents="none"
+                  />
+                  <View style={styles.stylistTag}>
+                    <Scissors size={12} color="#fff" strokeWidth={1.5} />
+                    <Text style={styles.stylistName} numberOfLines={1}>{stylistName}</Text>
+                  </View>
+                </>
+              )}
+
+              {(post.post_media?.length ?? 0) > 1 && (
+                <View style={styles.photoDots}>
+                  {Array.from({ length: Math.min(post.post_media.length, 5) }).map((_, i) => (
+                    <View key={`${post.id}-dot-${i}`} style={[styles.photoDot, i === 0 && styles.photoDotActive]} />
+                  ))}
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
   };
 
   // Check if viewed profile is a stylist
@@ -790,11 +735,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
             </View>
           );
         }
-        return (
-          <View style={styles.grid}>
-            {buildRows(posts).map(renderRow)}
-          </View>
-        );
+        return renderMasonryGrid(posts);
 
       case 'tagged':
         if (taggedLoading) {
@@ -808,11 +749,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
             </View>
           );
         }
-        return (
-          <View style={styles.grid}>
-            {buildRows(taggedPosts).map(renderRow)}
-          </View>
-        );
+        return renderMasonryGrid(taggedPosts);
 
       case 'favorites':
         return <SavedLooks />;
@@ -1095,49 +1032,33 @@ const makeStyles = (c) => StyleSheet.create({
   },
   content: {},
 
-  // Scrapbook grid
-  grid: {
-    paddingHorizontal: SIDE_PAD,
-    paddingTop: 12,
-    paddingBottom: 40,
-    gap: GAP,
+  // Masonry grid (mirrors ExploreScreen's masonry feed — same gap/radius/aspect rules)
+  masonryCanvas: {
+    position: 'relative',
+    marginHorizontal: MASONRY_PAD,
+    marginTop: 12,
+    marginBottom: 40,
   },
-  row: { flexDirection: 'row', gap: GAP },
-  flex1: { flex: 1 },
-  tileShadow: {
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
-  },
-  tileImage: {
-    width: '100%',
-    borderRadius: 5.5,
+  masonryCard: {
+    position: 'absolute',
+    borderRadius: MASONRY_RADIUS,
     overflow: 'hidden',
     backgroundColor: c.borderLight,
   },
-  tileImagePlaceholder: { flex: 1, backgroundColor: c.border },
-  tileFooter: {
-    paddingHorizontal: 7,
-    paddingTop: 5,
-    paddingBottom: 5,
-    backgroundColor: c.surface,
+  // Dark gradient fade behind the frosted-glass stylist tag, bottom-left
+  stylistGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' },
+  stylistTag: {
+    position: 'absolute', bottom: 10, left: 10,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 999, paddingVertical: 4, paddingHorizontal: 8,
   },
-  tileFooterRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  tileFooterStylist: {
-    fontSize: 11,
-    fontFamily: 'Figtree_600SemiBold',
-    color: c.primary,
-    flex: 1,
-  },
+  stylistName: { color: '#fff', fontSize: 12, fontFamily: 'Figtree_500Medium', marginLeft: 4 },
   photoDots: {
     position: 'absolute',
-    bottom: 7,
-    left: 0,
-    right: 0,
+    top: 8,
+    right: 8,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     gap: 4,
   },
@@ -1145,7 +1066,7 @@ const makeStyles = (c) => StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.45)',
+    backgroundColor: 'rgba(255,255,255,0.5)',
   },
   photoDotActive: {
     backgroundColor: '#fff',

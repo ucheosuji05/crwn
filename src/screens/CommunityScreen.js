@@ -21,7 +21,7 @@ const VIEW = {
  * and owns the shared thread+upvote state so that upvotes made in the detail
  * view are immediately reflected when the user goes back to the list.
  */
-export default function CommunityScreen({ route }) {
+export default function CommunityScreen({ route, navigation }) {
   const { colors } = useTheme();
   const [view, setView]                   = useState(VIEW.LIST);
   const [selectedThread, setSelectedThread] = useState(null);
@@ -37,6 +37,27 @@ export default function CommunityScreen({ route }) {
     prependThread,
     removeThread,
   } = useThreads();
+
+  // Tapping the Community tab icon should always land on the feed, even if
+  // the user was mid-create or viewing a thread when they tapped it.
+  useEffect(() => {
+    const unsubscribe = navigation?.addListener?.('tabPress', () => {
+      setSelectedThread(null);
+      setView(VIEW.LIST);
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  // Jump straight to the create-thread view when navigated here from the
+  // shared "+" overlay (Explore Post / Community Post menu)
+  useEffect(() => {
+    if (route?.params?.openCreate) {
+      setView(VIEW.CREATE);
+      // Clear the param immediately so re-focusing this tab (or remounting via
+      // the double-tap reset) doesn't keep forcing the create view back open.
+      navigation?.setParams({ openCreate: undefined });
+    }
+  }, [route?.params?.openCreate]);
 
   // Open a specific thread by ID when navigated from a notification
   useEffect(() => {

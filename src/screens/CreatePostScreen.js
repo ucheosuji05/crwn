@@ -14,6 +14,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Scissors } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { postService } from '../services/postService';
@@ -282,7 +283,7 @@ export default function CreatePostScreen({ navigation }) {
           <View style={styles.section}>
             <View style={styles.switchRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="cut-outline" size={18} color={colors.primary} />
+                <Scissors size={18} color={colors.primary} strokeWidth={1.5} />
                 <Text style={[styles.label, { color: colors.text, marginBottom: 0 }]}>Tag a Stylist</Text>
               </View>
               <TouchableOpacity
@@ -298,7 +299,7 @@ export default function CreatePostScreen({ navigation }) {
               <View style={{ marginTop: 12 }}>
                 {selectedStylist ? (
                   <View style={[styles.selectedStylist, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight }]}>
-                    <Ionicons name="cut-outline" size={16} color={colors.primary} />
+                    <Scissors size={16} color={colors.primary} strokeWidth={1.5} />
                     <Text style={[styles.selectedStylistText, { color: colors.primary }]} numberOfLines={1}>
                       {selectedStylist.full_name || selectedStylist.username}
                     </Text>

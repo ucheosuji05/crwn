@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npx expo *)",
-      "Bash(grep -v \"node_modules\\\\|//\")"
+      "Bash(grep -v \"node_modules\\\\|//\")",
+      "Bash(ls /Users/alanastull/node_modules/expo-font/build/ 2>/dev/null | head -20)",
+      "Read(//Users/alanastull/node_modules/expo-font/build/**)",
+      "Bash(cat /Users/alanastull/node_modules/expo-font/package.json | grep -E '\"type\"|\"main\"|\"module\"|\"exports\"' | head -20)",
+      "Read(//Users/alanastull/node_modules/expo-font/**)"
     ]
   }
 }

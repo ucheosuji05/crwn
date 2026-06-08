@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Scissors } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
@@ -1328,7 +1329,7 @@ export default function StylistDashboardScreen() {
             </View>
             {metrics.bookings > 0 && (
               <View style={styles.bookingsChip}>
-                <Ionicons name="cut-outline" size={10} color={colors.textMuted} />
+                <Scissors size={10} color={colors.textMuted} strokeWidth={1.5} />
                 <Text style={styles.bookingsChipText}>{metrics.bookings} bookings</Text>
               </View>
             )}
@@ -2501,7 +2502,7 @@ export default function StylistDashboardScreen() {
             {/* Booking info summary */}
             {selectedBooking && (
               <View style={[styles.rescheduleInfoRow, { backgroundColor: colors.primaryLight || '#FDF1EE', borderColor: colors.borderLight }]}>
-                <Ionicons name="cut-outline" size={16} color={colors.primary} />
+                <Scissors size={16} color={colors.primary} strokeWidth={1.5} />
                 <Text style={[styles.rescheduleInfoText, { color: colors.primary }]}>
                   {selectedBooking.service_name} · {selectedBooking.client?.full_name || selectedBooking.client?.username || 'Client'}
                 </Text>
