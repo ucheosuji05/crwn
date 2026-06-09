@@ -5,11 +5,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SUPABASE_URL = 'https://iyfpmxejxgxypjnoivyz.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5ZnBteGVqeGd4eXBqbm9pdnl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQwMTE1OTUsImV4cCI6MjA3OTU4NzU5NX0._2LSVnN3ZY8mtU9JUwmKJpNDgsBohrNMak7fTyuiXnM';
 
+// Supabase is used for data only — Better Auth handles all authentication.
+// Disabling session persistence prevents the client from entering a
+// token-refresh loop on startup when there is no valid Supabase session.
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
+    autoRefreshToken: false,
+    persistSession: false,
     detectSessionInUrl: false,
   },
 });

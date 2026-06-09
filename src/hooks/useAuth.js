@@ -75,6 +75,8 @@ export const AuthProvider = ({ children }) => {
     user,
     session,
     loading,
+    profile: user,        // BottomTabNavigator uses profile?.is_stylist
+    profileLoaded: !loading, // BottomTabNavigator gates the Stylists tab on this
     signUp,
     signIn,
     signInWithGoogle,

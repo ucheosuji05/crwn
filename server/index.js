@@ -92,14 +92,14 @@ app.get('/api/auth/open-app', (req, res) => {
         if (pw !== pw2) { show('Passwords do not match.', true); return; }
         var btn = document.getElementById('btn');
         btn.disabled = true; btn.textContent = 'Resetting...';
-        fetch('/api/auth/reset-password/' + token, {
+        fetch('/api/auth/web-reset', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-          body: JSON.stringify({ newPassword: pw })
+          body: JSON.stringify({ newPassword: pw, token: token })
         })
         .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
         .then(function(res) {
-          if (res.ok) {
+          if (res.ok && res.d.success) {
             document.getElementById('form-wrap').style.display = 'none';
             show('Password updated! Go back to the CRWN app and sign in with your new password.', false);
           } else {
@@ -120,6 +120,42 @@ app.get('/api/auth/open-app', (req, res) => {
       }
     </script>
     </body></html>`);
+});
+
+// Server-side proxy for the in-browser password reset form.
+// The browser can't call Better Auth's reset endpoint directly because Better Auth
+// responds with a 302 redirect to crwn:// — which is invalid in a browser fetch.
+// This endpoint makes the call from Node (redirect:'manual'), then returns JSON.
+app.post('/api/auth/web-reset', async (req, res) => {
+  const { token, newPassword } = req.body || {};
+  if (!token || !newPassword) {
+    return res.status(400).json({ message: 'Missing token or password.' });
+  }
+  try {
+    const response = await fetch(
+      `${process.env.BETTER_AUTH_URL}/api/auth/reset-password/${encodeURIComponent(token)}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Origin: process.env.BETTER_AUTH_URL,
+        },
+        body: JSON.stringify({ newPassword }),
+        redirect: 'manual',
+      }
+    );
+    // 2xx = success; 3xx redirect (to crwn://) also means success
+    if (response.ok || (response.status >= 300 && response.status < 400)) {
+      return res.json({ success: true });
+    }
+    const text = await response.text().catch(() => '');
+    let message = 'The link may have expired. Request a new one in the app.';
+    try { message = JSON.parse(text).message || message; } catch (_) {}
+    return res.status(400).json({ message });
+  } catch (err) {
+    console.error('web-reset error:', err);
+    return res.status(500).json({ message: 'Server error. Please try again.' });
+  }
 });
 
 // Custom mobile callback MUST come before the Better Auth catch-all,

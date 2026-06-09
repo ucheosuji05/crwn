@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { threadService } from '../services/threadService';
 import { useTheme } from '../context/ThemeContext';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CATEGORIES =[
   'Low Porosity',
@@ -37,6 +38,7 @@ const CATEGORIES =[
 export default function CreateThreadScreen({ onBack, onThreadCreated }) {
   const { user } = useAuth();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [category, setCategory] = useState('');
@@ -77,7 +79,7 @@ export default function CreateThreadScreen({ onBack, onThreadCreated }) {
       keyboardVerticalOffset={80}
     >
       {/* ── Header ── */}
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <TouchableOpacity onPress={onBack} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
@@ -182,7 +184,6 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 12,
     paddingBottom: 12,
     backgroundColor: c.surface,
     borderBottomWidth: 1,
