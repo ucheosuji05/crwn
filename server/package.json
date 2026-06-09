@@ -1,12 +1,18 @@
 {
   "name": "crwn-server",
   "version": "0.1.0",
+  "type": "module",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node --env-file=server.env index.js",
+    "migrate": "node --env-file=server.env migrate.js",
+    "migrate-users": "node --env-file=server.env migrate-users.js"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5"
+    "better-auth": "^1.6.14",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^4.22.2",
+    "pg": "^8.21.0"
   }
 }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, StatusBar, Linking } from 'react-native';
 
 // Apply Figtree as the default font for every Text in the app.
 // Explicit fontFamily overrides (e.g. LibreBaskerville on headers) take precedence.
@@ -29,6 +29,8 @@ import {
 
 import OnboardingScreen from './src/screens/OnboardingScreen';
 import AuthScreen from './src/screens/AuthScreen';
+import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
+import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import RootNavigator from './src/navigation/RootNavigator';
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
@@ -43,13 +45,35 @@ import { colors } from './src/theme/themes';
 function AppContent() {
   const { user, loading } = useAuth();
   const { colors: themeColors } = useTheme();
-  const [hasOnboarded, setHasOnboarded] = useState(null); // null = still checking
+  const [hasOnboarded, setHasOnboarded] = useState(null);
+  const [authView, setAuthView] = useState('default'); // 'default' | 'forgot-password' | 'reset-password'
+  const [resetToken, setResetToken] = useState(null);
 
   useEffect(() => {
     AsyncStorage.getItem('onboarded').then(val => setHasOnboarded(val === 'true'));
   }, []);
 
-  // Wait for both the Supabase session check and AsyncStorage to finish
+  // Handle crwn://reset-password?token=... deep links
+  useEffect(() => {
+    const handleUrl = ({ url }) => {
+      if (!url) return;
+      try {
+        const parsed = new URL(url);
+        if (parsed.pathname === '//reset-password' || url.includes('reset-password')) {
+          const token = parsed.searchParams.get('token');
+          if (token) {
+            setResetToken(token);
+            setAuthView('reset-password');
+          }
+        }
+      } catch {}
+    };
+
+    Linking.getInitialURL().then(url => { if (url) handleUrl({ url }); });
+    const sub = Linking.addEventListener('url', handleUrl);
+    return () => sub.remove();
+  }, []);
+
   if (loading || hasOnboarded === null) {
     return (
       <View style={styles.loadingContainer}>
@@ -58,13 +82,27 @@ function AppContent() {
     );
   }
 
-  // No active session
+  // ── Pre-auth screens (no NavigationContainer) ──────────────────────────
   if (!user) {
-    if (hasOnboarded) {
-      // Returning user whose session expired — show sign-in
-      return <AuthScreen onBack={() => setHasOnboarded(false)} />;
+    if (authView === 'reset-password' && resetToken) {
+      return (
+        <ResetPasswordScreen
+          token={resetToken}
+          onDone={() => { setAuthView('default'); setResetToken(null); }}
+        />
+      );
     }
-    // Brand-new user — show onboarding
+    if (authView === 'forgot-password') {
+      return <ForgotPasswordScreen onBack={() => setAuthView('default')} />;
+    }
+    if (hasOnboarded) {
+      return (
+        <AuthScreen
+          onBack={() => setHasOnboarded(false)}
+          onForgotPassword={() => setAuthView('forgot-password')}
+        />
+      );
+    }
     return (
       <OnboardingScreen
         onDone={() => AsyncStorage.setItem('onboarded', 'true')}
@@ -73,13 +111,10 @@ function AppContent() {
     );
   }
 
-  // Active session — show the main app
+  // ── Authenticated — show main app ──────────────────────────────────────
   return (
     <>
-      <StatusBar
-        barStyle={themeColors.statusBar}
-        backgroundColor={themeColors.surface}
-      />
+      <StatusBar barStyle={themeColors.statusBar} backgroundColor={themeColors.surface} />
       <NavigationContainer>
         <RootNavigator />
       </NavigationContainer>

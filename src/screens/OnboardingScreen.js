@@ -146,7 +146,7 @@ const STYLIST_FILTERS = ['All', 'Near Me', 'Locs', 'Braids', 'Natural'];
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen({ onDone, onSignIn }) {
-  const { refreshProfile } = useAuth();
+  const { refreshProfile, signInWithGoogle } = useAuth();
   const [currentStep, setCurrentStep] = useState(STEPS.SPLASH);
   const [formData, setFormData] = useState({
     email: '',
@@ -459,6 +459,18 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </GradientScreen>
   );
 
+  const handleGoogleSignIn = async () => {
+    try {
+      const result = await signInWithGoogle();
+      if (result.error) {
+        Alert.alert('Google Sign In Failed', result.error.message || 'Please try again.');
+      }
+      // On success AuthProvider sets user and App.js navigates away automatically
+    } catch {
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+    }
+  };
+
   const renderWelcome = () => (
     <GradientScreen>
       <View style={styles.welcomeContent}>
@@ -468,6 +480,10 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       <View style={styles.welcomeButtons}>
         <TouchableOpacity style={styles.createAccountButton} onPress={goNext}>
           <Text style={styles.createAccountText}>Create Account</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
+          <Ionicons name="logo-google" size={18} color="#5D3A1A" />
+          <Text style={styles.googleButtonText}>Continue with Google</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={onSignIn}>
           <Text style={styles.signInText}>
@@ -1234,8 +1250,10 @@ const styles = StyleSheet.create({
   welcomeLogo: { fontSize: 64, fontFamily: 'LibreBaskerville_700Bold', color: '#5D3A1A', lineHeight: 72 },
   welcomeTagline: { fontSize: 18, fontFamily: 'LibreBaskerville_400Regular', color: '#5D3A1A', marginTop: 10, fontStyle: 'italic' },
   welcomeButtons: { paddingHorizontal: 24, paddingBottom: 48, alignItems: 'center', width: '100%' },
-  createAccountButton: { backgroundColor: '#5D1F1F', paddingVertical: 18, borderRadius: 14, width: '100%', alignItems: 'center', marginBottom: 20 },
+  createAccountButton: { backgroundColor: '#5D1F1F', paddingVertical: 18, borderRadius: 14, width: '100%', alignItems: 'center', marginBottom: 12 },
   createAccountText: { color: colors.white, fontSize: 16, fontFamily: 'Figtree_600SemiBold', letterSpacing: 0.3 },
+  googleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(255,255,255,0.9)', paddingVertical: 16, borderRadius: 14, width: '100%', marginBottom: 20 },
+  googleButtonText: { color: '#5D3A1A', fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
   signInText: { color: 'rgba(255,255,255,0.85)', fontSize: 15 },
   signInLink: { fontFamily: 'Figtree_700Bold', color: '#fff' },
 

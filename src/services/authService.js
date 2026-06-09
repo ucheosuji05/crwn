@@ -1,148 +1,121 @@
-import { supabase } from '../config/supabase';
+import * as WebBrowser from 'expo-web-browser';
+import { authClient, storeAuthToken, clearAuthToken } from '../lib/auth-client';
+import { supabase } from '../config/supabase'; // keep for profile/hair data writes
+
+const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
 
 export const authService = {
+
+  // ─── Email sign up ────────────────────────────────────────────────────────
   async signUp(email, password, userData) {
     try {
-      console.log('AuthService: Starting signup for', email);
-      
-      // Sign up the user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { data, error } = await authClient.signUp.email({
         email,
         password,
+        name: `${userData.name || ''}`.trim(),
+        // extra fields land on the user record via additionalFields in server/auth.js
+        userType: userData.userType || 'explorer',
+        username: userData.username || email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, ''),
+        location: userData.location || '',
       });
 
-      console.log('AuthService: Auth signup response', { authData, authError });
+      if (error) return { user: null, error };
 
-      if (authError) {
-        console.error('AuthService: Auth error', authError);
-        throw authError;
+      // Write hair profile to Supabase separately (Better Auth doesn't own this table)
+      if (data?.user && userData.hairType) {
+        await supabase.from('hair_profiles').insert([{
+          user_id: data.user.id,
+          hair_type: userData.hairType,
+          porosity: userData.porosity || null,
+          goals: userData.hairGoals || [],
+        }]);
       }
 
-      if (!authData.user) {
-        throw new Error('No user returned from signup');
-      }
-
-      console.log('AuthService: User created, ID:', authData.user.id);
-
-      // Create profile
-      try {
-        const profileData = {
-          id: authData.user.id,
-          email: email,
-          username: userData.username || email.split('@')[0],
-          full_name: userData.name || '',
-          phone: userData.phone || null,
-          date_of_birth: userData.dob || null,
-          location: userData.location || null,
-          is_stylist: userData.userType === 'stylist',
-        };
-
-        console.log('AuthService: Creating profile with data', profileData);
-
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .upsert([profileData], { onConflict: 'id' });
-
-        if (profileError) {
-          console.error('AuthService: Profile creation error', profileError);
-          throw profileError;
-        }
-
-        console.log('AuthService: Profile created successfully');
-
-        // Create hair profile if provided
-        if (userData.hairType) {
-          console.log('AuthService: Creating hair profile');
-          
-          const { error: hairError } = await supabase
-            .from('hair_profiles')
-            .insert([{
-              user_id: authData.user.id,
-              hair_type: userData.hairType,
-            }]);
-
-          if (hairError) {
-            console.error('AuthService: Hair profile error', hairError);
-            // Don't throw - hair profile is optional
-          }
-        }
-      } catch (dbError) {
-        console.error('AuthService: Database error during profile creation', dbError);
-        // The user was created but profile failed - they can still login
-        // You might want to handle this differently
-        return { 
-          user: authData.user, 
-          error: new Error('Account created but profile setup failed. Please contact support.') 
-        };
-      }
-
-      console.log('AuthService: Signup complete');
-      return { user: authData.user, error: null };
-    } catch (error) {
-      console.error('AuthService: Unexpected error', error);
-      return { user: null, error };
+      return { user: data?.user, error: null };
+    } catch (err) {
+      return { user: null, error: err };
     }
   },
 
+  // ─── Email sign in ────────────────────────────────────────────────────────
   async signIn(email, password) {
     try {
-      console.log('AuthService: Signing in', email);
-      
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      console.log('AuthService: Sign in response', { data, error });
-
-      if (error) {
-        console.error('AuthService: Sign in error', error);
-      }
-
+      const { data, error } = await authClient.signIn.email({ email, password });
       return { user: data?.user, session: data?.session, error };
-    } catch (error) {
-      console.error('AuthService: Unexpected sign in error', error);
-      return { user: null, session: null, error };
+    } catch (err) {
+      return { user: null, session: null, error: err };
     }
   },
 
+  // ─── Social OAuth helper ─────────────────────────────────────────────────
+  async _socialSignIn(provider) {
+    try {
+      // Open a bridge page that auto-submits the POST in the browser so the
+      // entire OAuth flow (state generation → Google → callback) stays in one
+      // continuous browser session, preventing state_mismatch errors.
+      const startUrl = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}`;
+      const result = await WebBrowser.openAuthSessionAsync(startUrl, 'crwn://auth/callback');
+
+      if (result.type !== 'success') {
+        return { data: null, error: new Error('Sign-in was cancelled') };
+      }
+
+      // Parse token from the deep link (crwn://auth/callback?token=...)
+      const qs = result.url.split('?')[1] || '';
+      const params = Object.fromEntries(qs.split('&').map(p => p.split('=')).filter(p => p.length === 2).map(([k, v]) => [k, decodeURIComponent(v)]));
+      const token = params.token;
+      const oauthError = params.error;
+
+      if (oauthError || !token) {
+        return { data: null, error: new Error(oauthError || 'No token received') };
+      }
+
+      await storeAuthToken(token);
+      const { data: sessionData } = await authClient.getSession();
+      return { data: sessionData, error: null };
+    } catch (err) {
+      return { data: null, error: new Error(err?.message || `${provider} sign-in failed`) };
+    }
+  },
+
+  // ─── Google OAuth ────────────────────────────────────────────────────────
+  async signInWithGoogle() {
+    return this._socialSignIn('google');
+  },
+
+  // ─── Instagram / Meta OAuth ───────────────────────────────────────────────
+  async signInWithInstagram() {
+    return this._socialSignIn('facebook');
+  },
+
+  // ─── Sign out ─────────────────────────────────────────────────────────────
   async signOut() {
     try {
-      console.log('AuthService: Signing out');
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('AuthService: Sign out error', error);
-      }
-      
+      const { error } = await authClient.signOut();
+      await clearAuthToken();
       return { error };
-    } catch (error) {
-      console.error('AuthService: Unexpected sign out error', error);
-      return { error };
+    } catch (err) {
+      await clearAuthToken();
+      return { error: err };
     }
   },
 
+  // ─── Session helpers ──────────────────────────────────────────────────────
   async getCurrentUser() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      return user;
-    } catch (error) {
-      console.error('AuthService: Get current user error', error);
+      const session = await authClient.getSession();
+      return session?.data?.user || null;
+    } catch {
       return null;
     }
   },
 
   async getSession() {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      return session;
-    } catch (error) {
-      console.error('AuthService: Get session error', error);
+      const { data } = await authClient.getSession();
+      return data?.session || null;
+    } catch {
       return null;
     }
-  },
-
-  onAuthStateChange(callback) {
-    return supabase.auth.onAuthStateChange(callback);
   },
 };
