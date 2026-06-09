@@ -8,7 +8,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Crown } from 'lucide-react-native';
+import { Crown, Scissors } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
@@ -23,10 +23,72 @@ import PostCard from '../components/PostCard';
 
 const HONEY = '#D4930A';
 const SCREEN_WIDTH = Dimensions.get('window').width;
-const GRID_GAP = 8;
-const GRID_SIZE = (SCREEN_WIDTH - GRID_GAP * 3) / 2;
 
-const TABS = ['Posts', 'Services', 'Reviews', 'Tagged'];
+// ── Masonry layout (mirrors the Explore feed: shortest column first,
+// natural aspect ratio, capped at 1.6:1 height:width) ──
+const MASONRY_GAP = 10;
+const MASONRY_PAD = 12;
+const MASONRY_DEFAULT_AR = 1;
+const MASONRY_MAX_HW = 1.6;
+const MASONRY_HW_LANDSCAPE_MAX = 0.8; // shorter than this (height:width) → landscape, spans full width
+const MASONRY_COLUMN_WIDTH = (SCREEN_WIDTH - MASONRY_PAD * 2 - MASONRY_GAP) / 2;
+
+const TABS = ['Posts', 'Services', 'Tagged'];
+
+function formatStyleTag(tag) {
+  if (!tag) return '';
+  return tag
+    .toString()
+    .replace(/[-_]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(word => word[0]?.toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
+// Shortest-column-first masonry: each post is placed into whichever column
+// is currently shorter, rendered at its natural aspect ratio but capped at
+// a 1.6:1 height:width ratio so very tall images don't blow out their slot.
+// Mirrors the Explore feed: landscape posts span the full width once both
+// columns are roughly level, and never land back to back.
+function computeProfileMasonry(posts, columnWidth, imageDimensions) {
+  const gap = MASONRY_GAP;
+  const fullWidth = columnWidth * 2 + gap;
+  let leftH = 0;
+  let rightH = 0;
+  let lastWasFull = false;
+  const items = [];
+
+  posts.forEach(post => {
+    const dims = imageDimensions[post.id];
+    const ar = dims ? dims.width / dims.height : MASONRY_DEFAULT_AR;
+    const hw = 1 / ar;
+    const renderAr = Math.max(ar, 1 / MASONRY_MAX_HW);
+
+    if (!lastWasFull && hw < MASONRY_HW_LANDSCAPE_MAX && Math.abs(leftH - rightH) <= 20) {
+      const top = Math.max(leftH, rightH);
+      const height = fullWidth / renderAr;
+      items.push({ post, column: 'full', top, height });
+      const nextH = top + height + gap;
+      leftH = nextH;
+      rightH = nextH;
+      lastWasFull = true;
+      return;
+    }
+
+    lastWasFull = false;
+    const height = columnWidth / renderAr;
+    if (leftH <= rightH) {
+      items.push({ post, column: 'left', top: leftH, height });
+      leftH += height + gap;
+    } else {
+      items.push({ post, column: 'right', top: rightH, height });
+      rightH += height + gap;
+    }
+  });
+
+  return { items, totalHeight: Math.max(leftH, rightH, gap) - gap };
+}
 
 // ── Booking modal helpers ─────────────────────────────────────────────────────
 
@@ -390,7 +452,7 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
           {/* Summary card */}
           <View style={[bs.summaryCard, { borderColor: colors.borderLight, backgroundColor: colors.background }]}>
             <View style={bs.summaryRow}>
-              <Ionicons name="cut-outline" size={15} color={colors.textMuted} />
+              <Scissors size={15} color={colors.textMuted} strokeWidth={1.5} />
               <Text style={[bs.summaryLabel, { color: colors.textMuted }]}>Stylist</Text>
               <Text style={[bs.summaryValue, { color: colors.text }]}>{confirmedDetails.stylistName}</Text>
             </View>
@@ -480,7 +542,7 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
           {/* ── Stylist strip ── */}
           <View style={[bs.stylistStrip, { borderColor: colors.borderLight }]}>
             <View style={bs.stylistIconWrap}>
-              <Ionicons name="cut-outline" size={16} color={colors.primary} />
+              <Scissors size={16} color={colors.primary} strokeWidth={1.5} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[bs.stylistName, { color: colors.primary }]}>{stylist?.name}</Text>
@@ -494,7 +556,7 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
             <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />
           ) : services.length === 0 ? (
             <View style={[bs.emptyServices, { borderColor: colors.borderLight }]}>
-              <Ionicons name="cut-outline" size={20} color={colors.textMuted} />
+              <Scissors size={20} color={colors.textMuted} strokeWidth={1.5} />
               <Text style={[bs.emptyServicesText, { color: colors.textMuted }]}>No services listed yet</Text>
             </View>
           ) : (
@@ -842,6 +904,8 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [selectedPost, setSelectedPost]       = useState(null);
   const [stylistPosts, setStylistPosts]       = useState([]);
   const [postsLoading, setPostsLoading]       = useState(false);
+  const [postImageDims, setPostImageDims]     = useState({});
+  const dimsFetchedRef = useRef(new Set());
   // Full profile fetched from DB (used when navigating with minimal params)
   const [fetchedProfile, setFetchedProfile]   = useState(null);
   const [reviews, setReviews]                 = useState([]);
@@ -855,6 +919,8 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [following, setFollowing]             = useState(false);
   const [followLoading, setFollowLoading]     = useState(false);
+  const [unfollowSheetVisible, setUnfollowSheetVisible] = useState(false);
+  const [requirementsOpen, setRequirementsOpen] = useState(true);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -869,12 +935,19 @@ export default function StylistProfileScreen({ route, navigation }) {
     id: stylistId,
     name = 'Stylist',
     location = '',
+    city,
+    state,
     rating = 0,
     reviewCount = 0,
     specialties = [],
     photos = [],
     avatarUrl,
+    requirements: stylistRequirements = [],
   } = stylist;
+
+  const displayLocation = (city || state)
+    ? `${city || ''}${city && state ? ', ' : ''}${state || ''}`
+    : location;
 
   // Fetch reviews + check for unreviewed bookings when Reviews tab is active
   useEffect(() => {
@@ -919,7 +992,7 @@ export default function StylistProfileScreen({ route, navigation }) {
       const { normalizeStylist } = require('../services/stylistService');
       supabase
         .from('profiles')
-        .select('id, full_name, username, avatar_url, city, state, location, specialties, portfolio_photos, rating, review_count')
+        .select('id, full_name, username, avatar_url, city, state, location, specialties, portfolio_photos, rating, review_count, requirements')
         .eq('id', stylistId)
         .single()
         .then(({ data }) => { if (data) setFetchedProfile(normalizeStylist({ ...data, post_photos: [] })); });
@@ -958,7 +1031,7 @@ export default function StylistProfileScreen({ route, navigation }) {
   }, [routeStylist.id]);
 
   const avatarUri = avatarUrl || photos[0];
-  const AVATAR_SIZE = 90;
+  const AVATAR_SIZE = 100;
   const BANNER_HEIGHT = 120;
 
   // Fetch services
@@ -990,6 +1063,20 @@ export default function StylistProfileScreen({ route, navigation }) {
     });
   }, [activeTab, stylistId]);
 
+  // Load natural image dimensions for masonry sizing (Posts + Tagged)
+  useEffect(() => {
+    [...stylistPosts, ...taggedPosts].forEach(post => {
+      const uri = post.post_media?.[0]?.media_url;
+      if (!uri || dimsFetchedRef.current.has(post.id)) return;
+      dimsFetchedRef.current.add(post.id);
+      Image.getSize(
+        uri,
+        (w, h) => setPostImageDims(prev => ({ ...prev, [post.id]: { width: w, height: h } })),
+        () => setPostImageDims(prev => ({ ...prev, [post.id]: { width: 1, height: 1 } })),
+      );
+    });
+  }, [stylistPosts, taggedPosts]);
+
   // Check initial follow state
   useEffect(() => {
     if (!user?.id || !stylistId) return;
@@ -1003,12 +1090,27 @@ export default function StylistProfileScreen({ route, navigation }) {
     setFollowLoading(true);
     if (following) {
       setFollowing(false);
-      await profileService.unfollowUser(user.id, stylistId);
+      setFollowersCount(prev => Math.max(0, prev - 1));
+      const { error } = await profileService.unfollowUser(user.id, stylistId);
+      if (error) {
+        setFollowing(true);
+        setFollowersCount(prev => prev + 1);
+      }
     } else {
       setFollowing(true);
-      await profileService.followUser(user.id, stylistId);
+      setFollowersCount(prev => prev + 1);
+      const { error } = await profileService.followUser(user.id, stylistId);
+      if (error) {
+        setFollowing(false);
+        setFollowersCount(prev => Math.max(0, prev - 1));
+      }
     }
     setFollowLoading(false);
+  };
+
+  const handleReportStylist = () => {
+    setUnfollowSheetVisible(false);
+    Alert.alert('Report', 'This stylist has been reported for review.');
   };
 
   const openBooking = (svc = null) => {
@@ -1016,7 +1118,63 @@ export default function StylistProfileScreen({ route, navigation }) {
     setBookingVisible(true);
   };
 
+  // Opens the full PostDetail screen on native; on web (no dedicated route
+  // transitions) falls back to the in-app post popup — same pattern as
+  // ExploreScreen and ProfileTabs use.
+  const openPost = useCallback((post) => {
+    if (Platform.OS !== 'web') {
+      navigation.push('PostDetail', { postId: post.id });
+    } else {
+      setSelectedPost(post);
+    }
+  }, [navigation]);
+
   // ── Tab content ─────────────────────────────────────────────────────────────
+
+  // Shared masonry grid renderer for Posts + Tagged (shortest column first,
+  // natural aspect ratio capped at 1.6:1, 10px gaps, 12px outer padding)
+  const renderMasonryGrid = (posts) => {
+    const layout = computeProfileMasonry(posts, MASONRY_COLUMN_WIDTH, postImageDims);
+    return (
+      <View style={styles.masonryOuter}>
+        <View style={[styles.masonryCanvas, { height: layout.totalHeight }]}>
+          {layout.items.map(({ post, column, top, height }) => {
+            const left = column === 'left' ? 0 : column === 'full' ? 0 : MASONRY_COLUMN_WIDTH + MASONRY_GAP;
+            const width = column === 'full' ? MASONRY_COLUMN_WIDTH * 2 + MASONRY_GAP : MASONRY_COLUMN_WIDTH;
+            const thumb = post.post_media?.[0]?.media_url;
+            const styleTag = formatStyleTag(post.tags?.[0]);
+            return (
+              <TouchableOpacity
+                key={post.id}
+                style={[styles.masonryCell, { width, height, left, top }]}
+                onPress={() => openPost(post)}
+                activeOpacity={0.85}
+              >
+                {thumb
+                  ? <Image source={{ uri: thumb }} style={styles.gridImage} resizeMode="cover" />
+                  : <View style={[styles.gridImage, { backgroundColor: colors.borderLight, alignItems: 'center', justifyContent: 'center' }]}>
+                      <Ionicons name="image-outline" size={20} color="#9ca3af" />
+                    </View>}
+                {styleTag ? (
+                  <>
+                    <LinearGradient
+                      colors={['transparent', 'rgba(26,22,18,0.9)']}
+                      locations={[0, 1]}
+                      style={styles.styleTagGradient}
+                      pointerEvents="none"
+                    />
+                    <View style={styles.styleTag}>
+                      <Text style={styles.styleTagText} numberOfLines={1}>{styleTag}</Text>
+                    </View>
+                  </>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
 
   const renderPosts = () => {
     if (postsLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
@@ -1026,34 +1184,7 @@ export default function StylistProfileScreen({ route, navigation }) {
         <Text style={styles.emptyText}>This stylist hasn't posted yet</Text>
       </View>
     );
-    const rows = [];
-    for (let i = 0; i < stylistPosts.length; i += 2) rows.push(stylistPosts.slice(i, i + 2));
-    return (
-      <View style={styles.gridContainer}>
-        {rows.map((row, rowIndex) => (
-          <View key={`row-${rowIndex}`} style={styles.gridRow}>
-            {row.map((post) => {
-              const thumb = post.post_media?.[0]?.media_url;
-              return (
-                <TouchableOpacity
-                  key={post.id}
-                  style={styles.gridCell}
-                  onPress={() => setSelectedPost(post)}
-                  activeOpacity={0.8}
-                >
-                  {thumb
-                    ? <Image source={{ uri: thumb }} style={styles.gridImage} resizeMode="cover" />
-                    : <View style={[styles.gridImage, { backgroundColor: colors.borderLight, alignItems: 'center', justifyContent: 'center' }]}>
-                        <Ionicons name="image-outline" size={20} color="#9ca3af" />
-                      </View>}
-                </TouchableOpacity>
-              );
-            })}
-            {row.length < 2 && <View style={styles.gridCell} />}
-          </View>
-        ))}
-      </View>
-    );
+    return renderMasonryGrid(stylistPosts);
   };
 
   const renderServices = () => {
@@ -1064,27 +1195,62 @@ export default function StylistProfileScreen({ route, navigation }) {
         <Text style={styles.emptyText}>This stylist hasn't added services yet</Text>
       </View>
     );
+
+    const serviceRequirements = Array.isArray(stylistRequirements) ? stylistRequirements : [];
+
     return (
       <View style={styles.servicesList}>
-        {services.map(svc => (
-          <View key={svc.id} style={styles.serviceCard}>
-            <View style={styles.serviceCardLeft}>
-              <Text style={styles.serviceCardName}>{svc.name}</Text>
-              {svc.description ? <Text style={styles.serviceCardDesc} numberOfLines={2}>{svc.description}</Text> : null}
-              {svc.duration_min ? (
-                <View style={styles.serviceCardMeta}>
-                  <Ionicons name="time-outline" size={12} color={colors.textMuted} />
-                  <Text style={styles.serviceCardMetaText}>{svc.duration_min} min</Text>
+        <TouchableOpacity
+          style={styles.requirementsRow}
+          activeOpacity={0.7}
+          onPress={() => setRequirementsOpen(prev => !prev)}
+        >
+          <Text style={styles.sectionLabelText}>REQUIREMENTS</Text>
+          <Ionicons name={requirementsOpen ? 'chevron-down' : 'chevron-forward'} size={16} color="#9CA3AF" />
+        </TouchableOpacity>
+
+        {requirementsOpen && (
+          <View style={[styles.requirementsExpandedCard, { borderColor: '#E8E0D8', backgroundColor: colors.surface }]}>
+            <View style={styles.requirementsExpandedHeader}>
+              <Text style={[styles.requirementsExpandedTitle, { color: colors.text }]}>Before Your Appointment</Text>
+              <View style={styles.requirementsCountPill}>
+                <Text style={styles.requirementsCountPillText}>{serviceRequirements.length}</Text>
+              </View>
+            </View>
+            <View style={styles.requirementsBody}>
+              {serviceRequirements.length > 0 ? serviceRequirements.map((item, i) => (
+                <View key={`req-${i}`} style={styles.requirementRow}>
+                  <View style={[styles.requirementBullet, { backgroundColor: colors.primary }]} />
+                  <Text style={[styles.requirementText, { color: colors.text }]}>{item}</Text>
                 </View>
-              ) : null}
+              )) : (
+                <Text style={[styles.requirementText, { color: colors.textSecondary }]}>No requirements listed yet.</Text>
+              )}
             </View>
-            <View style={styles.serviceCardRight}>
-              <Text style={styles.serviceCardPrice}>${svc.price?.toFixed(2)}</Text>
-              <TouchableOpacity style={styles.bookServiceBtn} onPress={() => openBooking(svc)}>
-                <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                <Text style={styles.bookServiceBtnText}>Book</Text>
-              </TouchableOpacity>
+          </View>
+        )}
+
+        <Text style={[styles.sectionLabelText, styles.servicesLabel]}>SERVICES</Text>
+
+        {services.map(svc => (
+          <View key={svc.id} style={[styles.serviceCard, { borderColor: '#E8E0D8', backgroundColor: colors.surface }]}>
+            <View style={styles.serviceCardTopRow}>
+              <Text style={[styles.serviceCardName, { color: colors.text }]} numberOfLines={1}>{svc.name}</Text>
+              <Text style={[styles.serviceCardPrice, { color: colors.text }]}>{`$${svc.price?.toFixed(2)}`}</Text>
             </View>
+            {svc.description ? <Text style={[styles.serviceCardDesc, { color: colors.textSecondary }]}>{svc.description}</Text> : null}
+            {svc.duration_min ? (
+              <Text style={[styles.serviceCardMetaText, { color: colors.textSecondary }]}>{svc.duration_min} min</Text>
+            ) : null}
+            <TouchableOpacity style={styles.serviceBookNowBtn} onPress={() => openBooking(svc)} activeOpacity={0.85}>
+              <LinearGradient
+                colors={['#5D1F1F', '#7D3F1D', '#B35D2B']}
+                locations={[0, 0.34, 1]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+              />
+              <Text style={styles.serviceBookNowText}>Book Now</Text>
+            </TouchableOpacity>
           </View>
         ))}
       </View>
@@ -1095,121 +1261,14 @@ export default function StylistProfileScreen({ route, navigation }) {
     switch (activeTab) {
       case 'Posts':    return renderPosts();
       case 'Services': return renderServices();
-      case 'Reviews':
-        if (reviewsLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
-        return (
-          <View style={styles.reviewsList}>
-            {/* Prompt to leave a review if they have unreviewed completed appointments */}
-            {unreviewedBookings.length > 0 && (
-              <TouchableOpacity
-                style={[styles.leaveReviewPrompt, { backgroundColor: colors.primary + '15', borderColor: colors.primary + '40' }]}
-                onPress={() => { setReviewRating(5); setReviewText(''); setReviewModal(unreviewedBookings[0]); }}
-                activeOpacity={0.8}
-              >
-                <MaterialCommunityIcons name="crown-outline" size={20} color={colors.primary} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.leaveReviewTitle, { color: colors.text }]}>Rate your experience</Text>
-                  <Text style={[styles.leaveReviewSub, { color: colors.textSecondary }]}>
-                    {unreviewedBookings[0].service_name
-                      ? `Your ${unreviewedBookings[0].service_name} appointment is complete`
-                      : 'Your appointment is complete — tap to leave a review'}
-                  </Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.primary} />
-              </TouchableOpacity>
-            )}
-
-            {reviews.length === 0 && unreviewedBookings.length === 0 && (
-              <View style={[styles.emptyState, { paddingTop: 40 }]}>
-                <Text style={styles.emptyTitle}>No reviews yet</Text>
-                <Text style={styles.emptyText}>Reviews from clients will appear here.</Text>
-              </View>
-            )}
-
-            {reviews.map(r => {
-              const clientName = r.client?.full_name || r.client?.username || 'Client';
-              const avatar = r.client?.avatar_url;
-              const diff = Math.floor((Date.now() - new Date(r.created_at)) / 1000);
-              const ago = diff < 3600 ? `${Math.floor(diff/60)}m ago`
-                : diff < 86400 ? `${Math.floor(diff/3600)}h ago`
-                : diff < 2592000 ? `${Math.floor(diff/86400)} day${Math.floor(diff/86400)!==1?'s':''} ago`
-                : `${Math.floor(diff/2592000)} month${Math.floor(diff/2592000)!==1?'s':''} ago`;
-              return (
-                <View key={r.id} style={[styles.reviewCard, { backgroundColor: colors.surface, shadowColor: colors.text }]}>
-                  <View style={styles.reviewHeader}>
-                    {avatar ? (
-                      <Image source={{ uri: avatar }} style={styles.reviewAvatar} />
-                    ) : (
-                      <View style={[styles.reviewAvatar, styles.reviewAvatarPlaceholder, { backgroundColor: colors.borderLight }]}>
-                        <Text style={{ color: colors.textMuted, fontFamily: 'Figtree_700Bold' }}>
-                          {clientName.charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.reviewClientName, { color: colors.text }]}>{clientName}</Text>
-                      <Text style={[styles.reviewTime, { color: colors.textMuted }]}>{ago}</Text>
-                    </View>
-                    <View style={styles.reviewCrowns}>
-                      {Array.from({ length: r.rating }).map((_, i) => (
-                        <MaterialCommunityIcons key={i} name="crown" size={15} color={HONEY} />
-                      ))}
-                    </View>
-                  </View>
-                  {!!r.text && (
-                    <Text style={[styles.reviewText, { color: colors.text }]}>{r.text}</Text>
-                  )}
-                  {!!r.service_name && (
-                    <View style={[styles.reviewTag, { backgroundColor: colors.surfaceAlt ?? colors.borderLight }]}>
-                      <Text style={[styles.reviewTagText, { color: colors.textSecondary }]}>{r.service_name}</Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
-          </View>
-        );
-      case 'Tagged': {
+            case 'Tagged': {
         if (taggedLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
         if (taggedPosts.length === 0) return (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No tagged posts yet</Text>
-            <Text style={styles.emptyText}>Posts where clients tag this stylist will appear here</Text>
+          <View style={styles.taggedEmptyState}>
+            <Text style={styles.taggedEmptyText}>No tagged posts yet</Text>
           </View>
         );
-        const taggedRows = [];
-        for (let i = 0; i < taggedPosts.length; i += 2) taggedRows.push(taggedPosts.slice(i, i + 2));
-        return (
-          <View style={styles.gridContainer}>
-            {taggedRows.map((row, rowIndex) => (
-              <View key={`row-${rowIndex}`} style={styles.gridRow}>
-                {row.map((item) => {
-                  const thumb = item.post_media?.[0]?.media_url;
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.gridCell}
-                      onPress={() => setSelectedPost(item)}
-                      activeOpacity={0.8}
-                    >
-                      {thumb
-                        ? <Image source={{ uri: thumb }} style={styles.gridImage} resizeMode="cover" />
-                        : <View style={[styles.gridImage, { backgroundColor: colors.borderLight, alignItems: 'center', justifyContent: 'center' }]}><Ionicons name="image-outline" size={20} color="#9ca3af" /></View>}
-                      {item.profiles && (
-                        <View style={styles.tilePostedBy}>
-                          <Text style={styles.tilePostedByText} numberOfLines={1}>
-                            {item.profiles.full_name || item.profiles.username}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-                {row.length < 2 && <View style={styles.gridCell} />}
-              </View>
-            ))}
-          </View>
-        );
+        return renderMasonryGrid(taggedPosts);
       }
       default: return null;
     }
@@ -1218,10 +1277,15 @@ export default function StylistProfileScreen({ route, navigation }) {
   // ── Shared inner content (used in both web <div> and native <ScrollView>) ──
   const profileContent = (
     <>
-      <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ height: BANNER_HEIGHT }} />
+      <View style={{ height: BANNER_HEIGHT }}>
+        <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+        <TouchableOpacity style={styles.instagramBadge} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => {/* open insta */}} activeOpacity={0.75}>
+          <Ionicons name="logo-instagram" size={20} color="#fff" />
+        </TouchableOpacity>
+      </View>
 
         <View style={[styles.avatarRow, { marginTop: -(AVATAR_SIZE / 2) }]}>
-          <View style={[styles.avatarRing, { width: AVATAR_SIZE + 4, height: AVATAR_SIZE + 4, borderRadius: (AVATAR_SIZE + 4) / 2, backgroundColor: colors.surface }]}>
+          <View style={[styles.avatarRing, { width: AVATAR_SIZE + 4, height: AVATAR_SIZE + 4, borderRadius: (AVATAR_SIZE + 4) / 2, backgroundColor: colors.surface, borderWidth: 2, borderColor: '#fff' }]}>
             {avatarUri
               ? <Image source={{ uri: avatarUri }} style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }} />
               : <View style={[styles.avatarPlaceholder, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }]}><Ionicons name="person" size={44} color="#9ca3af" /></View>}
@@ -1229,60 +1293,77 @@ export default function StylistProfileScreen({ route, navigation }) {
         </View>
 
         <View style={styles.info}>
-          <Text style={styles.name}>{name}</Text>
+          <View style={styles.nameRow}>
+            <View style={styles.nameBadge}>
+              <Scissors size={16} color={colors.primary} strokeWidth={2.5} />
+              <Text style={styles.name}>{name}</Text>
+            </View>
+            {following && (
+              <TouchableOpacity style={styles.unfollowBtn} onPress={() => setUnfollowSheetVisible(true)} activeOpacity={0.75}>
+                <Ionicons name="chevron-down" size={16} color={colors.primary} />
+              </TouchableOpacity>
+            )}
+          </View>
 
           {/* Location + Specialty — same row */}
           {(!!location || specialties.length > 0) && (
             <View style={styles.metaRow}>
               {!!location && (
                 <>
-                  <Ionicons name="location-outline" size={14} color={colors.textSecondary} />
-                  <Text style={styles.metaText}>{location}</Text>
+                  <Ionicons name="location-outline" size={14} color="#5E5E5E" />
+                  <Text style={styles.metaText}>{displayLocation}</Text>
                 </>
               )}
-              {specialties.map((spec, i) => (
-                <View key={i} style={styles.specialtyTag}>
-                  <Text style={styles.specialtyTagText}>{spec}</Text>
+              {specialties[0] ? (
+                <View style={styles.specialtyTag}>
+                  <Text style={styles.specialtyTagText}>{specialties[0]}</Text>
                 </View>
-              ))}
+              ) : null}
             </View>
           )}
 
-          {/* Reviews */}
-
           <View style={styles.stats}>
-            <View style={styles.stat}><Text style={styles.statNumber}>{postCount}</Text><Text style={styles.statLabel}>Posts</Text></View>
-            <View style={styles.stat}><Text style={styles.statNumber}>{followersCount}</Text><Text style={styles.statLabel}>Followers</Text></View>
-            <View style={styles.stat}><Text style={styles.statNumber}>{rating > 0 ? Number(rating).toFixed(1) : '—'}</Text><Text style={styles.statLabel}>Rating</Text></View>
+            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => {/* view followers */}}>
+              <Text style={styles.statNumber}>{followersCount}</Text>
+              <Text style={styles.statLabel}>Followers</Text>
+            </TouchableOpacity>
+            <View style={styles.statDivider} />
+            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => {/* view reviews */}}>
+              <Text style={styles.statNumber}>{reviewCount ?? 0}</Text>
+              <Text style={styles.statLabel}>Reviews</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.buttons}>
-            {/* Follow */}
-            <TouchableOpacity
-              style={[styles.followBtn, following && styles.followingBtn]}
-              onPress={handleFollow}
-              activeOpacity={0.8}
-              disabled={followLoading}
-            >
-              <Text style={[styles.followBtnText, following && styles.followingBtnText]}>
-                {following ? 'Following' : 'Follow'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Book */}
-            <TouchableOpacity style={styles.bookBtn} onPress={() => openBooking()} activeOpacity={0.85}>
-              <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
-              <Text style={styles.bookBtnText}>Book</Text>
-            </TouchableOpacity>
-
-            {/* Message icon */}
-            <TouchableOpacity
-              style={styles.msgIconBtn}
-              onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
-            </TouchableOpacity>
+            {!following ? (
+              <>
+                <TouchableOpacity
+                  style={styles.followFullBtn}
+                  onPress={handleFollow}
+                  activeOpacity={0.8}
+                  disabled={followLoading}
+                >
+                  <LinearGradient colors={['#B35D2B', '#7D3F1D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
+                  <Text style={styles.followFullBtnText}>Follow</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
+                  <Text style={styles.bookBtnText}>Book</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                  <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
+                    <Text style={styles.bookBtnText}>Book</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.messageActionBtn}
+                    onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.messageActionText}>Message</Text>
+                  </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -1324,18 +1405,9 @@ export default function StylistProfileScreen({ route, navigation }) {
         </ScrollView>
       )}
 
-      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 8 }]} onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
-        <Ionicons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />
+      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 24 }]} onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
+        <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.9)" />
       </TouchableOpacity>
-
-      <View style={[styles.socialIcons, { top: insets.top + 8 }]}>
-        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="globe-outline" size={22} color="rgba(255,255,255,0.9)" />
-        </TouchableOpacity>
-        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-          <Ionicons name="logo-instagram" size={22} color="rgba(255,255,255,0.9)" />
-        </TouchableOpacity>
-      </View>
 
       <BookingModal
         visible={bookingVisible}
@@ -1442,6 +1514,40 @@ export default function StylistProfileScreen({ route, navigation }) {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Unfollow / report stylist sheet */}
+      <Modal
+        visible={unfollowSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUnfollowSheetVisible(false)}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={() => setUnfollowSheetVisible(false)}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity
+              style={[styles.sheetItem, { borderBottomColor: colors.borderLight }]}
+              onPress={() => { setUnfollowSheetVisible(false); handleFollow(); }}
+            >
+              <Ionicons name="person-remove-outline" size={22} color={colors.text} />
+              <Text style={[styles.sheetItemText, { color: colors.text }]}>Unfollow</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.sheetItem, styles.sheetItemDanger]} onPress={handleReportStylist}>
+              <Ionicons name="flag-outline" size={22} color="#ef4444" />
+              <Text style={[styles.sheetItemText, styles.sheetItemTextDanger]}>Report Stylist</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sheetItem, styles.sheetCancel, { borderTopColor: colors.borderLight }]}
+              onPress={() => setUnfollowSheetVisible(false)}
+            >
+              <Text style={[styles.sheetCancelText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1450,48 +1556,61 @@ const makeStyles = (c) => StyleSheet.create({
   avatarRow: { alignItems: 'center', zIndex: 1 },
   avatarRing: { alignItems: 'center', justifyContent: 'center' },
   avatarPlaceholder: { backgroundColor: c.border, alignItems: 'center', justifyContent: 'center' },
-  info: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 },
-  name: { fontSize: 24, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 6 },
-  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
-  metaText: { fontSize: 13, color: c.textSecondary, fontFamily: 'Figtree_400Regular' },
+  info: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4 },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  metaText: { fontSize: 13, color: '#5E5E5E', fontFamily: 'Figtree_400Regular' },
   metaDot: { fontSize: 13, color: c.textSecondary, marginHorizontal: 2 },
   specialtyTag: {
-    paddingHorizontal: 11, paddingVertical: 4,
-    borderRadius: 20,
-    backgroundColor: '#EDEDED',
-    borderWidth: 1, borderColor: '#5e5e5e33',
+    paddingHorizontal: 10, paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: '#F0EAE0',
   },
   specialtyTagText: {
-    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#5e5e5e',
+    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#4F4032',
   },
-  stats: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
-  stat: { alignItems: 'center', paddingHorizontal: 24 },
-  statDivider: { width: 1, height: 32, backgroundColor: c.border },
+  stats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 24 },
+  stat: { alignItems: 'center', paddingHorizontal: 4 },
+  statDivider: { width: 1, height: 32, backgroundColor: '#E0D8D0' },
   statNumber: { fontSize: 18, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 2 },
-  statLabel: { fontSize: 12, color: c.textSecondary },
+  statLabel: { fontSize: 12, color: '#5E5E5E' },
   buttons: { flexDirection: 'row', gap: 10, marginBottom: 16, width: '100%', alignItems: 'center' },
-  // Follow button — solid dark fill when not following, outlined when following
-  followBtn: { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: '#5D1F1F' },
-  followingBtn: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: '#5D1F1F' },
-  followBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
-  followingBtnText: { color: '#5D1F1F' },
-  // Book button
-  bookBtn: { flex: 1, borderRadius: 10, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  bookBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
-  // Message icon button — square outlined icon to the right of Book
-  msgIconBtn: { width: 46, height: 46, borderRadius: 10, borderWidth: 1.5, borderColor: c.primary, alignItems: 'center', justifyContent: 'center' },
+  followFullBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  followFullBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
+  bookActionBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', backgroundColor: '#E2DACB' },
+  bookBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#77674B' },
+  messageActionBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E2DACB', backgroundColor: 'transparent' },
+  messageActionText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#77674B' },
+  /* Header name row */
+  nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 8 },
+  nameBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  name: { fontSize: 22, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 0 },
+  unfollowBtn: { marginLeft: 2, padding: 6 },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.surface },
   tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabText: { fontSize: 15, color: c.textSecondary, fontFamily: 'Figtree_500Medium' },
   activeTabText: { color: c.selected, fontFamily: 'Figtree_700Bold' },
   activeUnderline: { position: 'absolute', bottom: -1, left: 8, right: 8, height: 3, borderRadius: 2, backgroundColor: '#5D1F1F' },
-  gridContainer: { padding: GRID_GAP },
-  gridRow: { flexDirection: 'row', gap: GRID_GAP, marginBottom: GRID_GAP },
-  gridCell: { width: GRID_SIZE, height: GRID_SIZE, borderRadius: 10, overflow: 'hidden' },
+  masonryOuter: { paddingHorizontal: MASONRY_PAD, paddingTop: 12 },
+  masonryCanvas: { position: 'relative', width: '100%' },
+  masonryCell: { position: 'absolute', borderRadius: 14, overflow: 'hidden' },
   gridImage: { width: '100%', height: '100%' },
+  // Mirrors the Explore feed's "stylist tag": dark gradient fade behind a
+  // frosted-glass pill, bottom-left, with a Scissors icon + label
+  styleTagGradient: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '50%' },
+  styleTag: {
+    position: 'absolute', left: 10, bottom: 10,
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 999, paddingVertical: 4, paddingHorizontal: 8,
+    maxWidth: '85%',
+  },
+  styleTagText: { color: '#fff', fontSize: 12, fontFamily: 'Figtree_500Medium' },
   emptyState: { alignItems: 'center', paddingHorizontal: 32, paddingTop: 60, gap: 8 },
   emptyTitle: { fontSize: 17, fontFamily: 'Figtree_600SemiBold', color: c.text },
   emptyText: { fontSize: 14, color: c.textSecondary, textAlign: 'center', lineHeight: 20 },
+  taggedEmptyState: { alignItems: 'center', paddingTop: 60 },
+  taggedEmptyText: { fontSize: 14, color: c.textSecondary, textAlign: 'center' },
   reviewsList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
   leaveReviewPrompt: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
@@ -1537,33 +1656,42 @@ const makeStyles = (c) => StyleSheet.create({
   reviewText: { fontSize: 14, lineHeight: 20 },
   reviewTag: { alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
   reviewTagText: { fontSize: 12, fontFamily: 'Figtree_500Medium' },
-  servicesList: { padding: 16, gap: 12 },
-  serviceCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: c.surface, borderRadius: 14, padding: 16, borderWidth: 1, borderColor: c.borderLight, gap: 12 },
-  serviceCardLeft: { flex: 1 },
-  serviceCardName: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', color: c.text, marginBottom: 3 },
-  serviceCardDesc: { fontSize: 13, color: c.textSecondary, lineHeight: 18, marginBottom: 4 },
-  serviceCardMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  serviceCardMetaText: { fontSize: 12, color: c.textMuted },
-  serviceCardRight: { alignItems: 'flex-end', gap: 10 },
-  serviceCardPrice: { fontSize: 18, fontFamily: 'Figtree_700Bold', color: c.text },
-  bookServiceBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  bookServiceBtnText: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
+  servicesList: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 16 },
+  sectionLabelText: { fontSize: 11, fontFamily: 'Figtree_700Bold', letterSpacing: 1, textTransform: 'uppercase', color: '#9CA3AF' },
+  servicesLabel: { marginTop: 8, marginBottom: 12 },
+  requirementsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  requirementsExpandedCard: { borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 8 },
+  requirementsExpandedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  requirementsExpandedTitle: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', flex: 1, marginRight: 10 },
+  requirementsCountPill: { backgroundColor: '#F0EAE0', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  requirementsCountPillText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#B35D2B' },
+  requirementsBody: { gap: 10 },
+  requirementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  requirementBullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
+  requirementText: { fontSize: 13, lineHeight: 20, flex: 1 },
+  serviceCard: { borderRadius: 12, borderWidth: 1, marginBottom: 12, padding: 16 },
+  serviceCardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 },
+  serviceCardName: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', flex: 1 },
+  serviceCardDesc: { fontSize: 13, lineHeight: 18, marginBottom: 4 },
+  serviceCardMetaText: { fontSize: 12, marginBottom: 12 },
+  serviceCardPrice: { fontSize: 16, fontFamily: 'Figtree_700Bold' },
+  serviceBookNowBtn: { height: 44, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
+  serviceBookNowText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#ffffff' },
   backBtn: { position: 'absolute', left: 14, padding: 6, zIndex: 100 },
-  socialIcons: { position: 'absolute', right: 14, flexDirection: 'row', gap: 12, zIndex: 100 },
-  tilePostedBy: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: 6,
-    paddingVertical: 4,
+  instagramBadge: {
+    position: 'absolute', top: 64, right: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 10, padding: 6,
   },
-  tilePostedByText: {
-    fontSize: 10,
-    color: '#fff',
-    fontFamily: 'Figtree_500Medium',
-  },
+  sheetOverlay: { flex: 1, backgroundColor: c.overlay, justifyContent: 'flex-end' },
+  sheetContainer: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, paddingTop: 12 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 24, borderBottomWidth: 1 },
+  sheetItemText: { fontSize: 16, fontFamily: 'Figtree_500Medium', marginLeft: 16 },
+  sheetItemDanger: { borderBottomWidth: 0 },
+  sheetItemTextDanger: { color: '#ef4444' },
+  sheetCancel: { justifyContent: 'center', marginTop: 8, borderTopWidth: 8, borderBottomWidth: 0 },
+  sheetCancelText: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', textAlign: 'center' },
   postModalHeader: {
     flexDirection: 'row',
     justifyContent: 'flex-end',

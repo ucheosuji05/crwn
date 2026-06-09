@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { Compass, Globe, Scissors, Bell, User } from 'lucide-react-native';
 import {
   View, Text, StyleSheet, ActivityIndicator,
   TouchableOpacity, Platform, Image, Animated,
@@ -30,16 +31,28 @@ const DOUBLE_TAP_MS = 400;
 const SIDEBAR_WIDTH = 210;
 const PANEL_WIDTH = 380;
 
-// ── Notification icon with badge ──────────────────────────────────────────────
+const NAV_ACTIVE_COLOR = '#C17A3A';
+const NAV_INACTIVE_COLOR = '#9E9E9E';
+const NAV_ICON_SIZE = 24;
+const NAV_ICON_STROKE = 2;
 
-function NotifIcon({ focused, color, size, unreadCount, primaryColor, iconOn = 'notifications', iconOff = 'notifications-outline' }) {
+// Lucide icon used for each client-mode tab
+const NAV_ICONS = {
+  'Crwn.': Compass,
+  Community: Globe,
+  Stylists: Scissors,
+  Notifications: Bell,
+  Profile: User,
+};
+
+// ── Notification icon with badge ──────────────────────────────────────────────
+// `renderIcon(color, size)` returns the icon element so callers can mix
+// lucide icons (client mode) with Ionicons (provider "Inbox" mail icon).
+
+function NotifIcon({ color, size, unreadCount, primaryColor, renderIcon }) {
   return (
     <View>
-      <Ionicons
-        name={focused ? iconOn : iconOff}
-        size={size}
-        color={color}
-      />
+      {renderIcon(color, size)}
       {unreadCount > 0 && (
         <View style={[styles.badge, { backgroundColor: primaryColor }]}>
           <Text style={styles.badgeText}>
@@ -60,19 +73,21 @@ function WebSidebar({
   notifOpen, onNotifToggle,
   isProviderMode,
 }) {
-  // Nav items change when a stylist switches to provider mode
+  // Nav items change when a stylist switches to provider mode.
+  // Provider-only slots (Analytics/Calendar/Inbox) keep Ionicons since they
+  // have no lucide equivalent in the spec; client-mode slots use lucide icons.
   const NAV_ITEMS = isProviderMode ? [
     { name: 'Crwn.',         label: 'Explore',        icon: 'compass-outline'     },
     { name: 'Community',     label: 'Analytics',      icon: 'stats-chart-outline' },
     { name: 'Stylists',      label: 'Calendar',       icon: 'calendar-outline'    },
-    { name: 'Notifications', label: 'Inbox',          icon: 'notifications-outline' },
+    { name: 'Notifications', label: 'Inbox',          icon: 'mail-outline' },
     { name: 'Profile',       label: 'Profile',        icon: 'person-outline'      },
   ] : [
-    { name: 'Crwn.',         label: 'Explore',        icon: 'compass-outline'     },
-    { name: 'Community',     label: 'Community',      icon: 'globe-outline'       },
-    { name: 'Stylists',      label: 'Stylists',       icon: 'cut-outline'         },
-    { name: 'Notifications', label: 'Inbox',          icon: 'notifications-outline' },
-    { name: 'Profile',       label: 'Profile',        icon: 'person-outline'      },
+    { name: 'Crwn.',         label: 'Explore'   },
+    { name: 'Community',     label: 'Community' },
+    { name: 'Stylists',      label: 'Stylists'  },
+    { name: 'Notifications', label: 'Inbox'     },
+    { name: 'Profile',       label: 'Profile'   },
   ];
 
   return (
@@ -95,9 +110,11 @@ function WebSidebar({
         const focused = usePanel
           ? notifOpen
           : (state.index === index && !notifOpen);
-        const color = focused ? colors.selected : colors.textMuted;
+        const color = focused ? NAV_ACTIVE_COLOR : NAV_INACTIVE_COLOR;
         const item = NAV_ITEMS.find((n) => n.name === route.name);
         if (!item) return null;
+
+        const LucideIcon = !isProviderMode && NAV_ICONS[route.name];
 
         // Badge count: provider uses booking notifs, client uses social notifs
         const badgeCount = isNotif
@@ -134,16 +151,19 @@ function WebSidebar({
             <View style={sidebar.iconWrap}>
               {isNotif ? (
                 <NotifIcon
-                  focused={focused}
                   color={color}
-                  size={22}
+                  size={NAV_ICON_SIZE}
                   unreadCount={badgeCount}
                   primaryColor={colors.primary}
-                  iconOn={isProviderMode ? 'mail-outline' : 'notifications-outline'}
-                  iconOff={isProviderMode ? 'mail-outline' : 'notifications-outline'}
+                  renderIcon={(c, s) => isProviderMode
+                    ? <Ionicons name="mail-outline" size={s} color={c} />
+                    : <Bell size={s} color={c} strokeWidth={NAV_ICON_STROKE} />
+                  }
                 />
+              ) : LucideIcon ? (
+                <LucideIcon size={NAV_ICON_SIZE} color={color} strokeWidth={NAV_ICON_STROKE} />
               ) : (
-                <Ionicons name={item.icon} size={22} color={color} />
+                <Ionicons name={item.icon} size={NAV_ICON_SIZE} color={color} />
               )}
             </View>
             <Text style={[sidebar.label, {
@@ -400,19 +420,18 @@ export default function BottomTabNavigator() {
             backgroundColor: colors.tabBar,
             borderTopColor: colors.border,
           },
-          tabBarIcon: ({ focused, color, size }) => {
-            // Provider mode overrides icons for slots 2-4
+          tabBarIcon: ({ focused, color }) => {
+            // Provider mode overrides icons for slots 2-4 — no lucide
+            // equivalents specified for these, so keep Ionicons.
             if (isStylist && isProviderMode) {
               if (route.name === 'Notifications') {
                 return (
                   <NotifIcon
-                    focused={focused}
                     color={color}
-                    size={size}
+                    size={NAV_ICON_SIZE}
                     unreadCount={bookingNotifCount}
                     primaryColor={colors.primary}
-                    iconOn="mail-outline"
-                    iconOff="mail-outline"
+                    renderIcon={(c, s) => <Ionicons name="mail-outline" size={s} color={c} />}
                   />
                 );
               }
@@ -423,34 +442,26 @@ export default function BottomTabNavigator() {
                 case 'Stylists':  iconName = 'calendar-outline';    break;
                 case 'Profile':   iconName = 'person-outline';      break;
               }
-              return <Ionicons name={iconName} size={size} color={color} />;
+              return <Ionicons name={iconName} size={NAV_ICON_SIZE} color={color} />;
             }
 
-            // Default client-mode icons
+            // Default client-mode icons — lucide, per design spec
             if (route.name === 'Notifications') {
               return (
                 <NotifIcon
-                  focused={focused}
                   color={color}
-                  size={size}
+                  size={NAV_ICON_SIZE}
                   unreadCount={unreadNotifCount + bookingNotifCount}
                   primaryColor={colors.primary}
-                  iconOn="notifications-outline"
-                  iconOff="notifications-outline"
+                  renderIcon={(c, s) => <Bell size={s} color={c} strokeWidth={NAV_ICON_STROKE} />}
                 />
               );
             }
-            let iconName;
-            switch (route.name) {
-              case 'Crwn.':     iconName = 'compass-outline'; break;
-              case 'Community': iconName = 'globe-outline';   break;
-              case 'Stylists':  iconName = 'cut-outline';     break;
-              case 'Profile':   iconName = 'person-outline';  break;
-            }
-            return <Ionicons name={iconName} size={size} color={color} />;
+            const LucideIcon = NAV_ICONS[route.name];
+            return <LucideIcon size={NAV_ICON_SIZE} color={color} strokeWidth={NAV_ICON_STROKE} />;
           },
-          tabBarActiveTintColor: colors.selected,
-          tabBarInactiveTintColor: 'gray',
+          tabBarActiveTintColor: NAV_ACTIVE_COLOR,
+          tabBarInactiveTintColor: NAV_INACTIVE_COLOR,
           tabBarShowLabel: false,
         })}
       >

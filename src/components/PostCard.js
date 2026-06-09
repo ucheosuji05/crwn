@@ -17,6 +17,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Scissors } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { postService } from '../services/postService';
@@ -542,7 +543,7 @@ export default function PostCard({
           {/* Like + Reply + Delete row */}
           <View style={styles.cmtActionsRow}>
             <TouchableOpacity onPress={() => handleLikeComment(item.id)} style={styles.cmtLikeBtn} activeOpacity={0.7}>
-              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#ef4444' : colors.textMuted} />
+              <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#F27C7C' : colors.textMuted} />
               {likeCount > 0 && <Text style={[styles.cmtLikeCount, { color: colors.textMuted }]}>{likeCount}</Text>}
             </TouchableOpacity>
             {!isReply && (
@@ -863,7 +864,7 @@ export default function PostCard({
               },
             ]}
           >
-            <Ionicons name="heart" size={90} color="#ef4444" />
+            <Ionicons name="heart" size={90} color="#F27C7C" />
           </Animated.View>
 
           {mediaItems.length > 1 && (
@@ -904,7 +905,7 @@ export default function PostCard({
         <View style={styles.metadata}>
           {stylistDisplayName && (
             <TouchableOpacity style={styles.stylistChip} onPress={handleStylistPress} activeOpacity={0.7}>
-              <Ionicons name="cut-outline" size={13} color={colors.primary} />
+              <Scissors size={13} color={colors.primary} strokeWidth={1.5} />
               <Text style={styles.stylistName}>{stylistDisplayName}</Text>
             </TouchableOpacity>
           )}
@@ -925,7 +926,7 @@ export default function PostCard({
       {/* Actions */}
       <View style={styles.actions}>
         <TouchableOpacity style={styles.actionButton} onPress={handleLike}>
-          <Ionicons name={liked ? "heart" : "heart-outline"} size={24} color={liked ? "#ef4444" : colors.text} />
+          <Ionicons name={liked ? "heart" : "heart-outline"} size={24} color={liked ? "#F27C7C" : colors.text} />
           <Text style={styles.actionText}>{likesCount}</Text>
         </TouchableOpacity>
 
@@ -1141,6 +1142,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   timeAgo: {
     fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
     color: c.textMuted
   },
   mediaContainer: {
@@ -1244,10 +1246,12 @@ const makeStyles = (c) => StyleSheet.create({
   },
   rating: {
     fontSize: 14,
+    fontFamily: 'Figtree_500Medium',
     color: c.textSecondary
   },
   description: {
     fontSize: 15,
+    fontFamily: 'Figtree_500Medium',
     color: c.text,
     lineHeight: 20
   },
@@ -1312,6 +1316,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   menuItemText: {
     fontSize: 16,
+    fontFamily: 'Figtree_500Medium',
     color: c.text,
     marginLeft: 16
   },
@@ -1402,6 +1407,7 @@ const makeStyles = (c) => StyleSheet.create({
   noCommentsSub: {
     textAlign: 'center',
     fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
     marginTop: 2,
   },
   commentItem: {
@@ -1447,6 +1453,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   commentText: {
     fontSize: 14,
+    fontFamily: 'Figtree_500Medium',
     lineHeight: 19,
   },
   commentInput: {
@@ -1481,6 +1488,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
+    fontFamily: 'Figtree_500Medium',
     maxHeight: 80,
     borderWidth: 1,
   },
@@ -1504,6 +1512,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   replyBannerText: {
     fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
     flex: 1,
     marginRight: 8,
   },
@@ -1650,6 +1659,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 11,
     fontSize: 15,
+    fontFamily: 'Figtree_500Medium',
     color: c.text,
     backgroundColor: c.inputBackground,
   },

@@ -19,7 +19,8 @@ export const threadService = {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_stylist
         ),
         upvotes:thread_upvotes(count),
         replies:thread_replies(count)
@@ -42,7 +43,8 @@ export const threadService = {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_stylist
         ),
         upvotes:thread_upvotes(count),
         replies:thread_replies(count)
@@ -67,7 +69,8 @@ export const threadService = {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_stylist
         ),
         upvotes:thread_upvotes(count),
         replies:thread_replies(count)
@@ -145,7 +148,8 @@ export const threadService = {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_stylist
         ),
         upvotes:thread_reply_upvotes(count)
       `)
@@ -172,7 +176,8 @@ export const threadService = {
           id,
           username,
           full_name,
-          avatar_url
+          avatar_url,
+          is_stylist
         ),
         upvotes:thread_reply_upvotes(count)
       `)

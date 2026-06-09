@@ -1,6 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Heart } from 'lucide-react-native';
+import HashtagText from './HashtagText';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { threadService } from '../services/threadService';
@@ -54,7 +56,7 @@ export default function ThreadCard({ thread, isUpvoted = false, onUpvoteToggle, 
       <Text style={styles.title} numberOfLines={2}>{thread?.title}</Text>
 
       {thread?.body ? (
-        <Text style={styles.preview} numberOfLines={2}>{thread.body}</Text>
+        <HashtagText text={thread.body} style={styles.preview} numberOfLines={2} />
       ) : null}
 
       <View style={styles.footer}>
@@ -64,7 +66,7 @@ export default function ThreadCard({ thread, isUpvoted = false, onUpvoteToggle, 
           disabled={toggling || !user}
           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
         >
-          <Ionicons name={isUpvoted ? 'heart' : 'heart-outline'} size={14} color="#e05c5c" />
+          <Heart size={14} color={isUpvoted ? '#D4726E' : '#D1D1D1'} fill={isUpvoted ? '#D4726E' : 'transparent'} />
           <Text style={[styles.footerText, isUpvoted && styles.footerTextActive]}>
             {upvoteCount}
           </Text>
@@ -102,36 +104,35 @@ const makeStyles = (c) => StyleSheet.create({
   },
   tagBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: c.cardWarm,
-    borderRadius: 20,
-    paddingHorizontal: 10,
+    backgroundColor: '#F0EAE0',
+    borderRadius: 8,
+    paddingHorizontal: 8,
     paddingVertical: 3,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: c.isDark ? c.border : '#e8d5bf',
   },
   tagText: {
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: 'Figtree_600SemiBold',
-    color: c.isDark ? '#d4956a' : '#9c6b3c',
+    color: '#7A5C2E',
     letterSpacing: 0.2,
   },
   title: {
     fontSize: 15,
-    fontFamily: 'Figtree_700Bold',
+    fontFamily: 'Figtree_600SemiBold',
     color: c.text,
     lineHeight: 21,
     marginBottom: 5,
   },
   preview: {
     fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
     color: c.textSecondary,
     lineHeight: 18,
     marginBottom: 10,
   },
   footer: { flexDirection: 'row', alignItems: 'center' },
   footerItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  footerText: { fontSize: 13, color: c.textMuted, marginLeft: 3 },
-  footerTextActive: { color: '#e05c5c', fontFamily: 'Figtree_600SemiBold' },
-  dot: { color: c.border, marginHorizontal: 7, fontSize: 12 },
+  footerText: { fontSize: 13, fontFamily: 'Figtree_500Medium', color: c.textMuted, marginLeft: 3 },
+  footerTextActive: { color: '#D4726E', fontFamily: 'Figtree_600SemiBold' },
+  dot: { color: c.border, marginHorizontal: 7, fontSize: 12, fontFamily: 'Figtree_500Medium' },
 });

@@ -12,6 +12,7 @@ import {
   FlatList,
   Share,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,6 +44,7 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
   const [editVisible, setEditVisible] = useState(false);
   const [followList, setFollowList]   = useState(null); // { title, data }
   const [followListLoading, setFollowListLoading] = useState(false);
+  const [unfollowSheetVisible, setUnfollowSheetVisible] = useState(false);
 
   // Fetch the viewed user's profile whenever the target ID changes
   useEffect(() => {
@@ -160,6 +162,11 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
     // Re-fetch to get the true count from DB
     await fetchProfile();
     setFollowLoading(false);
+  };
+
+  const handleReportProfile = () => {
+    setUnfollowSheetVisible(false);
+    Alert.alert('Report', 'This profile has been reported for review.');
   };
 
   // ── Edit Profile ──────────────────────────────────────────────────────────
@@ -296,25 +303,28 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
             <>
               <TouchableOpacity
                 style={[styles.btn, following ? styles.followingBtn : styles.followBtn]}
-                onPress={handleFollow}
+                onPress={() => following ? setUnfollowSheetVisible(true) : handleFollow()}
                 disabled={followLoading}
               >
                 {followLoading ? (
-                  <ActivityIndicator size="small" color={following ? colors.primary : '#fff'} />
+                  <ActivityIndicator size="small" color={following ? '#7D3F1D' : '#fff'} />
                 ) : (
-                  <Text style={[styles.btnText, following ? styles.followingBtnText : styles.followBtnText]}>
-                    {following ? 'Following' : 'Follow'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={[styles.btnText, following ? styles.followingBtnText : styles.followBtnText]}>
+                      {following ? 'Following' : 'Follow'}
+                    </Text>
+                    {following && <Ionicons name="chevron-down" size={16} color="#7D3F1D" style={{ marginLeft: 4 }} />}
+                  </View>
                 )}
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.btn}
+                style={[styles.btn, styles.messageBtn]}
                 onPress={() => navigation.navigate('Messaging', {
                   recipientId: viewedUserId,
                   recipientName: profile?.full_name || profile?.username || 'User',
                 })}
               >
-                <Text style={styles.btnText}>Message</Text>
+                <Text style={[styles.btnText, styles.messageBtnText]}>Message</Text>
               </TouchableOpacity>
             </>
           )}
@@ -380,6 +390,40 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
             />
           )}
         </SafeAreaView>
+      </Modal>
+
+      {/* ── Unfollow / report profile sheet ── */}
+      <Modal
+        visible={unfollowSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setUnfollowSheetVisible(false)}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={() => setUnfollowSheetVisible(false)}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity
+              style={[styles.sheetItem, { borderBottomColor: colors.borderLight }]}
+              onPress={() => { setUnfollowSheetVisible(false); handleFollow(); }}
+            >
+              <Ionicons name="person-remove-outline" size={22} color={colors.text} />
+              <Text style={[styles.sheetItemText, { color: colors.text }]}>Unfollow</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.sheetItem, styles.sheetItemDanger]} onPress={handleReportProfile}>
+              <Ionicons name="flag-outline" size={22} color="#ef4444" />
+              <Text style={[styles.sheetItemText, styles.sheetItemTextDanger]}>Report Profile</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sheetItem, styles.sheetCancel, { borderTopColor: colors.borderLight }]}
+              onPress={() => setUnfollowSheetVisible(false)}
+            >
+              <Text style={[styles.sheetCancelText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
       </Modal>
     </View>
   );
@@ -518,10 +562,19 @@ const makeStyles = (c) => StyleSheet.create({
   },
   followingBtn: {
     backgroundColor: c.surface,
-    borderColor: c.primary,
+    borderWidth: 1.5,
+    borderColor: '#7D3F1D',
   },
   followingBtnText: {
-    color: c.primary,
+    color: '#7D3F1D',
+  },
+  messageBtn: {
+    borderWidth: 1.5,
+    borderColor: '#E2DACB',
+    backgroundColor: 'transparent',
+  },
+  messageBtnText: {
+    color: '#77674B',
   },
 
   // ── Follow list modal ──
@@ -585,4 +638,15 @@ const makeStyles = (c) => StyleSheet.create({
     color: c.textSecondary,
     marginTop: 1,
   },
+
+  // ── Unfollow / report sheet ──
+  sheetOverlay: { flex: 1, backgroundColor: c.overlay, justifyContent: 'flex-end' },
+  sheetContainer: { borderTopLeftRadius: 20, borderTopRightRadius: 20, paddingBottom: 34, paddingTop: 12 },
+  sheetHandle: { width: 40, height: 4, borderRadius: 2, alignSelf: 'center', marginBottom: 16 },
+  sheetItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, paddingHorizontal: 24, borderBottomWidth: 1 },
+  sheetItemText: { fontSize: 16, fontFamily: 'Figtree_500Medium', marginLeft: 16 },
+  sheetItemDanger: { borderBottomWidth: 0 },
+  sheetItemTextDanger: { color: '#ef4444' },
+  sheetCancel: { justifyContent: 'center', marginTop: 8, borderTopWidth: 8, borderBottomWidth: 0 },
+  sheetCancelText: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', textAlign: 'center' },
 });

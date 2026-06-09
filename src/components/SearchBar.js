@@ -8,10 +8,11 @@ export default function SearchBar({
   onChangeText,
   placeholder = 'Search for hair salons, inspos, etc.',
   autoFocus = false,
+  containerStyle,
 }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.container, { backgroundColor: colors.inputBackground }]}>
+    <View style={[styles.container, { backgroundColor: colors.inputBackground }, containerStyle]}>
       <Ionicons name="search" size={20} color={colors.textMuted} style={styles.icon} />
       <TextInput
         style={[styles.input, { color: colors.text }]}

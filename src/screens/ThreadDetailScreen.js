@@ -14,14 +14,19 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Heart, Scissors } from 'lucide-react-native';
+import HashtagText from '../components/HashtagText';
 import { useAuth } from '../hooks/useAuth';
 import { threadService } from '../services/threadService';
 import { useTheme } from '../context/ThemeContext';
 
-const BRAND  = '#5D1F1F';
-const HONEY  = '#C9963A';
-const CHAMPA = '#FAFAFA';
-const NEST_LINE = '#E5DDD5';
+const BRAND   = '#5D1F1F';
+const OCHRE   = '#B35D2B';
+const CHAMPA  = '#FAFAFA';
+const NEST_LINE = '#F0EAE0';
+const HEART_OUTLINE = '#D1D1D1';
+const HEART_FILLED  = '#D4726E';
+const GREY_MUTED    = '#9CA3AF';
 
 function formatTimeAgo(dateString) {
   if (!dateString) return '';
@@ -39,26 +44,21 @@ function formatTimeAgo(dateString) {
   return date.toLocaleDateString();
 }
 
-// ─── Build reply tree from flat array ────────────────────────────────────────
+// ─── Normalize a raw DB reply row into our local data model ──────────────────
+// Local replies always carry a `parentId` (camelCase): null for top-level,
+// or the id of the top-level reply they're attached to. We only ever support
+// one level of nesting — see handleReplyTo's collapsing logic below.
 
-function buildTree(flat) {
-  const map = {};
-  flat.forEach(r => { map[r.id] = { ...r, children: [] }; });
-  const roots = [];
-  flat.forEach(r => {
-    if (r.parent_id && map[r.parent_id]) {
-      map[r.parent_id].children.push(map[r.id]);
-    } else {
-      roots.push(map[r.id]);
-    }
-  });
-  return roots;
+function normalizeReply(r) {
+  return { ...r, parentId: r.parent_id ?? null };
 }
 
 // ─── ReplyNode ────────────────────────────────────────────────────────────────
+// Renders a single reply row (top-level or nested — nesting is purely visual,
+// applied by the caller via the `nested` flag and a wrapping indent block).
 
 function ReplyNode({
-  reply, depth = 0,
+  reply, nested = false,
   upvotedIds, onUpvoteToggle,
   currentUserId, onDelete,
   newReplyId, highlightAnim,
@@ -66,11 +66,12 @@ function ReplyNode({
   styles, colors,
 }) {
   const [toggling, setToggling] = useState(false);
-  const isNew    = reply.id === newReplyId;
-  const isOwner  = reply.user_id === currentUserId;
-  const isUpvoted = upvotedIds.has(reply.id);
-  const upvotes  = Number(reply?.upvotes?.[0]?.count ?? 0);
-  const author   = reply?.profiles?.username || 'Anonymous';
+  const isNew      = reply.id === newReplyId;
+  const isOwner    = reply.user_id === currentUserId;
+  const isUpvoted  = upvotedIds.has(reply.id);
+  const upvotes    = Number(reply?.upvotes?.[0]?.count ?? 0);
+  const author     = reply?.profiles?.username || 'Anonymous';
+  const isStylist  = !!reply?.profiles?.is_stylist;
 
   const handleUpvote = async () => {
     if (!currentUserId || toggling) return;
@@ -92,9 +93,12 @@ function ReplyNode({
   };
 
   const cardContent = (
-    <View style={[styles.replyCard, depth > 0 && styles.replyCardNested]}>
+    <View style={[styles.replyCard, nested && styles.replyCardNested]}>
       <View style={styles.replyHeader}>
-        <Text style={styles.replyAuthor}>@{author}</Text>
+        <View style={styles.replyAuthorRow}>
+          {isStylist && <Scissors size={13} color={OCHRE} style={{ marginRight: 4 }} />}
+          <Text style={styles.replyAuthor}>@{author}</Text>
+        </View>
         <View style={styles.replyHeaderRight}>
           <Text style={styles.replyTime}>{formatTimeAgo(reply?.created_at)}</Text>
           {isOwner && (
@@ -113,14 +117,14 @@ function ReplyNode({
           onPress={handleUpvote}
           disabled={toggling || !currentUserId}
         >
-          <Ionicons name={isUpvoted ? 'heart' : 'heart-outline'} size={14} color={HONEY} />
+          <Heart size={14} color={isUpvoted ? HEART_FILLED : HEART_OUTLINE} fill={isUpvoted ? HEART_FILLED : 'transparent'} />
           <Text style={[styles.replyUpvoteText, isUpvoted && styles.replyUpvoteActive]}>
             {upvotes}
           </Text>
         </TouchableOpacity>
 
         {currentUserId && (
-          <TouchableOpacity onPress={() => onReply({ id: reply.id, author })}>
+          <TouchableOpacity onPress={() => onReply({ id: reply.id, author, parentId: reply.parentId })}>
             <Text style={styles.replyLink}>Reply</Text>
           </TouchableOpacity>
         )}
@@ -128,39 +132,11 @@ function ReplyNode({
     </View>
   );
 
-  return (
-    <View>
-      {isNew ? (
-        <Animated.View style={[styles.highlightWrap, { opacity: highlightAnim, backgroundColor: CHAMPA }]}>
-          {cardContent}
-        </Animated.View>
-      ) : (
-        cardContent
-      )}
-
-      {/* Nested children */}
-      {reply.children?.length > 0 && (
-        <View style={[styles.nestedBlock, depth === 0 ? styles.nestedBlockRoot : styles.nestedBlockDeep]}>
-          {reply.children.map(child => (
-            <ReplyNode
-              key={`reply-${child.id}`}
-              reply={child}
-              depth={depth + 1}
-              upvotedIds={upvotedIds}
-              onUpvoteToggle={onUpvoteToggle}
-              currentUserId={currentUserId}
-              onDelete={onDelete}
-              newReplyId={newReplyId}
-              highlightAnim={highlightAnim}
-              onReply={onReply}
-              styles={styles}
-              colors={colors}
-            />
-          ))}
-        </View>
-      )}
-    </View>
-  );
+  return isNew ? (
+    <Animated.View style={[styles.highlightWrap, { opacity: highlightAnim, backgroundColor: CHAMPA }]}>
+      {cardContent}
+    </Animated.View>
+  ) : cardContent;
 }
 
 // ─── ThreadDetailScreen ───────────────────────────────────────────────────────
@@ -182,7 +158,7 @@ export default function ThreadDetailScreen({
   const [replyText, setReplyText]             = useState('');
   const [posting, setPosting]                 = useState(false);
   const [toggling, setToggling]               = useState(false);
-  const [replyingTo, setReplyingTo]           = useState(null); // { id, author }
+  const [replyingTo, setReplyingTo]           = useState(null); // { id: <attachToId>, author }
   const [newReplyId, setNewReplyId]           = useState(null);
 
   const toastOpacity   = useRef(new Animated.Value(0)).current;
@@ -190,7 +166,22 @@ export default function ThreadDetailScreen({
   const highlightTimer = useRef(null);
   const inputRef       = useRef(null);
 
-  const replyTree = useMemo(() => buildTree(replies), [replies]);
+  // Group the flat reply list into top-level replies + a parentId → children map.
+  // Only one level of nesting is ever produced (see handleReplyTo), so children
+  // never themselves have children.
+  const { topLevelReplies, childrenByParent } = useMemo(() => {
+    const top = [];
+    const childMap = {};
+    replies.forEach(r => {
+      if (r.parentId) {
+        if (!childMap[r.parentId]) childMap[r.parentId] = [];
+        childMap[r.parentId].push(r);
+      } else {
+        top.push(r);
+      }
+    });
+    return { topLevelReplies: top, childrenByParent: childMap };
+  }, [replies]);
 
   // ── Fetch replies ──────────────────────────────────────────────────────────
 
@@ -203,7 +194,7 @@ export default function ThreadDetailScreen({
         ? threadService.getUpvotedReplyIds(user.id, thread.id)
         : Promise.resolve({ ids: [] }),
     ]);
-    if (!repliesResult.error) setReplies(repliesResult.data || []);
+    if (!repliesResult.error) setReplies((repliesResult.data || []).map(normalizeReply));
     setUpvotedReplyIds(new Set(upvotesResult.ids || []));
     setLoadingReplies(false);
   }, [thread?.id, user]);
@@ -288,7 +279,8 @@ export default function ThreadDetailScreen({
     } else if (data) {
       // Deduplicate — prevent the same reply appearing twice if a realtime event
       // and the optimistic append race each other.
-      setReplies(prev => prev.some(r => r.id === data.id) ? prev : [...prev, data]);
+      const normalized = normalizeReply(data);
+      setReplies(prev => prev.some(r => r.id === normalized.id) ? prev : [...prev, normalized]);
       setReplyText('');
       setReplyingTo(null);
       showToast();
@@ -298,9 +290,14 @@ export default function ThreadDetailScreen({
   };
 
   // ── Handle "Reply" tap on a reply ──────────────────────────────────────────
+  // Collapse to one level of nesting: replying to a top-level reply attaches
+  // the new reply to it directly, but replying to an already-nested reply
+  // attaches the new reply to that reply's top-level parent instead.
 
-  const handleReplyTo = ({ id, author }) => {
-    setReplyingTo({ id, author });
+  const handleReplyTo = ({ id, author, parentId }) => {
+    const attachToId = parentId ?? id;
+    setReplyingTo({ id: attachToId, author });
+    setReplyText(`@${author} `);
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
@@ -326,8 +323,9 @@ export default function ThreadDetailScreen({
     ]);
   };
 
-  const upvoteCount = Number(thread?.upvotes?.[0]?.count ?? 0);
-  const author      = thread?.profiles?.username || 'Anonymous';
+  const upvoteCount     = Number(thread?.upvotes?.[0]?.count ?? 0);
+  const author          = thread?.profiles?.username || 'Anonymous';
+  const isThreadStylist = !!thread?.profiles?.is_stylist;
 
   if (!thread) return null;
 
@@ -369,7 +367,10 @@ export default function ThreadDetailScreen({
           {/* ── Thread post ── */}
           <View style={styles.post}>
             <View style={styles.postMeta}>
-              <Text style={styles.postAuthor}>@{author}</Text>
+              <View style={styles.postAuthorRow}>
+                {isThreadStylist && <Scissors size={13} color={OCHRE} style={{ marginRight: 4 }} />}
+                <Text style={styles.postAuthor}>@{author}</Text>
+              </View>
               {thread.category ? (
                 <View style={styles.categoryTag}>
                   <Text style={styles.categoryTagText}>{thread.category}</Text>
@@ -377,17 +378,17 @@ export default function ThreadDetailScreen({
               ) : null}
             </View>
             <Text style={styles.postTitle}>{thread.title}</Text>
-            <Text style={styles.postBody}>{thread.body}</Text>
+            <HashtagText text={thread.body} style={styles.postBody} />
             <View style={styles.postFooter}>
               <TouchableOpacity
                 style={styles.footerItem}
                 onPress={handleThreadUpvote}
                 disabled={toggling || !user}
               >
-                <Ionicons
-                  name={isThreadUpvoted ? 'heart' : 'heart-outline'}
+                <Heart
                   size={15}
-                  color={HONEY}
+                  color={isThreadUpvoted ? HEART_FILLED : HEART_OUTLINE}
+                  fill={isThreadUpvoted ? HEART_FILLED : 'transparent'}
                 />
                 <Text style={[styles.footerText, isThreadUpvoted && styles.footerTextActive]}>
                   {upvoteCount}
@@ -399,7 +400,6 @@ export default function ThreadDetailScreen({
           </View>
 
           {/* ── Replies ── */}
-          <View style={styles.divider} />
           <View style={styles.repliesSection}>
             <Text style={styles.repliesHeading}>
               {replies.length} {replies.length === 1 ? 'Reply' : 'Replies'}
@@ -410,22 +410,45 @@ export default function ThreadDetailScreen({
             ) : replies.length === 0 ? (
               <Text style={styles.noReplies}>Be the first to reply!</Text>
             ) : (
-              replyTree.map(r => (
-                <ReplyNode
-                  key={`reply-${r.id}`}
-                  reply={r}
-                  depth={0}
-                  upvotedIds={upvotedReplyIds}
-                  onUpvoteToggle={handleReplyUpvoteToggle}
-                  currentUserId={user?.id}
-                  onDelete={handleDeleteReply}
-                  newReplyId={newReplyId}
-                  highlightAnim={highlightAnim}
-                  onReply={handleReplyTo}
-                  styles={styles}
-                  colors={colors}
-                />
-              ))
+              topLevelReplies.map(r => {
+                const children = childrenByParent[r.id] || [];
+                return (
+                  <View key={`reply-${r.id}`}>
+                    <ReplyNode
+                      reply={r}
+                      upvotedIds={upvotedReplyIds}
+                      onUpvoteToggle={handleReplyUpvoteToggle}
+                      currentUserId={user?.id}
+                      onDelete={handleDeleteReply}
+                      newReplyId={newReplyId}
+                      highlightAnim={highlightAnim}
+                      onReply={handleReplyTo}
+                      styles={styles}
+                      colors={colors}
+                    />
+                    {children.length > 0 && (
+                      <View style={styles.nestedBlock}>
+                        {children.map(child => (
+                          <ReplyNode
+                            key={`reply-${child.id}`}
+                            reply={child}
+                            nested
+                            upvotedIds={upvotedReplyIds}
+                            onUpvoteToggle={handleReplyUpvoteToggle}
+                            currentUserId={user?.id}
+                            onDelete={handleDeleteReply}
+                            newReplyId={newReplyId}
+                            highlightAnim={highlightAnim}
+                            onReply={handleReplyTo}
+                            styles={styles}
+                            colors={colors}
+                          />
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                );
+              })
             )}
           </View>
         </ScrollView>
@@ -435,7 +458,7 @@ export default function ThreadDetailScreen({
           {replyingTo && (
             <View style={styles.replyingToRow}>
               <Text style={styles.replyingToText}>Replying to @{replyingTo.author}</Text>
-              <TouchableOpacity onPress={() => setReplyingTo(null)}>
+              <TouchableOpacity onPress={() => { setReplyingTo(null); setReplyText(''); }}>
                 <Ionicons name="close" size={14} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
@@ -445,7 +468,7 @@ export default function ThreadDetailScreen({
               ref={inputRef}
               style={styles.input}
               placeholder={user ? 'Add your reply...' : 'Sign in to reply'}
-              placeholderTextColor={colors.placeholder}
+              placeholderTextColor={GREY_MUTED}
               value={replyText}
               onChangeText={setReplyText}
               multiline
@@ -513,35 +536,44 @@ const makeStyles = (c) => StyleSheet.create({
 
   // ── Thread post ──
   post: {
-    paddingHorizontal: 18, paddingTop: 18, paddingBottom: 20,
-    borderBottomWidth: 1, borderBottomColor: '#f0ece8',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
   postMeta: {
     flexDirection: 'row', alignItems: 'center',
     justifyContent: 'space-between', marginBottom: 10,
   },
-  postAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: HONEY },
-  categoryTag: { backgroundColor: '#f5f0eb', borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
-  categoryTagText: { fontSize: 11, color: '#9c6b3c', fontFamily: 'Figtree_500Medium' },
+  postAuthorRow: { flexDirection: 'row', alignItems: 'center' },
+  postAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: OCHRE },
+  categoryTag: { alignSelf: 'flex-start', backgroundColor: '#F0EAE0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  categoryTagText: { fontSize: 12, color: '#7A5C2E', fontFamily: 'Figtree_600SemiBold' },
   postTitle: { fontSize: 19, fontFamily: 'Figtree_700Bold', color: c.text, lineHeight: 26, marginBottom: 10 },
   postBody: { fontSize: 14, color: c.textSecondary, lineHeight: 21, marginBottom: 16 },
   postFooter: { flexDirection: 'row', alignItems: 'center' },
   footerItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   footerText: { fontSize: 13, color: c.textMuted, marginLeft: 3 },
-  footerTextActive: { color: HONEY, fontFamily: 'Figtree_600SemiBold' },
+  footerTextActive: { color: HEART_FILLED, fontFamily: 'Figtree_600SemiBold' },
   dot: { color: c.border, marginHorizontal: 8, fontSize: 12 },
-  divider: { height: 1, backgroundColor: '#f0ece8' },
 
   // ── Replies section ──
-  repliesSection: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 12 },
-  repliesHeading: { fontSize: 15, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 4 },
-  noReplies: { color: c.textMuted, fontSize: 14, marginTop: 20, textAlign: 'center' },
+  repliesSection: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 12 },
+  repliesHeading: { fontSize: 16, fontFamily: 'Figtree_700Bold', color: c.text, marginTop: 16, marginBottom: 12 },
+  noReplies: { color: GREY_MUTED, fontSize: 14, marginTop: 20, textAlign: 'center' },
 
   // ── Reply card ──
   replyCard: {
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: c.borderLight,
+    borderTopColor: '#F0EAE0',
   },
   replyCardNested: {
     borderTopWidth: 0,
@@ -557,32 +589,23 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center', marginBottom: 6,
   },
   replyHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  replyAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: HONEY },
-  replyTime: { fontSize: 11, color: c.textMuted },
+  replyAuthorRow: { flexDirection: 'row', alignItems: 'center' },
+  replyAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: OCHRE },
+  replyTime: { fontSize: 12, color: c.textMuted },
   deleteBtn: { padding: 2 },
-  replyBody: { fontSize: 14, color: c.text, lineHeight: 20, marginBottom: 10 },
+  replyBody: { fontSize: 14, color: '#1A1A1A', lineHeight: 20, marginTop: 4, marginBottom: 10 },
   replyFooter: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   replyUpvote: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   replyUpvoteText: { fontSize: 13, color: c.textMuted, marginLeft: 3 },
-  replyUpvoteActive: { color: HONEY, fontFamily: 'Figtree_600SemiBold' },
-  replyLink: { fontSize: 13, color: c.textMuted, fontFamily: 'Figtree_500Medium' },
+  replyUpvoteActive: { color: HEART_FILLED, fontFamily: 'Figtree_600SemiBold' },
+  replyLink: { fontSize: 13, color: GREY_MUTED, fontFamily: 'Figtree_500Medium', marginLeft: 12 },
 
   // ── Nesting ──
   nestedBlock: {
-    marginLeft: 16,
-    paddingLeft: 12,
+    paddingLeft: 20,
     borderLeftWidth: 2,
     borderLeftColor: NEST_LINE,
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  nestedBlockRoot: {
-    marginLeft: 0,
-    paddingLeft: 16,
-  },
-  nestedBlockDeep: {
-    marginLeft: 8,
-    paddingLeft: 10,
+    marginTop: 6,
   },
 
   // ── Replying-to chip ──
@@ -604,15 +627,15 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 14, paddingTop: 10, gap: 10,
   },
   input: {
-    flex: 1, backgroundColor: '#f5f0eb', borderRadius: 22,
+    flex: 1, backgroundColor: '#EDEDED', borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 10,
     fontSize: 14, color: c.text, maxHeight: 100,
   },
   postBtn: {
-    backgroundColor: BRAND, borderRadius: 22,
-    paddingHorizontal: 18, paddingVertical: 10,
+    backgroundColor: OCHRE, borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 10,
     minWidth: 56, alignItems: 'center',
   },
-  postBtnDisabled: { backgroundColor: '#ccc' },
+  postBtnDisabled: { backgroundColor: '#D1D1D1' },
   postBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
 });

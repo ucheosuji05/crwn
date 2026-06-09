@@ -6,15 +6,19 @@ import {
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Plus, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import ThreadCard from './ThreadCard';
 import SearchBar from './SearchBar';
-import { useUnreadMessages } from '../hooks/useUnreadMessages';
+import CreatePostMenu from './CreatePostMenu';
 import { useTheme } from '../context/ThemeContext';
 import { HEADER_BAR_HEIGHT } from './ScreenHeader';
 
-const FILTERS =['All', 'Low Porosity', 'High Porosity', 'Protective Styles', 'Styling Tips', 'Beginner'];
+const FILTERS = [
+  'All', 'Hair Health', 'Product Recs', 'Styling Tips',
+  'Beginner', 'Protective Styles', 'Growth & Retention',
+];
 
 export default function ThreadList({
   threads = [],
@@ -27,13 +31,13 @@ export default function ThreadList({
   onCreatePress,
 }) {
   const navigation = useNavigation();
-  const unreadCount = useUnreadMessages();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
+  const [createMenuOpen, setCreateMenuOpen] = useState(false);
 
   const toggleSearch = useCallback(() => {
     if (searchOpen) {
@@ -53,37 +57,6 @@ export default function ThreadList({
       return matchesCategory && matchesSearch;
     });
   }, [threads, activeFilter, search]);
-
-  const ListHeader = (
-    <>
-      {searchOpen && (
-        <SearchBar
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search discussions..."
-          autoFocus
-        />
-      )}
-      <FlatList
-        horizontal
-        data={FILTERS}
-        keyExtractor={(f) => f}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.filterList}
-        renderItem={({ item }) => {
-          const active = item === activeFilter;
-          return (
-            <TouchableOpacity
-              style={[styles.filterChip, active && styles.filterChipActive]}
-              onPress={() => setActiveFilter(item)}
-            >
-              <Text style={[styles.filterText, active && styles.filterTextActive]}>{item}</Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-    </>
-  );
 
   const renderEmpty = () => {
     if (loading) return null;
@@ -110,32 +83,78 @@ export default function ThreadList({
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
       <View style={styles.header}>
-        <Pressable
-          style={styles.headerIcon}
-          onPress={toggleSearch}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons
-            name={searchOpen ? 'close-outline' : 'search-outline'}
-            size={22}
-            color={colors.text}
-          />
-        </Pressable>
-
-        <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>
-
-        <TouchableOpacity
-          style={styles.headerIcon}
-          onPress={() => navigation.navigate('Messaging')}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
-          {unreadCount > 0 && (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+        {searchOpen ? (
+          <>
+            <View style={styles.searchRow}>
+              <Pressable
+                style={styles.searchToggleBtn}
+                onPress={toggleSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-outline" size={22} color={colors.text} />
+              </Pressable>
+              <View style={styles.searchBarWrap}>
+                <SearchBar
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder="Search discussions..."
+                  autoFocus
+                  containerStyle={styles.searchBarContainer}
+                />
+              </View>
             </View>
-          )}
-        </TouchableOpacity>
+
+            <View style={styles.chipsRow}>
+              <FlatList
+                horizontal
+                data={FILTERS}
+                keyExtractor={(f) => f}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterList}
+                renderItem={({ item }) => {
+                  const active = item === activeFilter;
+                  return (
+                    <TouchableOpacity
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      onPress={() => setActiveFilter(item)}
+                    >
+                      <Text style={[styles.filterText, active && styles.filterTextActive]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                }}
+              />
+            </View>
+          </>
+        ) : (
+          <View style={styles.chipsRow}>
+            <Pressable
+              style={styles.searchToggleBtn}
+              onPress={toggleSearch}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="search-outline" size={22} color={colors.text} />
+            </Pressable>
+            <FlatList
+              horizontal
+              data={FILTERS}
+              keyExtractor={(f) => f}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterList}
+              style={styles.filterFlatList}
+              renderItem={({ item }) => {
+                const active = item === activeFilter;
+                return (
+                  <TouchableOpacity
+                    style={[styles.filterChip, active && styles.filterChipActive]}
+                    onPress={() => setActiveFilter(item)}
+                  >
+                    <Text style={[styles.filterText, active && styles.filterTextActive]}>{item}</Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        )}
       </View>
 
       {loading && threads.length === 0 ? (
@@ -154,7 +173,6 @@ export default function ThreadList({
               onPress={() => onThreadPress?.(item)}
             />
           )}
-          ListHeaderComponent={ListHeader}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmpty}
@@ -164,14 +182,34 @@ export default function ThreadList({
         />
       )}
 
-      <TouchableOpacity style={styles.fab} onPress={onCreatePress}>
-        <LinearGradient
-          colors={['#5D1F1F', '#C8835A']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={StyleSheet.absoluteFill}
-        />
-        <Ionicons name="add" size={28} color="#fff" />
+      <CreatePostMenu
+        visible={createMenuOpen}
+        onClose={() => setCreateMenuOpen(false)}
+        onSelectExplore={() => {
+          setCreateMenuOpen(false);
+          navigation.navigate('CreatePost');
+        }}
+        onSelectCommunity={() => {
+          setCreateMenuOpen(false);
+          onCreatePress?.();
+        }}
+      />
+
+      <TouchableOpacity style={styles.fab} onPress={() => setCreateMenuOpen((open) => !open)} activeOpacity={0.85}>
+        {createMenuOpen ? (
+          <View style={styles.fabClose}>
+            <X size={24} color="#5D1F1F" strokeWidth={2.5} />
+          </View>
+        ) : (
+          <LinearGradient
+            colors={['#5D1F1F', '#7D3F1D', '#B35D2B']}
+            locations={[0, 0.5, 1]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        {!createMenuOpen && <Plus size={24} color="#fff" strokeWidth={2} />}
       </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -179,58 +217,52 @@ export default function ThreadList({
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: c.surface },
+  safe: { flex: 1, backgroundColor: '#FCFCFC' },
   header: {
-    height: HEADER_BAR_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.hairline,
-    backgroundColor: c.surface,
+    minHeight: HEADER_BAR_HEIGHT,
+    backgroundColor: '#FCFCFC',
   },
-  headerLogo: {
-    fontSize: 24,
-    fontFamily: 'LibreBaskerville_700Bold',
-    color: c.text,
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
-  },
-  headerIcon: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: c.primary,
+  searchToggleBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 3,
   },
-  badgeText: { color: '#fff', fontSize: 9, fontFamily: 'Figtree_700Bold', lineHeight: 12 },
-  filterList: { paddingHorizontal: 14, paddingVertical: 10, gap: 8 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14 },
+  searchBarWrap: { flex: 1 },
+  searchBarContainer: { marginLeft: 6, marginRight: 14, marginVertical: 8 },
+  filterFlatList: { flex: 1 },
+  chipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: HEADER_BAR_HEIGHT,
+    paddingLeft: 14,
+  },
+  filterList: { paddingLeft: 6, paddingVertical: 10, paddingRight: 14, gap: 8, alignItems: 'center' },
   filterChip: {
-    borderRadius: 20,
+    borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: c.surface,
-    borderWidth: 1,
-    borderColor: c.border,
+    paddingVertical: 7,
+    backgroundColor: '#F1EEE8',
   },
-  filterChipActive: { backgroundColor: c.selected, borderColor: c.selected },
-  filterText: { fontSize: 13, color: c.textSecondary, fontFamily: 'Figtree_500Medium' },
-  filterTextActive: { color: c.isDark ? '#111' : '#fff', fontFamily: 'Figtree_600SemiBold' },
-  listContent: { paddingBottom: 100 },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 60 },
-  centerMessage: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  centerText: { color: c.textMuted, fontSize: 15 },
+  filterChipActive: { backgroundColor: '#5D1F1F' },
+  filterText: { fontSize: 13, fontWeight: '500', color: '#5E5E5E' },
+  filterTextActive: { color: '#fff' },
+  listContent: { paddingBottom: 100, flexGrow: 1 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  centerMessage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  centerText: { color: c.textMuted, fontSize: 15, fontFamily: 'Figtree_500Medium' },
   retryBtn: { marginTop: 4, paddingHorizontal: 20, paddingVertical: 8, backgroundColor: c.primary, borderRadius: 20 },
   retryText: { color: '#fff', fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
+  fabClose: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#fff',
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#F0EAE0',
+  },
   fab: {
     position: 'absolute',
     bottom: 28,
@@ -241,6 +273,7 @@ const makeStyles = (c) => StyleSheet.create({
     overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 50,
     shadowColor: '#5D1F1F',
     shadowOpacity: 0.35,
     shadowRadius: 8,

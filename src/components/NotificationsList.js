@@ -6,6 +6,7 @@ import {
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Scissors } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
@@ -18,7 +19,7 @@ import ScreenHeader from './ScreenHeader';
 // ── Type configs ──────────────────────────────────────────────────────────────
 
 const SOCIAL_TYPE_CONFIG = {
-  like:    { icon: 'heart',           color: '#ef4444' },
+  like:    { icon: 'heart',           color: '#F27C7C' },
   crown:   { icon: 'star',            color: '#F8B430' },
   comment: { icon: 'chatbubble',      color: null },
   reply:   { icon: 'chatbubble-ellipses', color: null },
@@ -214,7 +215,7 @@ export default function NotificationsList({ panelMode = false }) {
       case 'crown':
         // Someone liked/crowned a post → open that post
         if (item.post_id) {
-          navigation.navigate('PostDetail', { postId: item.post_id });
+          navigation.push('PostDetail', { postId: item.post_id });
         } else if (item.actor?.id) {
           navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
         }
@@ -223,7 +224,7 @@ export default function NotificationsList({ panelMode = false }) {
       case 'comment':
         // Someone commented on a post → open post with comments expanded
         if (item.post_id) {
-          navigation.navigate('PostDetail', { postId: item.post_id, openComments: true });
+          navigation.push('PostDetail', { postId: item.post_id, openComments: true });
         } else if (item.thread_id) {
           navigation.navigate('Community', { screen: 'Community', params: { openThreadId: item.thread_id } });
         } else if (item.actor?.id) {
@@ -234,7 +235,7 @@ export default function NotificationsList({ panelMode = false }) {
       case 'reply':
         // Someone replied to a comment on a post → open post with comments expanded
         if (item.post_id) {
-          navigation.navigate('PostDetail', { postId: item.post_id, openComments: true });
+          navigation.push('PostDetail', { postId: item.post_id, openComments: true });
         } else if (item.thread_id) {
           navigation.navigate('Community', { openThreadId: item.thread_id });
         } else if (item.actor?.id) {
@@ -252,7 +253,7 @@ export default function NotificationsList({ panelMode = false }) {
       default:
         // Fallback: open actor profile or the post if we have one
         if (item.post_id) {
-          navigation.navigate('PostDetail', { postId: item.post_id });
+          navigation.push('PostDetail', { postId: item.post_id });
         } else if (item.actor?.id) {
           navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
         }
@@ -295,7 +296,7 @@ export default function NotificationsList({ panelMode = false }) {
               <Image source={{ uri: actorAvatar }} style={styles.avatar} />
             ) : (
               <View style={[styles.avatarPlaceholder, { backgroundColor: colors.border }]}>
-                <Ionicons name="cut" size={22} color={colors.textMuted} />
+                <Scissors size={22} color={colors.textMuted} strokeWidth={1.5} />
               </View>
             )}
             <View style={[styles.badge, { backgroundColor: cfg.color, borderColor: colors.surface }]}>
