@@ -52,6 +52,10 @@ export async function clearAuthToken() {
   await AsyncStorage.removeItem(TOKEN_KEY);
 }
 
+export function getAuthToken() {
+  return cachedToken;
+}
+
 // Call this before the first getSession() to ensure the token is ready
 export function initAuth() {
   return tokenLoaded;

@@ -171,6 +171,117 @@ app.get('/api/auth/mobile-callback', (req, res) => {
   res.redirect(`crwn://auth/callback?token=${encodeURIComponent(token)}`);
 });
 
+// ── Shared helpers ────────────────────────────────────────────────────────────
+
+async function getSessionUserId(req) {
+  const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim();
+  if (!token) return null;
+  try {
+    const data = await auth.api.getSession({ headers: { authorization: `Bearer ${token}` } });
+    return data?.user?.id || null;
+  } catch {
+    return null;
+  }
+}
+
+const SUPABASE_URL = 'https://iyfpmxejxgxypjnoivyz.supabase.co';
+function supabaseAdminHeaders() {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' };
+}
+
+// ── Thread upvotes ─────────────────────────────────────────────────────────────
+// Client uses anon key (no session) so auth.uid() is null and RLS blocks
+// all thread_upvotes writes. These endpoints use the service role key.
+
+// Get thread IDs the current user has upvoted
+app.get('/api/threads/upvotes', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.json({ ids: [] });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/thread_upvotes?user_id=eq.${userId}&select=thread_id`,
+      { headers: supabaseAdminHeaders() }
+    );
+    const rows = await r.json();
+    return res.json({ ids: Array.isArray(rows) ? rows.map(row => row.thread_id) : [] });
+  } catch {
+    return res.json({ ids: [] });
+  }
+});
+
+// Add upvote
+app.post('/api/threads/:threadId/upvote', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/thread_upvotes`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, thread_id: req.params.threadId }),
+    });
+    if (!r.ok && r.status !== 409) return res.status(r.status).json({ message: 'Failed to upvote' });
+    return res.json({ success: true });
+  } catch {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Remove upvote
+app.delete('/api/threads/:threadId/upvote', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/thread_upvotes?user_id=eq.${userId}&thread_id=eq.${req.params.threadId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Post delete ────────────────────────────────────────────────────────────────
+// Supabase client uses anon key with no session so auth.uid() is null and RLS
+// blocks client-side deletes silently. Service role key bypasses RLS;
+// ownership is verified against the Better Auth session.
+app.delete('/api/posts/:postId', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { postId } = req.params;
+  const h = supabaseAdminHeaders();
+
+  try {
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/posts?id=eq.${postId}&user_id=eq.${userId}&select=id`,
+      { headers: h }
+    );
+    const owned = await checkRes.json();
+    if (!Array.isArray(owned) || owned.length === 0) {
+      return res.status(403).json({ message: 'Post not found or not yours' });
+    }
+
+    await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/post_media?post_id=eq.${postId}`, { method: 'DELETE', headers: h }),
+      fetch(`${SUPABASE_URL}/rest/v1/likes?post_id=eq.${postId}`, { method: 'DELETE', headers: h }),
+      fetch(`${SUPABASE_URL}/rest/v1/comments?post_id=eq.${postId}`, { method: 'DELETE', headers: h }),
+      fetch(`${SUPABASE_URL}/rest/v1/bookmarks?post_id=eq.${postId}`, { method: 'DELETE', headers: h }),
+    ]);
+
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/posts?id=eq.${postId}&user_id=eq.${userId}`,
+      { method: 'DELETE', headers: h }
+    );
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('Delete post error:', err);
+    return res.status(500).json({ message: 'Failed to delete post' });
+  }
+});
+
 // Better Auth handles all /api/auth/* routes
 app.all('/api/auth/*', toNodeHandler(auth));
 

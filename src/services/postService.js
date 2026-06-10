@@ -1,5 +1,8 @@
 import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
+import { getAuthToken } from '../lib/auth-client';
+
+const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
 
 export const postService = {
   // Get all posts (for Explore page)
@@ -161,21 +164,26 @@ export const postService = {
     }
   },
 
-  // Delete post
-  async deletePost(postId, userId) {
-    // Delete related rows first to avoid FK violations if CASCADE isn't set
-    await supabase.from('post_media').delete().eq('post_id', postId);
-    await supabase.from('likes').delete().eq('post_id', postId);
-    await supabase.from('comments').delete().eq('post_id', postId);
-    await supabase.from('bookmarks').delete().eq('post_id', postId);
+  // Delete post — routed through the server so the service role key bypasses
+  // Supabase RLS (anon client has no session, so auth.uid() would be null).
+  async deletePost(postId) {
+    const token = getAuthToken();
+    if (!token) return { error: { message: 'Not authenticated' } };
 
-    const { error } = await supabase
-      .from('posts')
-      .delete()
-      .eq('id', postId)
-      .eq('user_id', userId);
-
-    return { error };
+    try {
+      const res = await fetch(`${AUTH_URL}/api/posts/${encodeURIComponent(postId)}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return { error: { message: body.message || 'Delete failed' } };
+      return { error: null };
+    } catch (err) {
+      return { error: { message: err.message || 'Network error' } };
+    }
   },
 
   // Update post

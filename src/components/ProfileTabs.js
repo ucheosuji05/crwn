@@ -227,25 +227,20 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { profile: authProfile } = useAuth();
   const isOwnStylist = isOwnProfile && !!authProfile?.is_stylist;
-  const { posts, loading, refresh, deletePost } = usePosts(viewedUserId);
+  const { posts, loading, refresh, silentRefetch, deletePost } = usePosts(viewedUserId);
 
-  // Refresh posts whenever the profile screen regains focus (e.g. returning
-  // from PostDetail after a delete)
+  // When returning to the profile (e.g. after PostDetail deletes a post),
+  // silently re-sync without a loading spinner — realtime already removed
+  // the deleted post from state instantly; this confirms nothing else changed.
   useEffect(() => {
-    const unsub = navigation.addListener('focus', refresh);
+    const unsub = navigation.addListener('focus', silentRefetch);
     return unsub;
-  }, [navigation, refresh]);
+  }, [navigation, silentRefetch]);
 
   // ── Masonry grid renderers (mirrors ExploreScreen's masonry feed) ───────────
   const openPost = (item) => {
     if (Platform.OS !== 'web') {
-      // Tag the origin profile so PostDetail's back arrow can return here
-      // directly. Use push (not navigate) so opening a post always slides
-      // in from the right, even if a PostDetail instance is already on the stack.
-      navigation.push('PostDetail', {
-        postId: item.id,
-        profileOrigin: { userId: viewedUserId, isStylist: isViewedStylist },
-      });
+      navigation.push('PostDetail', { postId: item.id });
     } else {
       setSelectedPost(item);
     }

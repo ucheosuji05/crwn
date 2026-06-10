@@ -35,22 +35,9 @@ function getTimeAgo(dateString) {
 }
 
 export default function PostDetailScreen({ route, navigation }) {
-  const { postId, openComments = false, profileOrigin } = route?.params ?? {};
+  const { postId, openComments = false } = route?.params ?? {};
 
-  // When opened from a profile's posts grid, return there directly —
-  // `navigate` pops to the existing route instead of an indeterminate
-  // goBack() that could otherwise land back on the Explore feed.
-  const goBack = () => {
-    if (profileOrigin?.userId) {
-      if (profileOrigin.isStylist) {
-        navigation.navigate('StylistProfile', { stylist: { id: profileOrigin.userId } });
-      } else {
-        navigation.navigate('UserProfile', { viewedUserId: profileOrigin.userId });
-      }
-    } else {
-      navigation.goBack();
-    }
-  };
+  const goBack = () => navigation.goBack();
 
   const { colors } = useTheme();
   const { user, profile: currentUserProfile } = useAuth();
@@ -265,7 +252,7 @@ export default function PostDetailScreen({ route, navigation }) {
     setMenuVisible(false);
     const doDelete = async () => {
       setDeleting(true);
-      const { error } = await postService.deletePost(post.id, user.id);
+      const { error } = await postService.deletePost(post.id);
       setDeleting(false);
       if (error) Alert.alert('Error', 'Failed to delete post');
       else goBack();

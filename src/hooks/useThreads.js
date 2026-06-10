@@ -26,7 +26,7 @@ export const useThreads = () => {
 
     const [threadsResult, upvotesResult] = await Promise.all([
       threadService.getThreads(),
-      user ? threadService.getUpvotedThreadIds(user.id) : Promise.resolve({ ids: [] }),
+      threadService.getUpvotedThreadIds(),
     ]);
 
     if (threadsResult.error) {
@@ -44,7 +44,7 @@ export const useThreads = () => {
   const silentRefetch = useCallback(async () => {
     const [threadsResult, upvotesResult] = await Promise.all([
       threadService.getThreads(),
-      user ? threadService.getUpvotedThreadIds(user.id) : Promise.resolve({ ids: [] }),
+      threadService.getUpvotedThreadIds(),
     ]);
     if (!threadsResult.error) setThreads(threadsResult.data || []);
     setUpvotedIds(new Set(upvotesResult.ids || []));

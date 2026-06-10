@@ -1,4 +1,19 @@
 import { supabase } from '../config/supabase';
+import { getAuthToken } from '../lib/auth-client';
+
+const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
+
+async function authedFetch(path, options = {}) {
+  const token = getAuthToken();
+  return fetch(`${AUTH_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}
 
 export const threadService = {
 
@@ -101,34 +116,34 @@ export const threadService = {
    * Returns all thread IDs the user has upvoted.
    * Used to hydrate upvote state for a list of threads in one query.
    */
-  async getUpvotedThreadIds(userId) {
-    const { data, error } = await supabase
-      .from('thread_upvotes')
-      .select('thread_id')
-      .eq('user_id', userId);
-
-    const ids = (data || []).map((row) => row.thread_id);
-    return { ids, error };
+  async getUpvotedThreadIds() {
+    try {
+      const res = await authedFetch('/api/threads/upvotes');
+      const body = await res.json().catch(() => ({ ids: [] }));
+      return { ids: body.ids || [], error: null };
+    } catch {
+      return { ids: [], error: null };
+    }
   },
 
   async upvoteThread(userId, threadId) {
-    const { data, error } = await supabase
-      .from('thread_upvotes')
-      .insert([{ user_id: userId, thread_id: threadId }])
-      .select()
-      .single();
-
-    return { data, error };
+    try {
+      const res = await authedFetch(`/api/threads/${encodeURIComponent(threadId)}/upvote`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      return { data: null, error: res.ok ? null : { message: body.message || 'Failed to upvote' } };
+    } catch (err) {
+      return { data: null, error: { message: err.message } };
+    }
   },
 
   async removeThreadUpvote(userId, threadId) {
-    const { error } = await supabase
-      .from('thread_upvotes')
-      .delete()
-      .eq('user_id', userId)
-      .eq('thread_id', threadId);
-
-    return { error };
+    try {
+      const res = await authedFetch(`/api/threads/${encodeURIComponent(threadId)}/upvote`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to remove upvote' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 
   // ─────────────────────────────────────────────
