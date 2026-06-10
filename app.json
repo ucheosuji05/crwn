@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "CRWN MVP",
+    "owner": "crwn-team",
     "slug": "crwn-mvp",
     "privacy": "public",
     "platforms": [
