@@ -82,6 +82,16 @@ export const AuthProvider = ({ children }) => {
     setSession(null);
   }, []);
 
+  // Re-reads the session from storage and syncs it into context — used after
+  // flows that create a session via authService directly (e.g. onboarding signup)
+  // without going through this hook's signUp.
+  const refreshSession = useCallback(async () => {
+    const { data } = await authClient.getSession();
+    setSession(data?.session || null);
+    setUser(data?.user || null);
+    return data;
+  }, []);
+
   const value = {
     user,
     session,
@@ -93,6 +103,7 @@ export const AuthProvider = ({ children }) => {
     signInWithGoogle,
     signInWithInstagram,
     clearAuth,
+    refreshSession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
 import {
   LibreBaskerville_400Regular,
+  LibreBaskerville_400Regular_Italic,
   LibreBaskerville_700Bold,
 } from '@expo-google-fonts/libre-baskerville';
 import {
@@ -105,7 +106,10 @@ function AppContent() {
     }
     return (
       <OnboardingScreen
-        onDone={() => AsyncStorage.setItem('onboarded', 'true')}
+        onDone={async () => {
+          await AsyncStorage.setItem('onboarded', 'true');
+          setHasOnboarded(true);
+        }}
         onSignIn={() => setHasOnboarded(true)}
       />
     );
@@ -129,6 +133,7 @@ function AppContent() {
 export default function App() {
   const [fontsLoaded] = useFonts({
     LibreBaskerville_400Regular,
+    LibreBaskerville_400Regular_Italic,
     LibreBaskerville_700Bold,
     Figtree_400Regular,
     Figtree_500Medium,

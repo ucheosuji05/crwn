@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, Image, FlatList, StyleSheet,
-  TouchableOpacity, RefreshControl, ActivityIndicator,
+  TouchableOpacity, Pressable, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Scissors } from 'lucide-react-native';
+import { Scissors, UserPlus } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
@@ -14,25 +14,29 @@ import { useUnreadCount } from '../context/UnreadCountContext';
 import { notificationService } from '../services/notificationService';
 import { bookingService } from '../services/bookingService';
 import { supabase } from '../config/supabase';
-import ScreenHeader from './ScreenHeader';
+import { HEADER_BAR_HEIGHT } from './ScreenHeader';
+import SearchBar from './SearchBar';
 
 // ── Type configs ──────────────────────────────────────────────────────────────
 
+// Shared cream badge background for social notification-type icons
+const SOCIAL_BADGE_BG = '#E8DDD0';
+
 const SOCIAL_TYPE_CONFIG = {
-  like:    { icon: 'heart',           color: '#F27C7C' },
-  crown:   { icon: 'star',            color: '#F8B430' },
-  comment: { icon: 'chatbubble',      color: null },
-  reply:   { icon: 'chatbubble-ellipses', color: null },
-  follow:  { icon: 'person-add',      color: null },
+  like:    { icon: 'heart',               color: '#F27C7C', iconSize: 9  },
+  crown:   { icon: 'star',                color: '#F8B430', iconSize: 11 },
+  comment: { icon: 'chatbubble-ellipses', color: '#8E683B', iconSize: 11 },
+  reply:   { icon: 'chatbubble-ellipses', color: '#8E683B', iconSize: 11 },
+  follow:  { lucideIcon: UserPlus,        color: '#8E683B', iconSize: 11 },
 };
 
 const BOOKING_TYPE_CONFIG = {
-  booking_confirmed:   { icon: 'checkmark-circle', color: '#22c55e', label: 'Confirmed'   },
-  booking_declined:    { icon: 'close-circle',      color: '#ef4444', label: 'Declined'    },
-  booking_cancelled:   { icon: 'close-circle',      color: '#ef4444', label: 'Cancelled'   },
-  booking_rescheduled: { icon: 'calendar',          color: '#f59e0b', label: 'Rescheduled' },
-  booking_request:     { icon: 'calendar-outline',  color: '#C8835A', label: 'New Request' },
-  booking_completed:   { icon: 'ribbon-outline',     color: '#F8B430', label: 'Rate Experience' },
+  booking_confirmed:   { icon: 'checkmark-circle', bg: '#3F523F', title: 'Booking Confirmed' },
+  booking_declined:    { icon: 'close-circle',     bg: '#C0392B', title: 'Booking Update' },
+  booking_cancelled:   { icon: 'close-circle',     bg: '#C0392B', title: 'Booking Update' },
+  booking_rescheduled: { icon: 'calendar',         bg: '#f59e0b', title: 'Booking Update' },
+  booking_request:     { icon: 'calendar-outline', bg: '#C8835A', title: 'Booking Update' },
+  booking_completed:   { icon: 'ribbon-outline',   bg: '#F8B430', title: 'Booking Update' },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -64,7 +68,7 @@ export default function NotificationsList({ panelMode = false }) {
   const navigation = useNavigation();
   const { colors } = useTheme();
   const {
-    decrementNotif, decrementBookingNotif,
+    msgCount, decrementNotif, decrementBookingNotif,
     clearNotifs, clearBookingNotifs,
   } = useUnreadCount();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -72,6 +76,8 @@ export default function NotificationsList({ panelMode = false }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading]             = useState(true);
   const [refreshing, setRefreshing]       = useState(false);
+  const [searchOpen, setSearchOpen]       = useState(false);
+  const [query, setQuery]                 = useState('');
 
   // ── Fetch + merge both feeds ─────────────────────────────────────────────────
 
@@ -274,6 +280,23 @@ export default function NotificationsList({ panelMode = false }) {
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
+  // ── Search ───────────────────────────────────────────────────────────────────
+
+  const toggleSearch = () => {
+    if (searchOpen) setQuery('');
+    setSearchOpen(prev => !prev);
+  };
+
+  const filteredNotifications = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return notifications;
+    return notifications.filter(n => {
+      const actorName = (n.actor?.username || n.actor?.full_name || '').toLowerCase();
+      const text = `${n.title || ''} ${n.body || ''}`.toLowerCase();
+      return actorName.includes(q) || text.includes(q);
+    });
+  }, [notifications, query]);
+
   // ── Render item ──────────────────────────────────────────────────────────────
 
   const renderItem = ({ item }) => {
@@ -281,8 +304,7 @@ export default function NotificationsList({ panelMode = false }) {
 
     if (isBooking) {
       const cfg = BOOKING_TYPE_CONFIG[item.type] ?? BOOKING_TYPE_CONFIG.booking_confirmed;
-      const actorAvatar = item.actor?.avatar_url;
-      const actorName   = item.actor?.full_name || item.actor?.username;
+      const actorHandle = item.actor?.username ? `@${item.actor.username}` : item.actor?.full_name;
 
       return (
         <TouchableOpacity
@@ -290,28 +312,22 @@ export default function NotificationsList({ panelMode = false }) {
           onPress={() => handlePress(item)}
           activeOpacity={0.7}
         >
-          {/* Avatar area */}
+          {/* Icon area — booking notifications always show the scissors icon, not a profile photo */}
           <View style={styles.avatarWrap}>
-            {actorAvatar ? (
-              <Image source={{ uri: actorAvatar }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.border }]}>
-                <Scissors size={22} color={colors.textMuted} strokeWidth={1.5} />
-              </View>
-            )}
-            <View style={[styles.badge, { backgroundColor: cfg.color, borderColor: colors.surface }]}>
-              <Ionicons name={cfg.icon} size={10} color="#fff" />
+            <View style={[styles.avatarPlaceholder, { backgroundColor: SOCIAL_BADGE_BG }]}>
+              <Scissors size={22} color="#5D1F1F" strokeWidth={1.5} />
+            </View>
+            <View style={[styles.badge, { backgroundColor: cfg.bg, borderColor: '#fff' }]}>
+              <Ionicons name={cfg.icon} size={12} color="#fff" />
             </View>
           </View>
 
           {/* Text */}
           <View style={styles.textBlock}>
             <Text style={styles.message} numberOfLines={3}>
-              <Text style={[styles.actor, { color: cfg.color }]}>{item.title}</Text>
+              <Text style={styles.bookingTitle}>{cfg.title}</Text>
+              {actorHandle ? <Text style={styles.bookingWith}>{` with ${actorHandle}`}</Text> : null}
               {item.body ? `\n${item.body}` : ''}
-              {actorName ? (
-                <Text style={[styles.bookingFrom, { color: colors.textMuted }]}>{`\nFrom ${actorName}`}</Text>
-              ) : null}
             </Text>
             <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
           </View>
@@ -346,8 +362,12 @@ export default function NotificationsList({ panelMode = false }) {
               <Ionicons name="person" size={22} color={colors.textMuted} />
             </View>
           )}
-          <View style={[styles.badge, { backgroundColor: cfg.color ?? colors.primary, borderColor: colors.surface }]}>
-            <Ionicons name={cfg.icon} size={10} color="#fff" />
+          <View style={[styles.badge, { backgroundColor: SOCIAL_BADGE_BG, borderColor: '#fff' }]}>
+            {cfg.lucideIcon ? (
+              <cfg.lucideIcon size={cfg.iconSize} color={cfg.color} strokeWidth={2} />
+            ) : (
+              <Ionicons name={cfg.icon} size={cfg.iconSize} color={cfg.color} />
+            )}
           </View>
         </View>
 
@@ -374,7 +394,7 @@ export default function NotificationsList({ panelMode = false }) {
 
   const list = (
     <FlatList
-      data={notifications}
+      data={filteredNotifications}
       keyExtractor={item => `${item._source ?? 'n'}-${item.id}`}
       renderItem={renderItem}
       refreshControl={
@@ -405,16 +425,47 @@ export default function NotificationsList({ panelMode = false }) {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
-        <ScreenHeader
-          title="Notifications"
-          right={
-            unreadCount > 0 ? (
-              <TouchableOpacity onPress={handleMarkAllRead}>
-                <Text style={styles.markAll}>Mark all read</Text>
-              </TouchableOpacity>
-            ) : null
-          }
-        />
+        <View style={styles.header}>
+          <Pressable
+            style={styles.headerIcon}
+            onPress={toggleSearch}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.primary} />
+          </Pressable>
+
+          <Text style={styles.headerTitle} pointerEvents="none">Notifications</Text>
+
+          <TouchableOpacity
+            style={styles.headerIcon}
+            onPress={() => navigation.navigate('Messaging')}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="chatbubble-outline" size={22} color={colors.primary} />
+            {msgCount > 0 && (
+              <View style={styles.badgeCount}>
+                <Text style={styles.badgeCountText}>
+                  {msgCount > 9 ? '9+' : msgCount}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+
+        {searchOpen && (
+          <View style={styles.searchBarRow}>
+            <SearchBar value={query} onChangeText={setQuery} placeholder="Search notifications" autoFocus />
+          </View>
+        )}
+
+        {unreadCount > 0 && (
+          <View style={styles.markAllRow}>
+            <TouchableOpacity onPress={handleMarkAllRead}>
+              <Text style={styles.markAll}>Mark all read</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {list}
       </View>
     </SafeAreaView>
@@ -424,7 +475,68 @@ export default function NotificationsList({ panelMode = false }) {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeStyles = (c) => StyleSheet.create({
-  safe:    { flex: 1, backgroundColor: c.surface },
+  safe: { flex: 1, backgroundColor: c.surface },
+
+  // ── Header ──
+  header: {
+    height: HEADER_BAR_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.hairline,
+    backgroundColor: c.surface,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontFamily: 'LibreBaskerville_700Bold',
+    color: c.primary,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+  },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  badgeCount: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: c.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeCountText: {
+    color: '#fff',
+    fontSize: 9,
+    fontFamily: 'Figtree_700Bold',
+    lineHeight: 12,
+  },
+  searchBarRow: {
+    borderBottomWidth: 1,
+    borderBottomColor: c.borderLight,
+    backgroundColor: c.surface,
+  },
+
+  markAllRow: {
+    alignItems: 'flex-end',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: c.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.hairline,
+  },
   markAll: { fontSize: 13, color: c.primary, fontFamily: 'Figtree_600SemiBold' },
 
   row: {
@@ -452,7 +564,8 @@ const makeStyles = (c) => StyleSheet.create({
   textBlock:    { flex: 1 },
   message:      { fontSize: 14, color: c.text, lineHeight: 19, marginBottom: 3 },
   actor:        { fontFamily: 'Figtree_700Bold', color: c.primary },
-  bookingFrom:  { fontSize: 12 },
+  bookingTitle: { fontFamily: 'Figtree_700Bold', color: '#5D1F1F' },
+  bookingWith:  { color: '#5D1F1F' },
   time:         { fontSize: 12, color: c.textMuted },
 
   thumbnail:       { width: 48, height: 48, borderRadius: 8, backgroundColor: c.border },

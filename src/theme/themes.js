@@ -69,7 +69,7 @@ export const lightTheme = {
   inputBackground: '#f3f4f6',
   placeholder: '#9ca3af',
   danger: '#ef4444',
-  unread: '#fdf5f2',
+  unread: '#F5F0EA',
   overlay: 'rgba(0,0,0,0.5)',
   tabBar: '#FCFCFC',
   statusBar: 'dark-content',

@@ -13,6 +13,7 @@ import {
   Keyboard,
   Modal,
   RefreshControl,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Scissors, Plus, X } from 'lucide-react-native';
@@ -203,23 +204,74 @@ const topicStyles = StyleSheet.create({
   },
 });
 
-export function ImageWithFallback({ uri }) {
-  const [failed, setFailed] = useState(false);
+// Pulsing placeholder block — same look as the onboarding "styles loading" skeleton
+export function SkeletonPulse({ style }) {
   const { colors } = useTheme();
-  if (failed) {
+  const pulse = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.8, duration: 600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return <Animated.View style={[style, { backgroundColor: colors.border, opacity: pulse }]} />;
+}
+
+// Full-grid skeleton shown while the very first page of posts is loading
+const SKELETON_HEIGHTS = [220, 180, 200, 240, 190, 210, 230, 170];
+
+function ExploreSkeletonGrid({ styles }) {
+  const leftHeights = SKELETON_HEIGHTS.filter((_, i) => i % 2 === 0);
+  const rightHeights = SKELETON_HEIGHTS.filter((_, i) => i % 2 === 1);
+  return (
+    <View style={styles.skeletonRow}>
+      <View style={styles.skeletonCol}>
+        {leftHeights.map((h, i) => (
+          <SkeletonPulse key={`l${i}`} style={[styles.skeletonCard, { height: h }]} />
+        ))}
+      </View>
+      <View style={styles.skeletonCol}>
+        {rightHeights.map((h, i) => (
+          <SkeletonPulse key={`r${i}`} style={[styles.skeletonCard, { height: h }]} />
+        ))}
+      </View>
+    </View>
+  );
+}
+
+export function ImageWithFallback({ uri }) {
+  const [status, setStatus] = useState('loading'); // 'loading' | 'loaded' | 'failed'
+  const { colors } = useTheme();
+
+  useEffect(() => {
+    setStatus('loading');
+  }, [uri]);
+
+  if (status === 'failed') {
     return (
-      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.borderLight }]}>
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.borderLight }]}> 
         <Ionicons name="image-outline" size={28} color={colors.border} />
       </View>
     );
   }
+
   return (
-    <Image
-      source={{ uri }}
-      style={StyleSheet.absoluteFill}
-      resizeMode="cover"
-      onError={() => setFailed(true)}
-    />
+    <>
+      {status === 'loading' && <SkeletonPulse style={StyleSheet.absoluteFill} />}
+      <Image
+        source={{ uri }}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
+        onLoad={() => setStatus('loaded')}
+        onError={() => setStatus('failed')}
+      />
+    </>
   );
 }
 
@@ -577,9 +629,13 @@ export default function ExploreScreen() {
         }}
       >
         {/* Absolutely-positioned masonry canvas */}
-        <View style={[styles.masonryCanvas, { height: masonryLayout.totalHeight }]}>
-          {masonryLayout.items.map(renderMasonryItem)}
-        </View>
+        {loading && uniquePosts.length === 0 ? (
+          <ExploreSkeletonGrid styles={styles} />
+        ) : (
+          <View style={[styles.masonryCanvas, { height: masonryLayout.totalHeight }]}>
+            {masonryLayout.items.map(renderMasonryItem)}
+          </View>
+        )}
 
         {loadingMore && (
           <ActivityIndicator color={colors.primary} style={{ paddingVertical: 24 }} />
@@ -801,6 +857,15 @@ const makeStyles = (c) => StyleSheet.create({
   masonryCanvas: {
     marginHorizontal: SIDE_PAD,
   },
+
+  // ── Initial-load skeleton grid ──
+  skeletonRow: {
+    flexDirection: 'row',
+    gap: COLUMN_GAP,
+    marginHorizontal: SIDE_PAD,
+  },
+  skeletonCol: { flex: 1, gap: COLUMN_GAP },
+  skeletonCard: { borderRadius: CARD_RADIUS },
 
   // ── Card ──
   card: {
