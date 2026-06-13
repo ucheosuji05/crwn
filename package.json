@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "server": "node server/index.js"
+    "server": "node --env-file=server/server.env server/index.js"
   },
   "dependencies": {
     "@expo-google-fonts/figtree": "^0.4.1",

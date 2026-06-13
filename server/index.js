@@ -433,6 +433,195 @@ app.post('/api/threads', async (req, res) => {
   }
 });
 
+// ── Post likes ────────────────────────────────────────────────────────────────
+app.post('/api/posts/:postId/like', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/likes`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, post_id: req.params.postId }),
+    });
+    return res.json({ success: r.ok });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/posts/:postId/like', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/likes?user_id=eq.${userId}&post_id=eq.${req.params.postId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Post bookmarks ────────────────────────────────────────────────────────────
+app.post('/api/posts/:postId/bookmark', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/bookmarks`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, post_id: req.params.postId }),
+    });
+    return res.json({ success: r.ok });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/posts/:postId/bookmark', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/bookmarks?user_id=eq.${userId}&post_id=eq.${req.params.postId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+app.post('/api/posts/:postId/comments', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  const { content, parentId } = req.body || {};
+  if (!content) return res.status(400).json({ message: 'content is required' });
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/comments`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'return=representation' },
+      body: JSON.stringify({ user_id: userId, post_id: req.params.postId, content, parent_id: parentId || null }),
+    });
+    if (!r.ok) return res.status(r.status).json({ message: 'Failed to add comment' });
+    const [comment] = await r.json();
+    const pr = await fetch(
+      `${SUPABASE_URL}/rest/v1/comments?id=eq.${comment.id}&select=*,profiles:user_id(id,username,avatar_url,full_name)`,
+      { headers: supabaseAdminHeaders() }
+    );
+    const [full] = await pr.json().catch(() => [comment]);
+    return res.json({ data: full || comment });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/comments/:commentId', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/comments?id=eq.${req.params.commentId}&user_id=eq.${userId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Comment likes ─────────────────────────────────────────────────────────────
+app.post('/api/comments/:commentId/like', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/comment_likes`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, comment_id: req.params.commentId }),
+    });
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/comments/:commentId/like', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/comment_likes?user_id=eq.${userId}&comment_id=eq.${req.params.commentId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Thread delete ─────────────────────────────────────────────────────────────
+app.delete('/api/threads/:threadId', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/threads?id=eq.${req.params.threadId}&user_id=eq.${userId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Thread replies ────────────────────────────────────────────────────────────
+app.post('/api/threads/:threadId/replies', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  const { body: replyBody, parentId } = req.body || {};
+  if (!replyBody) return res.status(400).json({ message: 'body is required' });
+  try {
+    const insertData = { user_id: userId, thread_id: req.params.threadId, body: replyBody };
+    if (parentId) insertData.parent_id = parentId;
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/thread_replies`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'return=representation' },
+      body: JSON.stringify(insertData),
+    });
+    if (!r.ok) return res.status(r.status).json({ message: 'Failed to create reply' });
+    const [reply] = await r.json();
+    const pr = await fetch(
+      `${SUPABASE_URL}/rest/v1/thread_replies?id=eq.${reply.id}&select=*,profiles:user_id(id,username,full_name,avatar_url,is_stylist),upvotes:thread_reply_upvotes(count)`,
+      { headers: supabaseAdminHeaders() }
+    );
+    const [full] = await pr.json().catch(() => [reply]);
+    return res.json({ data: full || reply });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/replies/:replyId', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/thread_replies?id=eq.${req.params.replyId}&user_id=eq.${userId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+// ── Reply upvotes ─────────────────────────────────────────────────────────────
+app.post('/api/replies/:replyId/upvote', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/thread_reply_upvotes`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: userId, reply_id: req.params.replyId }),
+    });
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/replies/:replyId/upvote', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/thread_reply_upvotes?user_id=eq.${userId}&reply_id=eq.${req.params.replyId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch { return res.status(500).json({ message: 'Server error' }); }
+});
+
 // ── Supabase token sync ─────────────────────────────────────────────────────
 // Mints a short-lived Supabase-compatible JWT from the Better Auth session so
 // supabase-js (via the `accessToken` option) can make auth.uid() resolve for

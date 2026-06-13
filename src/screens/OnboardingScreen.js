@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
-  Easing,
   Dimensions,
   ActivityIndicator,
   Alert,
@@ -54,7 +53,6 @@ const STEPS = {
   PROFILE_PHOTO: 'profilePhoto',
   USER_TYPE: 'userType',
   // stylist path
-  STYLIST_INTRO: 'stylistIntro',
   STYLIST_WORK_TYPE: 'stylistWorkType',
   STYLIST_EXPERIENCE: 'stylistExperience',
   STYLIST_SPECIALTIES: 'stylistSpecialties',
@@ -72,6 +70,7 @@ const STEPS = {
   HAIR_STYLES: 'hairStyles',
   CREATORS: 'creators',
   DISCOVER_STYLISTS: 'discoverStylists',
+  ENDING_BUFFER: 'endingBuffer',
   LOADING: 'loading',
   COMPLETE: 'complete',
 };
@@ -143,6 +142,7 @@ const PROGRESS_STEPS = [
   STEPS.HAIR_STYLES,
   STEPS.CREATORS,
   STEPS.DISCOVER_STYLISTS,
+  STEPS.ENDING_BUFFER,
 ];
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
@@ -172,28 +172,16 @@ const HAIR_STYLE_OPTIONS = [
   'Big Chop / TWA', 'Wigs & Extensions', 'Fades & Tapers',
 ];
 
-const STYLIST_SPECIALTY_TYPES = ['Styling', 'Hair Cutting'];
-
-const STYLING_SPECIALTY_OPTIONS = [
-  'Chemical Services',
-  'Color & Highlights',
-  'Locs',
-  'Natural Styles',
-  'Protective Styles',
-  'Scalp Technician',
-  'Silk Press & Blowouts',
-  'Wigs & Installs',
-  'Other',
-];
-
-const HAIR_CUTTING_SPECIALTY_OPTIONS = [
-  'Beard Work',
-  'Curly Cuts',
-  'Fades',
-  'Shaves',
-  'Shear Work',
-  'Trims',
-  'Other',
+const STYLIST_SPECIALTY_OPTIONS = [
+  'Locs & loc maintenance',
+  'Box braids & protective styles',
+  'Silk press & blowouts',
+  'Natural styles & wash & go',
+  'Twists & twist outs',
+  'Wigs & installs',
+  'Color & highlights',
+  'Cuts & fades',
+  'Keratin & relaxers',
 ];
 
 const STYLIST_FILTERS = ['All', 'Near Me', 'Locs', 'Braids', 'Natural'];
@@ -225,7 +213,7 @@ const MOCK_HAIR_LOOKS = [
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen({ onDone, onSignIn }) {
-  const { refreshSession } = useAuth();
+  const { /* refreshProfile, signInWithGoogle */ } = useAuth();
   const [currentStep, setCurrentStep] = useState(STEPS.SPLASH);
   const [formData, setFormData] = useState({
     email: '',
@@ -257,7 +245,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [stylistFilter, setStylistFilter] = useState('All');
-  const [specialtyTab, setSpecialtyTab] = useState('Styling'); // 'Styling' | 'Hair Cutting'
   const [hairLookFilter, setHairLookFilter] = useState('All');
   const [phoneStage, setPhoneStage] = useState('enter'); // 'enter' | 'code'
   const [phoneCode, setPhoneCode] = useState('');
@@ -429,16 +416,16 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     if (stylistIdx !== -1) {
       goToStep(stylistIdx < STYLIST_STEP_ORDER.length - 1
         ? STYLIST_STEP_ORDER[stylistIdx + 1]
-        : STEPS.LOADING);
+        : STEPS.ENDING_BUFFER);
       return;
     }
     switch (currentStep) {
       case STEPS.USER_TYPE:
-        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_INTRO : STEPS.USAGE_GOALS);
+        goToStep(formData.userType === 'stylist' ? STYLIST_STEP_ORDER[0] : STEPS.USAGE_GOALS);
         break;
-      case STEPS.STYLIST_INTRO: goToStep(STYLIST_STEP_ORDER[0]); break;
       case STEPS.USAGE_GOALS: goToStep(STEPS.STYLES_LOADING); break;
-      case STEPS.HAIR_STYLES: goToStep(STEPS.LOADING); break;
+      case STEPS.HAIR_STYLES: goToStep(STEPS.ENDING_BUFFER); break;
+      case STEPS.ENDING_BUFFER: goToStep(STEPS.LOADING); break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
         if (idx !== -1 && idx < BASE_STEP_ORDER.length - 1) goToStep(BASE_STEP_ORDER[idx + 1]);
@@ -455,6 +442,11 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     switch (currentStep) {
       case STEPS.USAGE_GOALS: goToStep(STEPS.USER_TYPE); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.USAGE_GOALS); break;
+      case STEPS.ENDING_BUFFER:
+        goToStep(formData.userType === 'stylist'
+          ? STYLIST_STEP_ORDER[STYLIST_STEP_ORDER.length - 1]
+          : STEPS.HAIR_STYLES);
+        break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
         if (idx > 0) goToStep(BASE_STEP_ORDER[idx - 1]);
@@ -662,8 +654,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           placeholder="Enter your first name"
           placeholderTextColor="#999"
           autoCapitalize="words"
-          textContentType="givenName"
-          autoComplete="given-name"
         />
       </View>
 
@@ -676,8 +666,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           placeholder="Enter your last name"
           placeholderTextColor="#999"
           autoCapitalize="words"
-          textContentType="familyName"
-          autoComplete="family-name"
         />
       </View>
 
@@ -692,8 +680,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
-          textContentType="emailAddress"
-          autoComplete="email"
         />
         {formData.email.length > 0 && !isValidEmail(formData.email) && (
           <Text style={styles.errorText}>Please enter a valid email</Text>
@@ -711,8 +697,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
             placeholderTextColor="#999"
             secureTextEntry={!showPassword}
             autoCapitalize="none"
-            textContentType="newPassword"
-            autoComplete="new-password"
           />
           <TouchableOpacity style={styles.eyeButton} onPress={() => setShowPassword(p => !p)}>
             <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color="#999" />
@@ -733,8 +717,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           placeholderTextColor="#999"
           secureTextEntry={!showPassword}
           autoCapitalize="none"
-          textContentType="newPassword"
-          autoComplete="new-password"
         />
         {formData.confirmPassword.length > 0 && formData.password !== formData.confirmPassword && (
           <Text style={styles.errorText}>Passwords don't match</Text>
@@ -845,8 +827,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           placeholder="Enter your first name"
           placeholderTextColor="#999"
           autoCapitalize="words"
-          textContentType="givenName"
-          autoComplete="given-name"
         />
       </View>
 
@@ -859,8 +839,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           placeholder="Enter your last name"
           placeholderTextColor="#999"
           autoCapitalize="words"
-          textContentType="familyName"
-          autoComplete="family-name"
         />
       </View>
 
@@ -1011,49 +989,29 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </WhiteScreen>
   );
 
-  const renderStylistSpecialties = () => {
-    const options = specialtyTab === 'Styling' ? STYLING_SPECIALTY_OPTIONS : HAIR_CUTTING_SPECIALTY_OPTIONS;
-
-    return (
-      <WhiteScreen
-        scrollable
-        footer={stylistSkipFooter()}
-        header={<>
-          {renderBack()}
-          {renderProgress()}
-          <Text style={styles.questionTitle}>What is your specialty?</Text>
-          <Text style={styles.questionSubtitle}>Your experience helps clients find the right fit.</Text>
-          <View style={styles.specialtyTabRow}>
-            {STYLIST_SPECIALTY_TYPES.map(tab => {
-              const active = specialtyTab === tab;
-              return (
-                <TouchableOpacity
-                  key={tab}
-                  style={[styles.specialtyTab, active && styles.specialtyTabActive]}
-                  onPress={() => setSpecialtyTab(tab)}
-                >
-                  <Text style={[styles.specialtyTabText, active && styles.specialtyTabTextActive]}>{tab}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </>}
-      >
-        <View style={styles.optionsContainer}>
-          {options.map(opt => {
-            // "Other" appears on both tabs — namespace it so selecting one doesn't select the other.
-            const value = opt === 'Other' ? `Other (${specialtyTab})` : opt;
-            const sel = formData.stylistSpecialties.includes(value);
-            return (
-              <TouchableOpacity key={value} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => toggleStylistSpecialty(value)}>
-                <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </WhiteScreen>
-    );
-  };
+  const renderStylistSpecialties = () => (
+    <WhiteScreen
+      scrollable
+      footer={stylistSkipFooter()}
+      header={<>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>What do you specialize in?</Text>
+        <Text style={styles.questionSubtitle}>Select the styles and techniques that define your work.</Text>
+      </>}
+    >
+      <View style={styles.optionsContainer}>
+        {STYLIST_SPECIALTY_OPTIONS.map(opt => {
+          const sel = formData.stylistSpecialties.includes(opt);
+          return (
+            <TouchableOpacity key={opt} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => toggleStylistSpecialty(opt)}>
+              <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </WhiteScreen>
+  );
 
   const renderStylistBusinessName = () => (
     <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!formData.businessName.trim()} />}>
@@ -1584,6 +1542,23 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     );
   };
 
+  const renderEndingBuffer = () => (
+    <View style={styles.endingContainer}>
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 32 }} edges={['top']}>
+        <Text style={styles.endingEyebrow}>WELCOME TO THE COMMUNITY</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
+          <Text style={styles.endingTitle}>Your crwn is {'\n'}</Text>
+          <Text style={styles.endingTitleCopper}>ready!</Text>
+        </View>
+      </SafeAreaView>
+      <SafeAreaView style={styles.endingBottom} edges={['bottom']}>
+        <TouchableOpacity style={styles.endingContinueBtn} onPress={goNext}>
+          <Text style={styles.endingContinueBtnText}>Continue</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </View>
+  );
+
   const renderLoading = () => (
     <GradientScreen>
       <View style={styles.loadingContent}>
@@ -1597,53 +1572,22 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </GradientScreen>
   );
 
-  const handleExplore = async () => {
-    // Sign-up happened via authService directly, so the AuthProvider's user/session
-    // state is still stale — refresh it so App.js sees an authenticated user.
-    await refreshSession();
-    onDone();
-  };
-
   const renderComplete = () => (
-    <AnimatedGradientScreen>
-      <View style={styles.gradientTextBlock}>
-        <Text style={styles.gradientEyebrow}>WELCOME TO THE COMMUNITY</Text>
-        <Text style={styles.gradientHeadline}>
-          <Text style={styles.gradientHeadlineDark}>your </Text>
-          <Text style={styles.gradientHeadlineMaroon}>crwn</Text>
-          {'\n'}
-          <Text style={styles.gradientHeadlineDark}>profile is </Text>
-          <Text style={styles.gradientHeadlineOchre}>live.</Text>
-        </Text>
+    <GradientScreen>
+      <View style={styles.loadingContent}>
+        <View style={styles.loadingCard}>
+          <View style={[styles.loadingCircle, { backgroundColor: colors.forest }]}>
+            <Ionicons name="checkmark" size={32} color="#fff" />
+          </View>
+          <Text style={styles.loadingText}>You're all set!</Text>
+        </View>
       </View>
-      <View style={styles.gradientButtonContainer}>
-        <TouchableOpacity style={styles.gradientContinueBtn} onPress={handleExplore} activeOpacity={0.85}>
-          <Text style={styles.gradientContinueBtnText}>Continue</Text>
+      <View style={styles.completeButtonContainer}>
+        <TouchableOpacity style={styles.whiteButton} onPress={onDone}>
+          <Text style={styles.whiteButtonText}>Explore Your CRWN</Text>
         </TouchableOpacity>
       </View>
-    </AnimatedGradientScreen>
-  );
-
-  // Buffer/transition screen shown right after a user picks "I'm a stylist",
-  // before the stylist-specific onboarding questions begin.
-  const renderStylistIntro = () => (
-    <AnimatedGradientScreen>
-      <View style={styles.gradientContentCentered}>
-        <Text style={[styles.gradientEyebrow, styles.textCenter]}>A FEW MORE QUESTIONS TO</Text>
-        <Text style={[styles.gradientHeadline, styles.textCenter]}>
-          <Text style={styles.gradientHeadlineDark}>complete</Text>
-          {'\n'}
-          <Text style={styles.gradientHeadlineMaroon}>service provider</Text>
-          {'\n'}
-          <Text style={styles.gradientHeadlineOchre}>onboarding.</Text>
-        </Text>
-      </View>
-      <View style={[styles.gradientButtonContainer, styles.gradientButtonRaised]}>
-        <TouchableOpacity style={styles.gradientContinueBtn} onPress={goNext} activeOpacity={0.85}>
-          <Text style={styles.gradientContinueBtnText}>Continue</Text>
-        </TouchableOpacity>
-      </View>
-    </AnimatedGradientScreen>
+    </GradientScreen>
   );
 
   // ── Step router ──────────────────────────────────────────────────────────────
@@ -1659,7 +1603,6 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       case STEPS.LOCATION:          return renderLocation();
       case STEPS.PROFILE_PHOTO:     return renderProfilePhoto();
       case STEPS.USER_TYPE:              return renderUserType();
-      case STEPS.STYLIST_INTRO:          return renderStylistIntro();
       case STEPS.STYLIST_WORK_TYPE:      return renderStylistWorkType();
       case STEPS.STYLIST_EXPERIENCE:     return renderStylistExperience();
       case STEPS.STYLIST_SPECIALTIES:    return renderStylistSpecialties();
@@ -1676,6 +1619,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       case STEPS.HAIR_STYLES:            return renderHairStyles();
       case STEPS.CREATORS:          return renderCreators();
       case STEPS.DISCOVER_STYLISTS: return renderDiscoverStylists();
+      case STEPS.ENDING_BUFFER:     return renderEndingBuffer();
       case STEPS.LOADING:           return renderLoading();
       case STEPS.COMPLETE:          return renderComplete();
       default:                      return renderSplash();
@@ -1702,57 +1646,6 @@ const GradientScreen = ({ children }) => (
     </SafeAreaView>
   </LinearGradient>
 );
-
-// Warm "sunset" gradient stops the completion screen drifts through —
-// honey gold is kept at low opacity so it blends rather than dominates.
-const COMPLETE_GRADIENT_STEPS = [
-  { colors: ['#F2C9A8', '#E8A87C', '#FCFCFC'], start: { x: 0,    y: 0    }, end: { x: 1,    y: 1 } },
-  { colors: ['#E8A87C', '#F8B43040', '#E8C4A8'], start: { x: 0,  y: 0.15 }, end: { x: 0.9,  y: 1 } },
-  { colors: ['#FCFCFC', '#E8C4A8', '#C2B093'], start: { x: 0.1, y: 0    }, end: { x: 1,    y: 0.9 } },
-  { colors: ['#E8C4A8', '#C2B093', '#F2C9A8'], start: { x: 0,   y: 0.05 }, end: { x: 0.95, y: 1 } },
-];
-const COMPLETE_GRADIENT_STEP_MS = 3000; // 4 steps × 3s = 12s full loop
-
-const AnimatedGradientScreen = ({ children }) => {
-  const [stepIndex, setStepIndex] = useState(0);
-  const fade = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const cycle = () => {
-      Animated.timing(fade, {
-        toValue: 1,
-        duration: COMPLETE_GRADIENT_STEP_MS,
-        easing: Easing.inOut(Easing.ease),
-        useNativeDriver: false,
-      }).start(({ finished }) => {
-        if (!finished || cancelled) return;
-        setStepIndex(prev => (prev + 1) % COMPLETE_GRADIENT_STEPS.length);
-        fade.setValue(0);
-        cycle();
-      });
-    };
-    cycle();
-
-    return () => { cancelled = true; };
-  }, [fade]);
-
-  const current = COMPLETE_GRADIENT_STEPS[stepIndex];
-  const next = COMPLETE_GRADIENT_STEPS[(stepIndex + 1) % COMPLETE_GRADIENT_STEPS.length];
-
-  return (
-    <View style={{ flex: 1, backgroundColor: '#FCFCFC' }}>
-      <LinearGradient colors={current.colors} start={current.start} end={current.end} style={StyleSheet.absoluteFill} />
-      <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]}>
-        <LinearGradient colors={next.colors} start={next.start} end={next.end} style={StyleSheet.absoluteFill} />
-      </Animated.View>
-      <SafeAreaView style={{ flex: 1 }} edges={['bottom']}>
-        {children}
-      </SafeAreaView>
-    </View>
-  );
-};
 
 const WhiteScreen = ({ children, scrollable, footer, header }) => (
   <SafeAreaView style={styles.whiteContainer} edges={['top', 'bottom']}>
@@ -1836,13 +1729,6 @@ const styles = StyleSheet.create({
   // Question text
   questionTitle: { fontSize: 24, fontFamily: 'LibreBaskerville_700Bold', color: colors.textPrimary, marginBottom: 10 },
   questionSubtitle: { fontSize: 14, fontFamily: 'Figtree_400Regular', color: colors.textSecondary, marginBottom: 24, lineHeight: 20 },
-
-  // Stylist specialty type toggle (Styling / Hair Cutting)
-  specialtyTabRow: { flexDirection: 'row', gap: 8, marginTop: -12, marginBottom: 20 },
-  specialtyTab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 6, backgroundColor: '#F3F0EB' },
-  specialtyTabActive: { backgroundColor: '#4A5E4A' },
-  specialtyTabText: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: '#9B9690' },
-  specialtyTabTextActive: { color: '#fff' },
 
   // Inputs
   inputGroup: { marginBottom: 20 },
@@ -2005,25 +1891,22 @@ const styles = StyleSheet.create({
   portfolioThumbRemove: { position: 'absolute', top: 4, right: 4 },
   portfolioAddMore: { width: (SCREEN_WIDTH - 48 - 16) / 3, height: (SCREEN_WIDTH - 48 - 16) / 3, borderRadius: 10, borderWidth: 1.5, borderColor: '#D1D1D1', alignItems: 'center', justifyContent: 'center' },
 
+  // Ending buffer
+  endingContainer: { flex: 1, backgroundColor: '#F0EAE0', justifyContent: 'space-between' },
+  endingEyebrow: { fontSize: 11, fontFamily: 'Figtree_600SemiBold', color: '#8B7355', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 },
+  endingTitle: { fontSize: 48, fontFamily: 'LibreBaskerville_700Bold', color: '#1A1612', lineHeight: 56 },
+  endingTitlePlain: { fontSize: 48, fontFamily: 'LibreBaskerville_700Bold', color: '#1A1612' },
+  endingTitleCopper: { fontSize: 48, fontFamily: 'LibreBaskerville_400Regular', color: '#C4956A', fontStyle: 'italic' },
+  endingBottom: { paddingHorizontal: 24, paddingBottom: 32 },
+  endingContinueBtn: { backgroundColor: '#3F523F', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  endingContinueBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
 
   // Loading / complete
   loadingContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
   loadingCard: { backgroundColor: colors.white, borderRadius: 20, paddingVertical: 48, paddingHorizontal: 32, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 8 },
   loadingCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.cream, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
   loadingText: { fontSize: 15, color: colors.textBrown, textAlign: 'center', fontFamily: 'Figtree_400Regular' },
-  // Final completion screen (animated gradient)
-  gradientTextBlock: { position: 'absolute', top: '38%', left: 0, right: 0, paddingHorizontal: 32 },
-  gradientEyebrow: { fontSize: 11, fontFamily: 'Figtree_600SemiBold', color: '#4F4032', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 12 },
-  gradientHeadline: { fontSize: 34, fontFamily: 'LibreBaskerville_700Bold', lineHeight: 42 },
-  gradientHeadlineDark: { color: '#1A1A1A' },
-  gradientHeadlineMaroon: { color: '#5D1F1F' },
-  gradientHeadlineOchre: { fontFamily: 'LibreBaskerville_400Regular_Italic', color: '#B35D2B' },
-  gradientButtonContainer: { position: 'absolute', left: 0, right: 0, bottom: 16, paddingHorizontal: 24 },
-  gradientContinueBtn: { height: 52, backgroundColor: '#3F523F', borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  gradientContinueBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
-  textCenter: { textAlign: 'center' },
-
-  // Stylist intro/buffer screen — content centered both axes
-  gradientContentCentered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 },
-  gradientButtonRaised: { bottom: 36 },
+  completeButtonContainer: { paddingHorizontal: 24, paddingBottom: 32 },
+  whiteButton: { backgroundColor: colors.white, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  whiteButtonText: { color: colors.textBrown, fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
 });

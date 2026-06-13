@@ -105,17 +105,14 @@ export const threadService = {
     return { data, error };
   },
 
-  /**
-   * Delete a thread. Only succeeds if user_id matches (RLS enforced too).
-   */
   async deleteThread(threadId, userId) {
-    const { error } = await supabase
-      .from('threads')
-      .delete()
-      .eq('id', threadId)
-      .eq('user_id', userId);
-
-    return { error };
+    try {
+      const res = await authedFetch(`/api/threads/${encodeURIComponent(threadId)}`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to delete thread' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 
   // ─────────────────────────────────────────────
@@ -184,41 +181,28 @@ export const threadService = {
     return { data, error };
   },
 
-  /**
-   * Post a new reply to a thread.
-   * Returns the full reply row with profile joined.
-   */
   async createReply(userId, threadId, body, parentId = null) {
-    const insertData = { user_id: userId, thread_id: threadId, body };
-    if (parentId) insertData.parent_id = parentId;
-
-    const { data, error } = await supabase
-      .from('thread_replies')
-      .insert([insertData])
-      .select(`
-        *,
-        profiles:user_id (
-          id,
-          username,
-          full_name,
-          avatar_url,
-          is_stylist
-        ),
-        upvotes:thread_reply_upvotes(count)
-      `)
-      .single();
-
-    return { data, error };
+    try {
+      const res = await authedFetch(`/api/threads/${encodeURIComponent(threadId)}/replies`, {
+        method: 'POST',
+        body: JSON.stringify({ body, parentId: parentId || null }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) return { data: null, error: { message: json.message || 'Failed to create reply' } };
+      return { data: json.data || null, error: null };
+    } catch (err) {
+      return { data: null, error: { message: err.message } };
+    }
   },
 
   async deleteReply(replyId, userId) {
-    const { error } = await supabase
-      .from('thread_replies')
-      .delete()
-      .eq('id', replyId)
-      .eq('user_id', userId);
-
-    return { error };
+    try {
+      const res = await authedFetch(`/api/replies/${encodeURIComponent(replyId)}`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to delete reply' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 
   // ─────────────────────────────────────────────
@@ -240,22 +224,22 @@ export const threadService = {
   },
 
   async upvoteReply(userId, replyId) {
-    const { data, error } = await supabase
-      .from('thread_reply_upvotes')
-      .insert([{ user_id: userId, reply_id: replyId }])
-      .select()
-      .single();
-
-    return { data, error };
+    try {
+      const res = await authedFetch(`/api/replies/${encodeURIComponent(replyId)}/upvote`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      return { data: null, error: res.ok ? null : { message: body.message || 'Failed to upvote' } };
+    } catch (err) {
+      return { data: null, error: { message: err.message } };
+    }
   },
 
   async removeReplyUpvote(userId, replyId) {
-    const { error } = await supabase
-      .from('thread_reply_upvotes')
-      .delete()
-      .eq('user_id', userId)
-      .eq('reply_id', replyId);
-
-    return { error };
+    try {
+      const res = await authedFetch(`/api/replies/${encodeURIComponent(replyId)}/upvote`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to remove upvote' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 };

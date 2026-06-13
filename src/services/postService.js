@@ -3,6 +3,18 @@ import { supabase } from '../config/supabase';
 import { getAuthToken } from '../lib/auth-client';
 import { AUTH_URL } from '../lib/auth-url';
 
+async function authedFetch(path, options = {}) {
+  const token = getAuthToken();
+  return fetch(`${AUTH_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+}
+
 export const postService = {
   // Get all posts (for Explore page)
   async getPosts(limit = 20, offset = 0) {
@@ -201,24 +213,24 @@ export const postService = {
 
   // Like post
   async likePost(userId, postId) {
-    const { data, error } = await supabase
-      .from('likes')
-      .insert([{ user_id: userId, post_id: postId }])
-      .select()
-      .single();
-
-    return { data, error };
+    try {
+      const res = await authedFetch(`/api/posts/${encodeURIComponent(postId)}/like`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      return { data: null, error: res.ok ? null : { message: body.message || 'Failed to like' } };
+    } catch (err) {
+      return { data: null, error: { message: err.message } };
+    }
   },
 
   // Unlike post
   async unlikePost(userId, postId) {
-    const { error } = await supabase
-      .from('likes')
-      .delete()
-      .eq('user_id', userId)
-      .eq('post_id', postId);
-
-    return { error };
+    try {
+      const res = await authedFetch(`/api/posts/${encodeURIComponent(postId)}/like`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to unlike' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 
   // Check if user liked post
@@ -235,24 +247,24 @@ export const postService = {
 
   // Bookmark post
   async bookmarkPost(userId, postId) {
-    const { data, error } = await supabase
-      .from('bookmarks')
-      .insert([{ user_id: userId, post_id: postId }])
-      .select()
-      .single();
-
-    return { data, error };
+    try {
+      const res = await authedFetch(`/api/posts/${encodeURIComponent(postId)}/bookmark`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      return { data: null, error: res.ok ? null : { message: body.message || 'Failed to bookmark' } };
+    } catch (err) {
+      return { data: null, error: { message: err.message } };
+    }
   },
 
   // Remove bookmark
   async removeBookmark(userId, postId) {
-    const { error } = await supabase
-      .from('bookmarks')
-      .delete()
-      .eq('user_id', userId)
-      .eq('post_id', postId);
-
-    return { error };
+    try {
+      const res = await authedFetch(`/api/posts/${encodeURIComponent(postId)}/bookmark`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to remove bookmark' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 
   // Check if user bookmarked post
@@ -320,32 +332,31 @@ export const postService = {
 
   // Add a comment or reply (parentId = null for top-level)
   async addComment(userId, postId, content, parentId = null) {
-    const { data, error } = await supabase
-      .from('comments')
-      .insert([{ user_id: userId, post_id: postId, content, parent_id: parentId || null }])
-      .select(`*, profiles:user_id (id, username, avatar_url, full_name)`)
-      .single();
-    return { data, error };
+    try {
+      const res = await authedFetch(`/api/posts/${encodeURIComponent(postId)}/comments`, {
+        method: 'POST',
+        body: JSON.stringify({ content, parentId: parentId || null }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return { data: null, error: { message: body.message || 'Failed to add comment' } };
+      return { data: body.data || null, error: null };
+    } catch (err) {
+      return { data: null, error: { message: err.message } };
+    }
   },
 
   // Like / unlike a comment
   async likeComment(userId, commentId) {
     try {
-      const { error } = await supabase
-        .from('comment_likes')
-        .insert([{ user_id: userId, comment_id: commentId }]);
-      return { error };
+      const res = await authedFetch(`/api/comments/${encodeURIComponent(commentId)}/like`, { method: 'POST' });
+      return { error: res.ok ? null : { message: 'Failed to like comment' } };
     } catch (_) { return { error: null }; }
   },
 
   async unlikeComment(userId, commentId) {
     try {
-      const { error } = await supabase
-        .from('comment_likes')
-        .delete()
-        .eq('user_id', userId)
-        .eq('comment_id', commentId);
-      return { error };
+      const res = await authedFetch(`/api/comments/${encodeURIComponent(commentId)}/like`, { method: 'DELETE' });
+      return { error: res.ok ? null : { message: 'Failed to unlike comment' } };
     } catch (_) { return { error: null }; }
   },
 
@@ -381,12 +392,13 @@ export const postService = {
 
   // Delete a comment
   async deleteComment(commentId, userId) {
-    const { error } = await supabase
-      .from('comments')
-      .delete()
-      .eq('id', commentId)
-      .eq('user_id', userId);
-    return { error };
+    try {
+      const res = await authedFetch(`/api/comments/${encodeURIComponent(commentId)}`, { method: 'DELETE' });
+      const body = await res.json().catch(() => ({}));
+      return { error: res.ok ? null : { message: body.message || 'Failed to delete comment' } };
+    } catch (err) {
+      return { error: { message: err.message } };
+    }
   },
 
   // Get posts where a specific stylist was tagged

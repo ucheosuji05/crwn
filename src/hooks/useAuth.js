@@ -25,7 +25,10 @@ export const AuthProvider = ({ children }) => {
     const loadSession = async () => {
       try {
         await initAuth(); // ensure stored token is loaded before first request
-        const { data } = await authClient.getSession();
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Session check timed out')), 8000)
+        );
+        const { data } = await Promise.race([authClient.getSession(), timeout]);
         setSession(data?.session || null);
         setUser(data?.user || null);
       } catch (err) {
@@ -82,14 +85,14 @@ export const AuthProvider = ({ children }) => {
     setSession(null);
   }, []);
 
-  // Re-reads the session from storage and syncs it into context — used after
-  // flows that create a session via authService directly (e.g. onboarding signup)
-  // without going through this hook's signUp.
-  const refreshSession = useCallback(async () => {
-    const { data } = await authClient.getSession();
-    setSession(data?.session || null);
-    setUser(data?.user || null);
-    return data;
+  const refreshProfile = useCallback(async () => {
+    try {
+      const { data } = await authClient.getSession();
+      setSession(data?.session || null);
+      setUser(data?.user || null);
+    } catch (err) {
+      console.error('refreshProfile error:', err);
+    }
   }, []);
 
   const value = {
@@ -103,7 +106,7 @@ export const AuthProvider = ({ children }) => {
     signInWithGoogle,
     signInWithInstagram,
     clearAuth,
-    refreshSession,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

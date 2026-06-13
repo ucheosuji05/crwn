@@ -124,19 +124,13 @@ const STATUS_CONFIG = {
 function ImageWithFallback({ uri }) {
   const [failed, setFailed] = useState(false);
   const { colors } = useTheme();
-
-  useEffect(() => {
-    setFailed(false);
-  }, [uri]);
-
   if (failed) {
     return (
-      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.borderLight }]}> 
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center', backgroundColor: colors.borderLight }]}>
         <Icon name="image-outline" size={28} color={colors.border} />
       </View>
     );
   }
-
   return (
     <Image
       source={{ uri }}
