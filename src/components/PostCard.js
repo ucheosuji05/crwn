@@ -74,7 +74,7 @@ export default function PostCard({
   const [newCollectionName, setNewCollectionName] = useState('');
 
   const examplePost = {
-    id: '1',
+    id: 'fallback-example-post',
     images: ['placeholder.jpg'],
     title: 'Side Part Silk Press',
     description: 'Book with my stylist she never disappoints!',

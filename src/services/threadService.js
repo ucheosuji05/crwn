@@ -1,7 +1,6 @@
 import { supabase } from '../config/supabase';
 import { getAuthToken } from '../lib/auth-client';
-
-const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
+import { AUTH_URL } from '../lib/auth-url';
 
 async function authedFetch(path, options = {}) {
   const token = getAuthToken();
@@ -71,13 +70,23 @@ export const threadService = {
   },
 
   /**
-   * Create a new thread.
+   * Create a new thread. Routed through the server so the service role key
+   * bypasses Supabase RLS (anon client has no session, so auth.uid() would
+   * be null and the insert policy `auth.uid() = user_id` would reject it).
    * Returns the full thread row with profile joined.
    */
-  async createThread(userId, { category, title, body }) {
+  async createThread({ category, title, body }) {
+    const res = await authedFetch('/api/threads', {
+      method: 'POST',
+      body: JSON.stringify({ category, title, body }),
+    });
+    const responseBody = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      return { data: null, error: { message: responseBody.message || 'Failed to create thread' } };
+    }
+
     const { data, error } = await supabase
       .from('threads')
-      .insert([{ user_id: userId, category, title, body }])
       .select(`
         *,
         profiles:user_id (
@@ -90,6 +99,7 @@ export const threadService = {
         upvotes:thread_upvotes(count),
         replies:thread_replies(count)
       `)
+      .eq('id', responseBody.thread.id)
       .single();
 
     return { data, error };

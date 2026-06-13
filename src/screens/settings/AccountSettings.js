@@ -50,16 +50,20 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
       return;
     }
     setPwLoading(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setPwLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setShowPasswordModal(false);
-      setNewPassword('');
-      setConfirmPassword('');
-      Alert.alert('Success', 'Your password has been updated.');
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
+        setShowPasswordModal(false);
+        setNewPassword('');
+        setConfirmPassword('');
+        Alert.alert('Success', 'Your password has been updated.');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Password change is not available right now.');
     }
+    setPwLoading(false);
   };
 
   // ── Change Email ──────────────────────────────────────────────────────────
@@ -69,18 +73,22 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
       return;
     }
     setEmailLoading(true);
-    const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
-    setEmailLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setShowEmailModal(false);
-      setNewEmail('');
-      Alert.alert(
-        'Check Your Inbox',
-        'A confirmation link has been sent to your new email address. Click it to complete the change.',
-      );
+    try {
+      const { error } = await supabase.auth.updateUser({ email: newEmail.trim() });
+      if (error) {
+        Alert.alert('Error', error.message);
+      } else {
+        setShowEmailModal(false);
+        setNewEmail('');
+        Alert.alert(
+          'Check Your Inbox',
+          'A confirmation link has been sent to your new email address. Click it to complete the change.',
+        );
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Email change is not available right now.');
     }
+    setEmailLoading(false);
   };
 
   // ── Delete Account ────────────────────────────────────────────────────────
@@ -95,7 +103,11 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
       .from('profiles')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', user.id);
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (_) {
+      // supabase.auth is disabled when accessToken is configured
+    }
     clearAuth();
     setDeleteLoading(false);
   };

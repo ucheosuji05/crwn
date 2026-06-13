@@ -2,7 +2,11 @@
   "permissions": {
     "allow": [
       "Bash(npx expo *)",
-      "Bash(grep -v \"node_modules\\\\|//\")"
+      "Bash(grep -v \"node_modules\\\\|//\")",
+      "Read(//usr/local/bin/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(npm list *)",
+      "Bash(brew list *)"
     ]
   }
 }

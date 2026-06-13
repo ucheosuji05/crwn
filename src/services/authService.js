@@ -1,8 +1,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { authClient, storeAuthToken, clearAuthToken } from '../lib/auth-client';
-import { supabase } from '../config/supabase'; // keep for profile/hair data writes
-
-const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
+import { supabase, clearSupabaseTokenCache } from '../config/supabase'; // keep for profile/hair data writes
+import { AUTH_URL } from '../lib/auth-url';
 
 export const authService = {
 
@@ -43,6 +42,7 @@ export const authService = {
       const { data, error } = await authClient.signIn.email({ email, password });
       return { user: data?.user, session: data?.session, error };
     } catch (err) {
+      console.error('[authService.signIn] AUTH_URL:', AUTH_URL, 'email:', email, 'error:', err);
       return { user: null, session: null, error: err };
     }
   },
@@ -93,9 +93,11 @@ export const authService = {
     try {
       const { error } = await authClient.signOut();
       await clearAuthToken();
+      clearSupabaseTokenCache();
       return { error };
     } catch (err) {
       await clearAuthToken();
+      clearSupabaseTokenCache();
       return { error: err };
     }
   },

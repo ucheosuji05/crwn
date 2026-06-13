@@ -4,13 +4,24 @@ import { authService } from '../services/authService';
 
 const AuthContext = createContext({});
 
+// TEMP: skip the sign-in screen for local dev. Set back to false to restore normal auth.
+const DEV_BYPASS_AUTH = false;
+const DEV_USER = {
+  id: 'dev-user',
+  email: 'dev@example.com',
+  name: 'Dev User',
+  userType: 'explorer',
+};
+
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(DEV_BYPASS_AUTH ? DEV_USER : null);
+  const [session, setSession] = useState(DEV_BYPASS_AUTH ? { id: 'dev-session' } : null);
+  const [loading, setLoading] = useState(!DEV_BYPASS_AUTH);
 
   // Better Auth: load session on mount
   useEffect(() => {
+    if (DEV_BYPASS_AUTH) return;
+
     const loadSession = async () => {
       try {
         await initAuth(); // ensure stored token is loaded before first request

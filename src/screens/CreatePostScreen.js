@@ -19,11 +19,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { postService } from '../services/postService';
 import { stylistService } from '../services/stylistService';
-import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 
 export default function CreatePostScreen({ navigation }) {
-  const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
@@ -126,7 +124,6 @@ export default function CreatePostScreen({ navigation }) {
     }
     setLoading(true);
     const { error } = await postService.createPost(
-      user.id,
       {
         title: title.trim(),
         description: caption.trim(),

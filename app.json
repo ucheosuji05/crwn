@@ -24,6 +24,7 @@
       "expo-web-browser"
     ],
     "extra": {
+      "authUrl": "http://localhost:3001",
       "eas": {
         "projectId": "e3eed5ea-2ccd-4f33-b260-59d3aba14152"
       }

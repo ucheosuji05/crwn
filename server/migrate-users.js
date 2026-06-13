@@ -121,7 +121,7 @@ async function main() {
 
     accountsToInsert.push({
       id: randomUUID(),
-      [c.accountId]: sbUser.id,
+      [c.accountId]: email,
       [c.providerId]: 'credential',
       [c.userId]: sbUser.id,
       [c.createdAt]: now,

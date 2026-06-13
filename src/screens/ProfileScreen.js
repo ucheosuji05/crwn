@@ -84,8 +84,8 @@ export default function ProfileScreen({ route, navigation }) {
             scrollbarColor: 'rgba(0,0,0,0.25) transparent',
           }}
         >
-          <UserHeader key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
-          <ProfileTabs key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <UserHeader key={`header-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <ProfileTabs key={`tabs-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
         </div>
       ) : (
         /* ── Native: keep ScrollView with pull-to-refresh */
@@ -101,8 +101,8 @@ export default function ProfileScreen({ route, navigation }) {
             />
           }
         >
-          <UserHeader key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
-          <ProfileTabs key={profileVersion} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <UserHeader key={`header-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <ProfileTabs key={`tabs-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
         </ScrollView>
       )}
 

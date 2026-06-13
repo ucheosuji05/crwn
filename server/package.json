@@ -6,7 +6,11 @@
   "scripts": {
     "start": "node --env-file=server.env index.js",
     "migrate": "node --env-file=server.env migrate.js",
-    "migrate-users": "node --env-file=server.env migrate-users.js"
+    "migrate-users": "node --env-file=server.env migrate-users.js",
+    "migrate-profile-trigger": "node --env-file=server.env migrate-add-profile-trigger.js",
+    "migrate-hair-profile-columns": "node --env-file=server.env migrate-add-hair-profile-columns.js",
+    "migrate-set-passwords": "node --env-file=server.env migrate-set-passwords.js",
+    "verify-account-ids": "node --env-file=server.env verify-account-ids.js"
   },
   "dependencies": {
     "better-auth": "^1.6.14",

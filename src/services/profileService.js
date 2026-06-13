@@ -108,6 +108,51 @@ export const profileService = {
     }
   },
 
+  // Upload a stylist's professional credentials photo; returns its public URL
+  uploadCredentialsPhoto: async (userId, imageUri) => {
+    try {
+      let uploadData;
+      let contentType;
+      let fileExt;
+
+      if (Platform.OS === 'web') {
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        contentType = blob.type || 'image/jpeg';
+        fileExt = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+        uploadData = blob;
+      } else {
+        fileExt = imageUri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+        contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+        uploadData = await new Promise((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', imageUri);
+          xhr.responseType = 'arraybuffer';
+          xhr.onload = () => resolve(xhr.response);
+          xhr.onerror = reject;
+          xhr.send();
+        });
+      }
+
+      const fileName = `${userId}/credentials.${fileExt}`;
+
+      const { error } = await supabase.storage
+        .from('avatars')
+        .upload(fileName, uploadData, { upsert: true, contentType });
+
+      if (error) throw error;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(fileName);
+
+      return { url: publicUrl, error: null };
+    } catch (error) {
+      console.error('Credentials photo upload error:', error);
+      return { url: null, error };
+    }
+  },
+
   // Upload a single portfolio photo; returns its public URL
   uploadPortfolioPhoto: async (userId, imageUri, index) => {
     try {

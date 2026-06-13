@@ -37,6 +37,7 @@ const colors = {
   maroon: '#5D1F1F',
   forest: '#3F523F',
   copper: '#C4956A',
+  honey: '#F8B430',
 };
 
 // ── Step definitions ──────────────────────────────────────────────────────────
@@ -46,6 +47,8 @@ const STEPS = {
   WELCOME: 'welcome',
   EMAIL: 'email',
   NAME: 'name',
+  PHONE_VERIFY: 'phoneVerify',
+  USERNAME: 'username',
   LOCATION: 'location',
   PROFILE_PHOTO: 'profilePhoto',
   USER_TYPE: 'userType',
@@ -54,11 +57,16 @@ const STEPS = {
   STYLIST_EXPERIENCE: 'stylistExperience',
   STYLIST_SPECIALTIES: 'stylistSpecialties',
   STYLIST_BUSINESS_NAME: 'stylistBusinessName',
+  STYLIST_CREDENTIALS: 'stylistCredentials',
+  STYLIST_BOOKING_LINK: 'stylistBookingLink',
+  STYLIST_SOCIAL_LINKS: 'stylistSocialLinks',
   STYLIST_AVAILABILITY: 'stylistAvailability',
   STYLIST_BOOKING: 'stylistBooking',
   STYLIST_PORTFOLIO: 'stylistPortfolio',
   STYLIST_FIND_CREATORS: 'stylistFindCreators',
   // explorer path
+  USAGE_GOALS: 'usageGoals',
+  STYLES_LOADING: 'stylesLoading',
   HAIR_STYLES: 'hairStyles',
   CREATORS: 'creators',
   DISCOVER_STYLISTS: 'discoverStylists',
@@ -67,7 +75,20 @@ const STEPS = {
   COMPLETE: 'complete',
 };
 
+// Active stylist-path order (8 screens) — used for both navigation and its progress bar
 const STYLIST_STEP_ORDER = [
+  STEPS.STYLIST_WORK_TYPE,
+  STEPS.STYLIST_EXPERIENCE,
+  STEPS.STYLIST_SPECIALTIES,
+  STEPS.STYLIST_BUSINESS_NAME,
+  STEPS.STYLIST_CREDENTIALS,
+  STEPS.STYLIST_BOOKING_LINK,
+  STEPS.STYLIST_SOCIAL_LINKS,
+  STEPS.STYLIST_PORTFOLIO,
+];
+
+// Old stylist-path order — kept for reference / easy re-enabling, no longer wired into navigation
+const LEGACY_STYLIST_STEP_ORDER = [
   STEPS.STYLIST_WORK_TYPE,
   STEPS.STYLIST_EXPERIENCE,
   STEPS.STYLIST_SPECIALTIES,
@@ -83,19 +104,41 @@ const BASE_STEP_ORDER = [
   STEPS.SPLASH,
   STEPS.WELCOME,
   STEPS.EMAIL,
-  STEPS.NAME,
-  STEPS.LOCATION,
+  STEPS.PHONE_VERIFY,
+  STEPS.USERNAME,
   STEPS.PROFILE_PHOTO,
+  STEPS.LOCATION,
   STEPS.USER_TYPE,
 ];
 
+// ── Progress bar groups ─────────────────────────────────────────────────────
+// Each group below renders its own dot-bar; the active group is found by membership of currentStep.
+const MAIN_STEPS = [
+  STEPS.EMAIL,
+  STEPS.PHONE_VERIFY,
+  STEPS.USERNAME,
+  STEPS.PROFILE_PHOTO,
+  STEPS.LOCATION,
+  STEPS.USER_TYPE,
+];
+
+const EXPLORER_PROGRESS_STEPS = [
+  STEPS.STYLES_LOADING,
+  STEPS.HAIR_STYLES,
+];
+
+// EXPLORER_PROGRESS_STEPS is no longer rendered — usage goals, the loading screen, and the
+// styles grid are all progress-bar-free in the explorer flow.
+const PROGRESS_GROUPS = [MAIN_STEPS, STYLIST_STEP_ORDER];
+
+// Old flat progress bar — kept for reference / easy re-enabling, no longer used by renderProgress
 const PROGRESS_STEPS = [
   STEPS.EMAIL,
   STEPS.NAME,
   STEPS.LOCATION,
   STEPS.PROFILE_PHOTO,
   STEPS.USER_TYPE,
-  ...STYLIST_STEP_ORDER,
+  ...LEGACY_STYLIST_STEP_ORDER,
   STEPS.HAIR_STYLES,
   STEPS.CREATORS,
   STEPS.DISCOVER_STYLISTS,
@@ -143,10 +186,34 @@ const STYLIST_SPECIALTY_OPTIONS = [
 
 const STYLIST_FILTERS = ['All', 'Near Me', 'Locs', 'Braids', 'Natural'];
 
+// "How do you want to use CRWN?" — explorer-path goals screen (multi-select)
+const USAGE_GOAL_OPTIONS = [
+  'Learn what works for my hair',
+  'Document and track my journey',
+  'Discover products for my hair type',
+  'Get inspired by styles and looks',
+  'Find and connect with stylists',
+  'Share my journey with others',
+];
+
+// Hair "looks" grid shown on the redesigned HAIR_STYLES / STYLES_LOADING screens
+const STYLE_FILTER_CHIPS = ['All', 'Protective', 'Cuts', 'Natural', 'Locs', 'Short Styles', 'Color'];
+
+const MOCK_HAIR_LOOKS = [
+  { id: 'h1', label: 'Ginger',      category: 'Color',        colors: ['#C4783A', '#8B4E1E'], height: 200 },
+  { id: 'h2', label: 'Brown Fade',  category: 'Cuts',         colors: ['#3D2B1F', '#1A1208'], height: 230 },
+  { id: 'h3', label: 'Blonde Twists', category: 'Protective', colors: ['#D4A574', '#A67B5B'], height: 220 },
+  { id: 'h4', label: 'Honey Blonde', category: 'Color',       colors: ['#C4956A', '#8B5E3C'], height: 240 },
+  { id: 'h5', label: 'Locs',        category: 'Locs',         colors: ['#2C1810', '#1A0F08'], height: 210 },
+  { id: 'h6', label: 'Wash & Go',   category: 'Natural',      colors: ['#5D1F1F', '#3D1010'], height: 225 },
+  { id: 'h7', label: 'Box Braids',  category: 'Protective',   colors: ['#8B6E4E', '#5D4A34'], height: 215 },
+  { id: 'h8', label: 'Short Crop',  category: 'Short Styles', colors: ['#D4C4B0', '#B09880'], height: 200 },
+];
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen({ onDone, onSignIn }) {
-  const { refreshProfile, signInWithGoogle } = useAuth();
+  const { /* refreshProfile, signInWithGoogle */ } = useAuth();
   const [currentStep, setCurrentStep] = useState(STEPS.SPLASH);
   const [formData, setFormData] = useState({
     email: '',
@@ -154,10 +221,13 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     confirmPassword: '',
     firstName: '',
     lastName: '',
+    phone: '',
+    username: '',
     location: '',
     profilePhoto: null,
     userType: null,
     // explorer fields
+    usageGoals: [],
     selectedStyles: [],
     followedCreators: [],
     followedStylists: [],
@@ -167,11 +237,18 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     stylistSpecialties: [],
     businessName: '',
     stylistAvailability: null,
+    credentialsPhoto: null,
+    bookingLink: '',
+    socialLinks: { instagram: '', tiktok: '', other: '' },
   });
   const [services, setServices] = useState([{ name: '', price: '' }]);
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
   const [stylistFilter, setStylistFilter] = useState('All');
+  const [hairLookFilter, setHairLookFilter] = useState('All');
+  const [phoneStage, setPhoneStage] = useState('enter'); // 'enter' | 'code'
+  const [phoneCode, setPhoneCode] = useState('');
+  const skeletonPulse = useRef(new Animated.Value(0.4)).current;
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const loadingProgress = useRef(new Animated.Value(0)).current;
@@ -185,6 +262,20 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   }, [currentStep]);
 
   useEffect(() => {
+    if (currentStep === STEPS.STYLES_LOADING) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(skeletonPulse, { toValue: 0.8, duration: 600, useNativeDriver: true }),
+          Animated.timing(skeletonPulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      loop.start();
+      const t = setTimeout(() => goToStep(STEPS.HAIR_STYLES), 1200);
+      return () => { clearTimeout(t); loop.stop(); };
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
     if (currentStep === STEPS.LOADING) handleSignup();
   }, [currentStep]);
 
@@ -193,7 +284,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     Animated.timing(loadingProgress, { toValue: 0.3, duration: 500, useNativeDriver: false }).start();
     setLoadingMessage('Creating your account...');
     try {
-      const username = formData.email.split('@')[0].toLowerCase().replace(/[^a-z0-9]/g, '');
+      const username = formData.username.trim().toLowerCase();
       const { user, error } = await authService.signUp(
         formData.email.trim(),
         formData.password,
@@ -239,6 +330,11 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           : Promise.resolve(),
       ]);
 
+      // Preferences object (profiles.preferences JSONB) — built up for all users
+      const prefs = {};
+      if (formData.phone) prefs.phone = formData.phone;
+      if (formData.usageGoals.length) prefs.usage_goals = formData.usageGoals;
+
       // Stylist-specific data (sequential: photos must upload before registering)
       if (formData.userType === 'stylist' && user?.id) {
         // Upload portfolio photos and collect public URLs
@@ -248,24 +344,43 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           if (url) photoUrls.push(url);
         }
 
+        // Upload professional credentials photo
+        let credentialsPhotoUrl = null;
+        if (formData.credentialsPhoto) {
+          const { url } = await profileService.uploadCredentialsPhoto(user.id, formData.credentialsPhoto);
+          credentialsPhotoUrl = url;
+        }
+
         // Register stylist: sets is_stylist, specialties, portfolio_photos
         await stylistService.registerAsStylist(user.id, {
           specialties: formData.stylistSpecialties,
           portfolioPhotos: photoUrls,
         });
 
-        // Store remaining stylist fields in the preferences JSONB column
-        const stylistPrefs = {};
-        if (formData.businessName)       stylistPrefs.business_name  = formData.businessName;
-        if (formData.stylistWorkType)    stylistPrefs.work_type      = formData.stylistWorkType;
-        if (formData.stylistExperience)  stylistPrefs.experience     = formData.stylistExperience;
-        if (formData.stylistAvailability) stylistPrefs.availability  = formData.stylistAvailability;
-        const activeServices = services.filter(s => s.name.trim());
-        if (activeServices.length > 0)   stylistPrefs.services       = activeServices;
+        if (formData.businessName)      prefs.business_name = formData.businessName;
+        if (formData.stylistWorkType)   prefs.work_type = formData.stylistWorkType;
+        if (formData.stylistExperience) prefs.experience = formData.stylistExperience;
+        if (formData.bookingLink)       prefs.booking_link = formData.bookingLink;
+        const social = Object.fromEntries(Object.entries(formData.socialLinks).filter(([, v]) => v?.trim()));
+        if (Object.keys(social).length) prefs.social_links = social;
+        if (credentialsPhotoUrl)        prefs.credentials_photo_url = credentialsPhotoUrl;
 
-        if (Object.keys(stylistPrefs).length > 0) {
-          await profileService.updateProfile(user.id, { preferences: stylistPrefs });
-        }
+        // -- Superseded by the unified `prefs` object above (kept for reference) --
+        // const stylistPrefs = {};
+        // if (formData.businessName)       stylistPrefs.business_name  = formData.businessName;
+        // if (formData.stylistWorkType)    stylistPrefs.work_type      = formData.stylistWorkType;
+        // if (formData.stylistExperience)  stylistPrefs.experience     = formData.stylistExperience;
+        // if (formData.stylistAvailability) stylistPrefs.availability  = formData.stylistAvailability;
+        // const activeServices = services.filter(s => s.name.trim());
+        // if (activeServices.length > 0)   stylistPrefs.services       = activeServices;
+        //
+        // if (Object.keys(stylistPrefs).length > 0) {
+        //   await profileService.updateProfile(user.id, { preferences: stylistPrefs });
+        // }
+      }
+
+      if (Object.keys(prefs).length > 0 && user?.id) {
+        await profileService.updateProfile(user.id, { preferences: prefs });
       }
 
       Animated.timing(loadingProgress, {
@@ -276,8 +391,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
 
       setLoadingMessage('Almost there...');
 
-      // Re-fetch profile now that it's been created with is_stylist set
-      if (user?.id) await refreshProfile(user.id);
+      // refreshProfile isn't part of useAuth's context value yet — skip to avoid a crash
+      // if (user?.id) await refreshProfile(user.id);
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -306,11 +421,10 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     }
     switch (currentStep) {
       case STEPS.USER_TYPE:
-        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_WORK_TYPE : STEPS.HAIR_STYLES);
+        goToStep(formData.userType === 'stylist' ? STYLIST_STEP_ORDER[0] : STEPS.USAGE_GOALS);
         break;
-      case STEPS.HAIR_STYLES: goToStep(STEPS.CREATORS); break;
-      case STEPS.CREATORS: goToStep(STEPS.DISCOVER_STYLISTS); break;
-      case STEPS.DISCOVER_STYLISTS: goToStep(STEPS.ENDING_BUFFER); break;
+      case STEPS.USAGE_GOALS: goToStep(STEPS.STYLES_LOADING); break;
+      case STEPS.HAIR_STYLES: goToStep(STEPS.ENDING_BUFFER); break;
       case STEPS.ENDING_BUFFER: goToStep(STEPS.LOADING); break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
@@ -326,11 +440,12 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       return;
     }
     switch (currentStep) {
-      case STEPS.HAIR_STYLES: goToStep(STEPS.USER_TYPE); break;
-      case STEPS.CREATORS: goToStep(STEPS.HAIR_STYLES); break;
-      case STEPS.DISCOVER_STYLISTS: goToStep(STEPS.CREATORS); break;
+      case STEPS.USAGE_GOALS: goToStep(STEPS.USER_TYPE); break;
+      case STEPS.HAIR_STYLES: goToStep(STEPS.USAGE_GOALS); break;
       case STEPS.ENDING_BUFFER:
-        goToStep(formData.userType === 'stylist' ? STEPS.STYLIST_FIND_CREATORS : STEPS.DISCOVER_STYLISTS);
+        goToStep(formData.userType === 'stylist'
+          ? STYLIST_STEP_ORDER[STYLIST_STEP_ORDER.length - 1]
+          : STEPS.HAIR_STYLES);
         break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
@@ -350,6 +465,15 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     }));
   };
 
+  const toggleUsageGoal = (goal) => {
+    setFormData(prev => ({
+      ...prev,
+      usageGoals: prev.usageGoals.includes(goal)
+        ? prev.usageGoals.filter(g => g !== goal)
+        : [...prev.usageGoals, goal],
+    }));
+  };
+
   const toggleStylistSpecialty = (specialty) => {
     setFormData(prev => ({
       ...prev,
@@ -358,6 +482,9 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         : [...prev.stylistSpecialties, specialty],
     }));
   };
+
+  const updateSocialLink = (key, value) =>
+    setFormData(prev => ({ ...prev, socialLinks: { ...prev.socialLinks, [key]: value } }));
 
   const addService = () => setServices(prev => [...prev, { name: '', price: '' }]);
   const updateService = (idx, field, value) =>
@@ -409,20 +536,37 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     if (!result.canceled) update('profilePhoto', result.assets[0].uri);
   };
 
+  const pickCredentialsPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Please allow access to your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.8,
+    });
+    if (!result.canceled) update('credentialsPhoto', result.assets[0].uri);
+  };
+
   const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
   const isEmailStepValid = () =>
     isValidEmail(formData.email) &&
     formData.password.length >= 6 &&
     formData.password === formData.confirmPassword;
+  const isUsernameValid = (u) => /^[a-z0-9_.]{3,20}$/.test(u);
 
   // ── Progress bar ────────────────────────────────────────────────────────────
 
   const renderProgress = () => {
-    const progressIndex = PROGRESS_STEPS.indexOf(currentStep);
-    if (progressIndex === -1) return null;
+    const group = PROGRESS_GROUPS.find(g => g.includes(currentStep));
+    if (!group) return null;
+    const progressIndex = group.indexOf(currentStep);
     return (
       <View style={styles.progressContainer}>
-        {PROGRESS_STEPS.map((_, i) => (
+        {group.map((_, i) => (
           <View
             key={i}
             style={[
@@ -439,7 +583,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   // ── Back button ─────────────────────────────────────────────────────────────
 
   const renderBack = () => {
-    const noBack = [STEPS.SPLASH, STEPS.WELCOME];
+    const noBack = [STEPS.SPLASH, STEPS.WELCOME, STEPS.STYLES_LOADING];
     if (noBack.includes(currentStep)) return null;
     return (
       <TouchableOpacity style={styles.backButton} onPress={goBack}>
@@ -459,17 +603,17 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </GradientScreen>
   );
 
-  const handleGoogleSignIn = async () => {
-    try {
-      const result = await signInWithGoogle();
-      if (result.error) {
-        Alert.alert('Google Sign In Failed', result.error.message || 'Please try again.');
-      }
-      // On success AuthProvider sets user and App.js navigates away automatically
-    } catch {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-    }
-  };
+  // const handleGoogleSignIn = async () => {
+  //   try {
+  //     const result = await signInWithGoogle();
+  //     if (result.error) {
+  //       Alert.alert('Google Sign In Failed', result.error.message || 'Please try again.');
+  //     }
+  //     // On success AuthProvider sets user and App.js navigates away automatically
+  //   } catch {
+  //     Alert.alert('Error', 'Something went wrong. Please try again.');
+  //   }
+  // };
 
   const renderWelcome = () => (
     <GradientScreen>
@@ -481,10 +625,10 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         <TouchableOpacity style={styles.createAccountButton} onPress={goNext}>
           <Text style={styles.createAccountText}>Create Account</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
+        {/* <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
           <Ionicons name="logo-google" size={18} color="#5D3A1A" />
           <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
         <TouchableOpacity onPress={onSignIn}>
           <Text style={styles.signInText}>
             Have an account? <Text style={styles.signInLink}>Sign in</Text>
@@ -495,11 +639,35 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   );
 
   const renderEmail = () => (
-    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!isEmailStepValid()} />}>
+    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!formData.firstName.trim() || !isEmailStepValid()} />}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>Create your account</Text>
-      <Text style={styles.questionSubtitle}>Enter your email and create a password.</Text>
+      <Text style={styles.questionSubtitle}>Tell us a bit about yourself to get started.</Text>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>First name</Text>
+        <TextInput
+          style={styles.input}
+          value={formData.firstName}
+          onChangeText={t => update('firstName', t)}
+          placeholder="Enter your first name"
+          placeholderTextColor="#999"
+          autoCapitalize="words"
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Last name</Text>
+        <TextInput
+          style={styles.input}
+          value={formData.lastName}
+          onChangeText={t => update('lastName', t)}
+          placeholder="Enter your last name"
+          placeholderTextColor="#999"
+          autoCapitalize="words"
+        />
+      </View>
 
       <View style={styles.inputGroup}>
         <Text style={styles.inputLabel}>Email</Text>
@@ -555,6 +723,91 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         )}
       </View>
 
+    </WhiteScreen>
+  );
+
+  const renderPhoneVerify = () => {
+    const phoneDigits = formData.phone.replace(/[^0-9]/g, '');
+
+    if (phoneStage === 'code') {
+      return (
+        <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={phoneCode.length !== 6} />}>
+          <TouchableOpacity style={styles.backButton} onPress={() => setPhoneStage('enter')}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          {renderProgress()}
+          <Text style={styles.questionTitle}>Enter your code</Text>
+          <Text style={styles.questionSubtitle}>We sent a 6-digit code to {formData.phone}.</Text>
+
+          <View style={styles.inputGroup}>
+            <TextInput
+              style={styles.otpInput}
+              value={phoneCode}
+              onChangeText={t => setPhoneCode(t.replace(/[^0-9]/g, '').slice(0, 6))}
+              placeholder="••••••"
+              placeholderTextColor="#C4B5A0"
+              keyboardType="number-pad"
+              maxLength={6}
+              textAlign="center"
+            />
+          </View>
+        </WhiteScreen>
+      );
+    }
+
+    return (
+      <WhiteScreen scrollable footer={<>
+        <ContinueButton onPress={() => setPhoneStage('code')} disabled={phoneDigits.length < 7} label="Send code" />
+        <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+          <Text style={styles.skipLinkText}>Skip for now</Text>
+        </TouchableOpacity>
+      </>}>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>Verify your number</Text>
+        <Text style={styles.questionSubtitle}>We'll send a code to confirm it's really you.</Text>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Phone number</Text>
+          <TextInput
+            style={styles.input}
+            value={formData.phone}
+            onChangeText={t => update('phone', t)}
+            placeholder="(555) 555-5555"
+            placeholderTextColor="#999"
+            keyboardType="phone-pad"
+          />
+        </View>
+      </WhiteScreen>
+    );
+  };
+
+  const renderUsername = () => (
+    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!isUsernameValid(formData.username)} />}>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Choose your username</Text>
+      <Text style={styles.questionSubtitle}>Your username will be visible to the CRWN community.</Text>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Username</Text>
+        <View style={styles.usernameInputContainer}>
+          <Text style={styles.usernameAt}>@</Text>
+          <TextInput
+            style={styles.usernameInput}
+            value={formData.username}
+            onChangeText={t => update('username', t.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
+            placeholder="yourname"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={20}
+          />
+        </View>
+        {formData.username.length > 0 && !isUsernameValid(formData.username) && (
+          <Text style={styles.errorText}>Username must be 3-20 characters (letters, numbers, _ or .)</Text>
+        )}
+      </View>
     </WhiteScreen>
   );
 
@@ -652,8 +905,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     <WhiteScreen>
       {renderBack()}
       {renderProgress()}
-      <Text style={styles.questionTitle}>How do you want to use CRWN?</Text>
-      <Text style={styles.questionSubtitle}>Choose one — you can always update this later.</Text>
+      <Text style={styles.questionTitle}>What brings you to CRWN?</Text>
+      <Text style={styles.questionSubtitle}>Choose the experience that's made for you.</Text>
 
       <View style={styles.userTypeFork}>
         <TouchableOpacity
@@ -661,9 +914,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           onPress={() => update('userType', 'explorer')}
           activeOpacity={0.85}
         >
-          <Text style={styles.userTypeCardIcon}>✨</Text>
-          <Text style={styles.userTypeCardTitle}>I'm here to explore</Text>
-          <Text style={styles.userTypeCardDesc}>Discover styles, find stylists, and build your hair community.</Text>
+          <Text style={styles.userTypeCardTitle}>I'm here for my hair</Text>
+          <Text style={styles.userTypeCardDesc}>Discover styles and textured hair professionals</Text>
           {formData.userType === 'explorer' && (
             <View style={styles.userTypeCheckmark}>
               <Ionicons name="checkmark-circle" size={22} color={colors.forest} />
@@ -676,9 +928,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           onPress={() => update('userType', 'stylist')}
           activeOpacity={0.85}
         >
-          <Text style={styles.userTypeCardIcon}>✂️</Text>
-          <Text style={styles.userTypeCardTitle}>I'm a stylist</Text>
-          <Text style={styles.userTypeCardDesc}>Set up your stylist profile, showcase your work, and grow your clientele.</Text>
+          <Text style={styles.userTypeCardTitle}>I'm a hair professional</Text>
+          <Text style={styles.userTypeCardDesc}>Showcase your work, grow your clientele, and connect with the community.</Text>
           {formData.userType === 'stylist' && (
             <View style={styles.userTypeCheckmark}>
               <Ionicons name="checkmark-circle" size={22} color={colors.forest} />
@@ -739,11 +990,16 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   );
 
   const renderStylistSpecialties = () => (
-    <WhiteScreen scrollable footer={stylistSkipFooter()}>
-      {renderBack()}
-      {renderProgress()}
-      <Text style={styles.questionTitle}>What do you specialize in?</Text>
-      <Text style={styles.questionSubtitle}>Select the styles and techniques that define your work.</Text>
+    <WhiteScreen
+      scrollable
+      footer={stylistSkipFooter()}
+      header={<>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>What do you specialize in?</Text>
+        <Text style={styles.questionSubtitle}>Select the styles and techniques that define your work.</Text>
+      </>}
+    >
       <View style={styles.optionsContainer}>
         {STYLIST_SPECIALTY_OPTIONS.map(opt => {
           const sel = formData.stylistSpecialties.includes(opt);
@@ -773,6 +1029,114 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           placeholderTextColor="#999"
           autoCapitalize="words"
         />
+      </View>
+    </WhiteScreen>
+  );
+
+  const renderStylistCredentials = () => (
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Show your professional credentials</Text>
+      <Text style={styles.questionSubtitle}>Upload a photo of your license, certification, or training credential. This helps build trust with clients.</Text>
+
+      <TouchableOpacity
+        style={[styles.credentialsUploadBox, formData.credentialsPhoto && styles.credentialsUploadBoxFilled]}
+        onPress={pickCredentialsPhoto}
+        activeOpacity={0.8}
+      >
+        {formData.credentialsPhoto ? (
+          <Image source={{ uri: formData.credentialsPhoto }} style={styles.credentialsPreview} />
+        ) : (
+          <>
+            <View style={styles.portfolioUploadIcon}>
+              <Ionicons name="arrow-up" size={22} color="#fff" />
+            </View>
+            <Text style={styles.portfolioUploadTitle}>Tap to upload a photo</Text>
+            <Text style={styles.portfolioUploadSub}>License, certification, or training credential</Text>
+          </>
+        )}
+      </TouchableOpacity>
+    </WhiteScreen>
+  );
+
+  const renderStylistBookingLink = () => (
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Add your booking link</Text>
+      <Text style={styles.questionSubtitle}>Share the link clients use to book with you (Calendly, Vagaro, Instagram, etc.).</Text>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Booking link</Text>
+        <TextInput
+          style={styles.input}
+          value={formData.bookingLink}
+          onChangeText={t => update('bookingLink', t)}
+          placeholder="https://"
+          placeholderTextColor="#999"
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="url"
+        />
+      </View>
+    </WhiteScreen>
+  );
+
+  const renderStylistSocialLinks = () => (
+    <WhiteScreen scrollable footer={stylistSkipFooter()}>
+      {renderBack()}
+      {renderProgress()}
+      <Text style={styles.questionTitle}>Connect your social media</Text>
+      <Text style={styles.questionSubtitle}>Add your handles so clients can find your work across platforms.</Text>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Instagram</Text>
+        <View style={styles.iconInputContainer}>
+          <Ionicons name="logo-instagram" size={20} color="#999" style={styles.iconInputIcon} />
+          <TextInput
+            style={styles.iconInput}
+            value={formData.socialLinks.instagram}
+            onChangeText={t => updateSocialLink('instagram', t)}
+            placeholder="@yourusername"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>TikTok</Text>
+        <View style={styles.iconInputContainer}>
+          <Ionicons name="logo-tiktok" size={20} color="#999" style={styles.iconInputIcon} />
+          <TextInput
+            style={styles.iconInput}
+            value={formData.socialLinks.tiktok}
+            onChangeText={t => updateSocialLink('tiktok', t)}
+            placeholder="@yourusername"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        </View>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={styles.inputLabel}>Other link</Text>
+        <View style={styles.iconInputContainer}>
+          <Ionicons name="link" size={20} color="#999" style={styles.iconInputIcon} />
+          <TextInput
+            style={styles.iconInput}
+            value={formData.socialLinks.other}
+            onChangeText={t => updateSocialLink('other', t)}
+            placeholder="https://"
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+        </View>
       </View>
     </WhiteScreen>
   );
@@ -841,7 +1205,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>Show them what you can do.</Text>
-      <Text style={styles.questionSubtitle}>Add at least one photo of your work. This is your first impression on CRWN.</Text>
+      <Text style={styles.questionSubtitle}>Upload photos of your work — this is your first impression on CRWN.</Text>
       {portfolioPhotos.length === 0 ? (
         <TouchableOpacity style={styles.portfolioUploadBox} onPress={pickPortfolioPhoto} activeOpacity={0.8}>
           <View style={styles.portfolioUploadIcon}>
@@ -916,35 +1280,131 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     );
   };
 
-  const renderHairStyles = () => (
-    <WhiteScreen scrollable footer={<>
-      <ContinueButton onPress={goNext} disabled={formData.selectedStyles.length === 0} />
-      <TouchableOpacity style={styles.skipLink} onPress={goNext}>
-        <Text style={styles.skipLinkText}>Skip for now</Text>
-      </TouchableOpacity>
-    </>}>
+  const renderUsageGoals = () => (
+    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={false} />}>
       {renderBack()}
-      {renderProgress()}
-      <Text style={styles.questionTitle}>Which styles speak to you?</Text>
-      <Text style={styles.questionSubtitle}>Select all that apply — your feed will reflect your taste.</Text>
-
-      <View style={styles.stylesGrid}>
-        {HAIR_STYLE_OPTIONS.map(style => {
-          const selected = formData.selectedStyles.includes(style);
+      <Text style={styles.questionTitle}>How do you want to use CRWN?</Text>
+      <Text style={styles.questionSubtitle}>Select everything that applies, we'll personalize your experience around it.</Text>
+      <View style={styles.optionsContainer}>
+        {USAGE_GOAL_OPTIONS.map(opt => {
+          const sel = formData.usageGoals.includes(opt);
           return (
-            <TouchableOpacity
-              key={style}
-              style={[styles.styleChip, selected && styles.styleChipSelected]}
-              onPress={() => toggleStyle(style)}
-            >
-              <Text style={[styles.styleChipText, selected && styles.styleChipTextSelected]}>{style}</Text>
+            <TouchableOpacity key={opt} style={[styles.optionButton, sel && styles.optionButtonSelected]} onPress={() => toggleUsageGoal(opt)}>
+              <Text style={[styles.optionText, sel && styles.optionTextSelected]}>{opt}</Text>
             </TouchableOpacity>
           );
         })}
       </View>
-
     </WhiteScreen>
   );
+
+  const renderStylesLoading = () => {
+    const placeholderHeights = [220, 180, 200, 240, 190, 210];
+    const leftHeights = placeholderHeights.filter((_, i) => i % 2 === 0);
+    const rightHeights = placeholderHeights.filter((_, i) => i % 2 === 1);
+    const renderPlaceholderCard = (height, key) => (
+      <Animated.View key={key} style={[styles.skeletonCard, { height, opacity: skeletonPulse }]}>
+        <View style={styles.skeletonLabel} />
+      </Animated.View>
+    );
+
+    return (
+      <WhiteScreen scrollable>
+        {renderProgress()}
+        <Text style={styles.questionTitle}>What styles speak to you?</Text>
+        {/* <Text style={styles.questionSubtitle}>Select all that apply — your feed will reflect your taste.</Text> */}
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterBar}
+          contentContainerStyle={styles.filterContent}
+        >
+          {STYLE_FILTER_CHIPS.map(f => (
+            <View key={f} style={[styles.filterChip, f === 'All' && styles.filterChipActive]}>
+              <Text style={[styles.filterChipText, f === 'All' && styles.filterChipTextActive]}>{f}</Text>
+            </View>
+          ))}
+        </ScrollView>
+
+        <View style={styles.masonryRow}>
+          <View style={styles.masonryCol}>{leftHeights.map((h, i) => renderPlaceholderCard(h, `l${i}`))}</View>
+          <View style={styles.masonryCol}>{rightHeights.map((h, i) => renderPlaceholderCard(h, `r${i}`))}</View>
+        </View>
+      </WhiteScreen>
+    );
+  };
+
+  const renderHairStyles = () => {
+    const filteredLooks = hairLookFilter === 'All'
+      ? MOCK_HAIR_LOOKS
+      : MOCK_HAIR_LOOKS.filter(l => l.category === hairLookFilter);
+    const leftLooks = filteredLooks.filter((_, i) => i % 2 === 0);
+    const rightLooks = filteredLooks.filter((_, i) => i % 2 === 1);
+
+    const renderLookCard = (look) => {
+      const selected = formData.selectedStyles.includes(look.id);
+      return (
+        <View key={look.id} style={selected && styles.lookCardGlow}>
+          <TouchableOpacity
+            style={[styles.personCard, { height: look.height }, selected && styles.lookCardSelected]}
+            onPress={() => toggleStyle(look.id)}
+            activeOpacity={0.9}
+          >
+            <LinearGradient colors={look.colors} style={StyleSheet.absoluteFill} />
+            {selected && (
+              <View style={styles.lookCheckmark}>
+                <Ionicons name="checkmark-circle" size={22} color={colors.white} />
+              </View>
+            )}
+            <View style={styles.lookCardTag}>
+              <Text style={styles.lookCardTagText}>{look.label}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+      );
+    };
+
+    return (
+      <WhiteScreen
+        scrollable
+        header={<>
+          {renderBack()}
+          {renderProgress()}
+          <Text style={styles.questionTitle}>What styles speak to you?</Text>
+          {/* <Text style={styles.questionSubtitle}>Select all that apply — your feed will reflect your taste.</Text> */}
+
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterBar}
+            contentContainerStyle={styles.filterContent}
+          >
+            {STYLE_FILTER_CHIPS.map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterChip, hairLookFilter === f && styles.filterChipActive]}
+                onPress={() => setHairLookFilter(f)}
+              >
+                <Text style={[styles.filterChipText, hairLookFilter === f && styles.filterChipTextActive]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </>}
+        footer={<>
+          <ContinueButton onPress={goNext} disabled={formData.selectedStyles.length === 0} />
+          <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+            <Text style={styles.skipLinkText}>Skip for now</Text>
+          </TouchableOpacity>
+        </>}
+      >
+        <View style={styles.masonryRow}>
+          <View style={styles.masonryCol}>{leftLooks.map(renderLookCard)}</View>
+          <View style={styles.masonryCol}>{rightLooks.map(renderLookCard)}</View>
+        </View>
+      </WhiteScreen>
+    );
+  };
 
   const renderCreators = () => {
     const leftCreators = MOCK_CREATORS.filter((_, i) => i % 2 === 0);
@@ -1087,8 +1547,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 32 }} edges={['top']}>
         <Text style={styles.endingEyebrow}>WELCOME TO THE COMMUNITY</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
-          <Text style={styles.endingTitle}>Your crwn{'\n'}</Text>
-          <Text style={styles.endingTitlePlain}>is </Text>
+          <Text style={styles.endingTitle}>Your crwn is {'\n'}</Text>
           <Text style={styles.endingTitleCopper}>ready!</Text>
         </View>
       </SafeAreaView>
@@ -1139,6 +1598,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       case STEPS.WELCOME:           return renderWelcome();
       case STEPS.EMAIL:             return renderEmail();
       case STEPS.NAME:              return renderName();
+      case STEPS.PHONE_VERIFY:      return renderPhoneVerify();
+      case STEPS.USERNAME:          return renderUsername();
       case STEPS.LOCATION:          return renderLocation();
       case STEPS.PROFILE_PHOTO:     return renderProfilePhoto();
       case STEPS.USER_TYPE:              return renderUserType();
@@ -1146,10 +1607,15 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       case STEPS.STYLIST_EXPERIENCE:     return renderStylistExperience();
       case STEPS.STYLIST_SPECIALTIES:    return renderStylistSpecialties();
       case STEPS.STYLIST_BUSINESS_NAME:  return renderStylistBusinessName();
+      case STEPS.STYLIST_CREDENTIALS:    return renderStylistCredentials();
+      case STEPS.STYLIST_BOOKING_LINK:   return renderStylistBookingLink();
+      case STEPS.STYLIST_SOCIAL_LINKS:   return renderStylistSocialLinks();
       case STEPS.STYLIST_AVAILABILITY:   return renderStylistAvailability();
       case STEPS.STYLIST_BOOKING:        return renderStylistBooking();
       case STEPS.STYLIST_PORTFOLIO:      return renderStylistPortfolio();
       case STEPS.STYLIST_FIND_CREATORS:  return renderStylistFindCreators();
+      case STEPS.USAGE_GOALS:            return renderUsageGoals();
+      case STEPS.STYLES_LOADING:         return renderStylesLoading();
       case STEPS.HAIR_STYLES:            return renderHairStyles();
       case STEPS.CREATORS:          return renderCreators();
       case STEPS.DISCOVER_STYLISTS: return renderDiscoverStylists();
@@ -1181,13 +1647,14 @@ const GradientScreen = ({ children }) => (
   </LinearGradient>
 );
 
-const WhiteScreen = ({ children, scrollable, footer }) => (
+const WhiteScreen = ({ children, scrollable, footer, header }) => (
   <SafeAreaView style={styles.whiteContainer} edges={['top', 'bottom']}>
     {scrollable ? (
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        {header && <View style={styles.whiteHeader}>{header}</View>}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={styles.whiteContentScrollable}
+          contentContainerStyle={header ? styles.whiteContentScrollableNoTop : styles.whiteContentScrollable}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -1201,14 +1668,14 @@ const WhiteScreen = ({ children, scrollable, footer }) => (
   </SafeAreaView>
 );
 
-const ContinueButton = ({ onPress, disabled }) => (
+const ContinueButton = ({ onPress, disabled, label = 'Continue' }) => (
   <View style={styles.continueButtonContainer}>
     <TouchableOpacity
       style={[styles.continueButton, !disabled && styles.continueButtonActive]}
       onPress={onPress}
       disabled={disabled}
     >
-      <Text style={styles.continueButtonText}>Continue</Text>
+      <Text style={styles.continueButtonText}>{label}</Text>
     </TouchableOpacity>
   </View>
 );
@@ -1225,6 +1692,8 @@ const styles = StyleSheet.create({
   whiteContainer: { flex: 1, backgroundColor: colors.white },
   whiteContent: { flex: 1, paddingHorizontal: 24, paddingTop: 20 },
   whiteContentScrollable: { paddingHorizontal: 24, paddingTop: 20, paddingBottom: 16 },
+  whiteContentScrollableNoTop: { paddingHorizontal: 24, paddingBottom: 16 },
+  whiteHeader: { paddingHorizontal: 24, paddingTop: 20 },
   whiteFooter: { paddingHorizontal: 24, paddingBottom: 12, paddingTop: 8 },
 
   // Back button
@@ -1264,11 +1733,24 @@ const styles = StyleSheet.create({
   // Inputs
   inputGroup: { marginBottom: 20 },
   inputLabel: { fontSize: 13, color: colors.textSecondary, marginBottom: 8, fontFamily: 'Figtree_400Regular' },
-  input: { borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, fontSize: 15, color: colors.textPrimary, backgroundColor: colors.white },
+  input: { borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 16, fontSize: 15, color: colors.textPrimary, backgroundColor: colors.white, fontFamily: 'Figtree_400Regular' },
   passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, backgroundColor: colors.white },
-  passwordInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 16, fontSize: 15, color: colors.textPrimary },
+  passwordInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 16, fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
   eyeButton: { paddingHorizontal: 12 },
   errorText: { color: '#ef4444', fontSize: 12, marginTop: 4 },
+
+  // OTP-style phone verification code input
+  otpInput: { borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingVertical: 16, fontSize: 24, letterSpacing: 12, color: colors.textPrimary, backgroundColor: colors.white, fontFamily: 'Figtree_600SemiBold' },
+
+  // Username input
+  usernameInputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, backgroundColor: colors.white, paddingHorizontal: 16 },
+  usernameAt: { fontSize: 16, color: colors.textSecondary, marginRight: 4, fontFamily: 'Figtree_500Medium' },
+  usernameInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
+
+  // Icon-prefixed inputs (social links)
+  iconInputContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, backgroundColor: colors.white, paddingHorizontal: 16 },
+  iconInputIcon: { marginRight: 10 },
+  iconInput: { flex: 1, paddingVertical: 12, fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
 
   // User type fork
   userTypeFork: { gap: 14, marginBottom: 28 },
@@ -1278,7 +1760,7 @@ const styles = StyleSheet.create({
   },
   userTypeCardSelected: { borderColor: '#3F523F', backgroundColor: '#F4F7F4' },
   userTypeCardIcon: { fontSize: 28, marginBottom: 10 },
-  userTypeCardTitle: { fontSize: 17, fontFamily: 'LibreBaskerville_700Bold', color: colors.textPrimary, marginBottom: 6 },
+  userTypeCardTitle: { fontSize: 17, fontFamily: 'LibreBaskerville_700Bold', color: colors.copper, marginBottom: 6 },
   userTypeCardDesc: { fontSize: 13, fontFamily: 'Figtree_400Regular', color: colors.textSecondary, lineHeight: 18 },
   userTypeCheckmark: { position: 'absolute', top: 16, right: 16 },
 
@@ -1319,6 +1801,32 @@ const styles = StyleSheet.create({
   masonryRow: { flexDirection: 'row', gap: CARD_GAP, marginBottom: 16 },
   masonryCol: { flex: 1, gap: CARD_GAP },
 
+  // Styles-loading skeleton (STYLES_LOADING)
+  skeletonCard: { width: CARD_COL, borderRadius: 14, backgroundColor: '#E8E2DA', justifyContent: 'flex-end', padding: 10 },
+  skeletonLabel: { width: '50%', height: 14, borderRadius: 7, backgroundColor: '#D4CCC0' },
+
+  // Hair look cards (redesigned HAIR_STYLES grid)
+  lookCardGlow: {
+    borderRadius: 14,
+    shadowColor: colors.honey,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  lookCardSelected: { borderWidth: 2, borderColor: colors.honey },
+  lookCheckmark: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
+  lookCardTag: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  lookCardTagText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: colors.white },
+
   // Person card (creators + stylists)
   personCard: {
     width: CARD_COL,
@@ -1350,10 +1858,10 @@ const styles = StyleSheet.create({
   stylistBadgeText: { fontSize: 10, color: '#fff', fontFamily: 'Figtree_600SemiBold' },
 
   // Filter chips (discover stylists)
-  filterBar: { marginBottom: 16, flexGrow: 0 },
+  filterBar: { marginTop: 16, marginBottom: 16, flexGrow: 0 },
   filterContent: { gap: 8, paddingRight: 8 },
-  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, backgroundColor: '#F5F0E8', borderWidth: 1, borderColor: '#E8DDD0' },
-  filterChipActive: { backgroundColor: '#1A1A1A', borderColor: '#1A1A1A' },
+  filterChip: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 5, backgroundColor: '#F3F0EB' },
+  filterChipActive: { backgroundColor: '#4A5E4A' },
   filterChipText: { fontSize: 13, fontFamily: 'Figtree_500Medium', color: '#5E5E5E' },
   filterChipTextActive: { color: '#fff' },
 
@@ -1366,6 +1874,11 @@ const styles = StyleSheet.create({
   serviceRemove: { padding: 4 },
   addServiceBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, marginTop: 4 },
   addServiceText: { fontSize: 14, color: colors.forest, fontFamily: 'Figtree_600SemiBold' },
+
+  // Credentials photo upload (STYLIST_CREDENTIALS)
+  credentialsUploadBox: { borderWidth: 1.5, borderColor: '#D1D1D1', borderRadius: 16, paddingVertical: 48, alignItems: 'center', justifyContent: 'center', marginVertical: 24, overflow: 'hidden' },
+  credentialsUploadBoxFilled: { paddingVertical: 0 },
+  credentialsPreview: { width: '100%', height: 200, borderRadius: 14 },
 
   // Portfolio upload
   portfolioUploadBox: { borderWidth: 1.5, borderColor: '#D1D1D1', borderRadius: 16, paddingVertical: 48, alignItems: 'center', justifyContent: 'center', marginVertical: 24 },

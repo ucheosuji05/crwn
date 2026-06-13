@@ -15,13 +15,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
+import { AUTH_URL } from '../lib/auth-url';
 
 export default function AuthScreen({ onBack, onForgotPassword }) {
-  const { signIn, signInWithGoogle } = useAuth();
+  const { signIn /* , signInWithGoogle */ } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
+  // const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSignIn = async () => {
@@ -31,33 +32,36 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
     }
     setLoading(true);
     try {
+      console.log('[AuthScreen] signing in to', AUTH_URL, 'email:', email.trim().toLowerCase());
       const result = await signIn(email.trim().toLowerCase(), password);
+      console.log('[AuthScreen] signIn result:', result);
       if (result.error) {
         Alert.alert('Sign In Failed', result.error.message || 'Invalid email or password');
       }
-    } catch {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+    } catch (err) {
+      console.error('[AuthScreen] signIn exception:', err);
+      Alert.alert('Error', err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    try {
-      const result = await signInWithGoogle();
-      if (result.error) {
-        const msg = result.error.message || result.error.statusText || result.error.code || 'Please try again.';
-        Alert.alert('Google Sign In Failed', msg);
-      }
-    } catch (e) {
-      Alert.alert('Error', e?.message || 'Something went wrong. Please try again.');
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
+  // const handleGoogleSignIn = async () => {
+  //   setGoogleLoading(true);
+  //   try {
+  //     const result = await signInWithGoogle();
+  //     if (result.error) {
+  //       const msg = result.error.message || result.error.statusText || result.error.code || 'Please try again.';
+  //       Alert.alert('Google Sign In Failed', msg);
+  //     }
+  //   } catch (e) {
+  //     Alert.alert('Error', e?.message || 'Something went wrong. Please try again.');
+  //   } finally {
+  //     setGoogleLoading(false);
+  //   }
+  // };
 
-  const isDisabled = loading || googleLoading;
+  const isDisabled = loading;
 
   return (
     <LinearGradient
@@ -86,7 +90,7 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
               <Text style={styles.subtitle}>Welcome back</Text>
 
               {/* ── Google sign in ───────────────────────────────── */}
-              <TouchableOpacity
+              {/* <TouchableOpacity
                 style={[styles.googleButton, isDisabled && styles.buttonDisabled]}
                 onPress={handleGoogleSignIn}
                 disabled={isDisabled}
@@ -99,7 +103,7 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
                     <Text style={styles.googleButtonText}>Continue with Google</Text>
                   </>
                 )}
-              </TouchableOpacity>
+              </TouchableOpacity> */}
 
               {/* ── Divider ───────────────────────────────────────── */}
               <View style={styles.dividerRow}>

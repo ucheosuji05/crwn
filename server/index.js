@@ -1,10 +1,23 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from './auth.js';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const serverEnvPath = path.join(__dirname, 'server.env');
+
+const dotenvResult = dotenv.config({ path: serverEnvPath });
+if (dotenvResult.error) {
+  console.warn(`server/index.js: could not load ${serverEnvPath}, falling back to default .env file`);
+  dotenv.config();
+} else {
+  console.log(`server/index.js: loaded environment from ${serverEnvPath}`);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -190,6 +203,27 @@ function supabaseAdminHeaders() {
   return { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' };
 }
 
+function base64url(input) {
+  return Buffer.from(input)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function signSupabaseJWT(payload, secret) {
+  const header = { alg: 'HS256', typ: 'JWT' };
+  const signingInput = `${base64url(JSON.stringify(header))}.${base64url(JSON.stringify(payload))}`;
+  const signature = crypto
+    .createHmac('sha256', secret)
+    .update(signingInput)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `${signingInput}.${signature}`;
+}
+
 // ── Thread upvotes ─────────────────────────────────────────────────────────────
 // Client uses anon key (no session) so auth.uid() is null and RLS blocks
 // all thread_upvotes writes. These endpoints use the service role key.
@@ -280,6 +314,148 @@ app.delete('/api/posts/:postId', async (req, res) => {
     console.error('Delete post error:', err);
     return res.status(500).json({ message: 'Failed to delete post' });
   }
+});
+
+// ── Post create ───────────────────────────────────────────────────────────────
+// Same RLS issue as above: the anon client can't insert into posts/post_media
+// or upload to the post-media bucket (its INSERT policies require auth.uid()
+// or the `authenticated` role, which the anon client never has).
+
+app.post('/api/posts', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { title, description, stylistId, tags } = req.body || {};
+  if (!title) return res.status(400).json({ message: 'Title is required' });
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'return=representation' },
+      body: JSON.stringify({
+        user_id: userId,
+        title,
+        description: description || '',
+        stylist_id: stylistId || null,
+        tags: tags || [],
+        is_public: true,
+      }),
+    });
+    if (!r.ok) {
+      console.error('Create post error:', await r.text());
+      return res.status(r.status).json({ message: 'Failed to create post' });
+    }
+    const [post] = await r.json();
+    return res.json({ post });
+  } catch (err) {
+    console.error('Create post error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Upload one image for a post and create its post_media row.
+// Body: raw image bytes; query: ?ext=jpg&position=0
+app.post('/api/posts/:postId/media', express.raw({ type: '*/*', limit: '20mb' }), async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { postId } = req.params;
+  const ext = (req.query.ext || 'jpg').replace(/[^a-z0-9]/gi, '') || 'jpg';
+  const position = parseInt(req.query.position, 10) || 0;
+  const contentType = req.headers['content-type'] || 'image/jpeg';
+  const h = supabaseAdminHeaders();
+
+  try {
+    const checkRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/posts?id=eq.${postId}&user_id=eq.${userId}&select=id`,
+      { headers: h }
+    );
+    const owned = await checkRes.json();
+    if (!Array.isArray(owned) || owned.length === 0) {
+      return res.status(403).json({ message: 'Post not found or not yours' });
+    }
+
+    const fileName = `${userId}/${postId}/${Date.now()}-${position}.${ext}`;
+    const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/post-media/${fileName}`, {
+      method: 'POST',
+      headers: { apikey: h.apikey, Authorization: h.Authorization, 'Content-Type': contentType },
+      body: req.body,
+    });
+    if (!uploadRes.ok) {
+      console.error('Media upload error:', await uploadRes.text());
+      return res.status(uploadRes.status).json({ message: 'Failed to upload image' });
+    }
+
+    const mediaUrl = `${SUPABASE_URL}/storage/v1/object/public/post-media/${fileName}`;
+    const insertRes = await fetch(`${SUPABASE_URL}/rest/v1/post_media`, {
+      method: 'POST',
+      headers: { ...h, Prefer: 'return=representation' },
+      body: JSON.stringify({ post_id: postId, media_url: mediaUrl, media_type: 'image', position }),
+    });
+    if (!insertRes.ok) {
+      console.error('post_media insert error:', await insertRes.text());
+      return res.status(insertRes.status).json({ message: 'Failed to save image' });
+    }
+    const [media] = await insertRes.json();
+    return res.json({ media });
+  } catch (err) {
+    console.error('Post media error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Thread create ────────────────────────────────────────────────────────────
+// threads' INSERT policies also require auth.uid() = user_id.
+app.post('/api/threads', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { category, title, body } = req.body || {};
+  if (!category || !title || !body) {
+    return res.status(400).json({ message: 'category, title, and body are required' });
+  }
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/threads`, {
+      method: 'POST',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'return=representation' },
+      body: JSON.stringify({ user_id: userId, category, title, body }),
+    });
+    if (!r.ok) {
+      console.error('Create thread error:', await r.text());
+      return res.status(r.status).json({ message: 'Failed to create thread' });
+    }
+    const [thread] = await r.json();
+    return res.json({ thread });
+  } catch (err) {
+    console.error('Create thread error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// ── Supabase token sync ─────────────────────────────────────────────────────
+// Mints a short-lived Supabase-compatible JWT from the Better Auth session so
+// supabase-js (via the `accessToken` option) can make auth.uid() resolve for
+// RLS-gated tables. Must be registered before the Better Auth catch-all below.
+app.get('/api/auth/supabase-token', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const secret = process.env.SUPABASE_JWT_SECRET;
+  if (!secret) {
+    console.error('SUPABASE_JWT_SECRET is not set');
+    return res.status(500).json({ message: 'Server misconfiguration' });
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const exp = now + 60 * 60; // 1 hour
+
+  const token = signSupabaseJWT(
+    { sub: userId, role: 'authenticated', aud: 'authenticated', iat: now, exp },
+    secret
+  );
+
+  return res.json({ token, exp });
 });
 
 // Better Auth handles all /api/auth/* routes

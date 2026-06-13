@@ -6,7 +6,7 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
+import { AUTH_URL } from '../lib/auth-url';
 
 export default function ForgotPasswordScreen({ onBack }) {
   const [email, setEmail] = useState('');

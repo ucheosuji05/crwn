@@ -1,8 +1,7 @@
 import { Platform } from 'react-native';
 import { supabase } from '../config/supabase';
 import { getAuthToken } from '../lib/auth-client';
-
-const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
+import { AUTH_URL } from '../lib/auth-url';
 
 export const postService = {
   // Get all posts (for Explore page)
@@ -71,90 +70,86 @@ export const postService = {
     return { data: sorted ?? data, error };
   },
 
-  // Create post
-  async createPost(userId, postData, mediaFiles = []) {
+  // Create post — routed through the server so the service role key bypasses
+  // Supabase RLS (anon client has no session, so auth.uid() would be null).
+  async createPost(postData, mediaFiles = []) {
+    const token = getAuthToken();
+    if (!token) return { data: null, error: { message: 'Not authenticated' } };
+
     try {
       // Insert post
-      const { data: post, error: postError } = await supabase
-        .from('posts')
-        .insert([{
-          user_id: userId,
+      const postRes = await fetch(`${AUTH_URL}/api/posts`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           title: postData.title,
           description: postData.description,
-          stylist_id: postData.stylistId || null,
+          stylistId: postData.stylistId || null,
           tags: postData.tags || [],
-          is_public: true,
-        }])
-        .select()
-        .single();
-
-      if (postError) throw postError;
+        }),
+      });
+      if (!postRes.ok) {
+        const body = await postRes.json().catch(() => ({}));
+        throw new Error(body.message || 'Failed to create post');
+      }
+      const { post } = await postRes.json();
 
       // Upload media files
-      if (mediaFiles.length > 0) {
-        for (let i = 0; i < mediaFiles.length; i++) {
-          const file = mediaFiles[i];
+      for (let i = 0; i < mediaFiles.length; i++) {
+        const file = mediaFiles[i];
 
-          let uploadData;
-          let contentType;
-          let fileExt;
+        let uploadData;
+        let contentType;
+        let fileExt;
 
-          if (Platform.OS === 'web') {
-            const response = await fetch(file.uri);
-            const blob = await response.blob();
-            contentType = blob.type || 'image/jpeg';
-            // HEIC/HEIF is not renderable in web browsers — treat as JPEG
-            // (the ensureJpeg() step in CreatePostScreen should have already
-            //  converted these, but guard here too just in case)
-            if (contentType.includes('heic') || contentType.includes('heif')) {
-              contentType = 'image/jpeg';
-            }
-            fileExt = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
-            uploadData = blob;
-          } else {
-            fileExt = file.uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
-            // HEIC should have been converted by ensureJpeg() before reaching here,
-            // but normalise the extension/type if it somehow wasn't.
-            if (fileExt === 'heic' || fileExt === 'heif') {
-              fileExt = 'jpg';
-            }
-            contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
-            uploadData = await new Promise((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.open('GET', file.uri);
-              xhr.responseType = 'arraybuffer';
-              xhr.onload = () => resolve(xhr.response);
-              xhr.onerror = reject;
-              xhr.send();
-            });
+        if (Platform.OS === 'web') {
+          const response = await fetch(file.uri);
+          const blob = await response.blob();
+          contentType = blob.type || 'image/jpeg';
+          // HEIC/HEIF is not renderable in web browsers — treat as JPEG
+          // (the ensureJpeg() step in CreatePostScreen should have already
+          //  converted these, but guard here too just in case)
+          if (contentType.includes('heic') || contentType.includes('heif')) {
+            contentType = 'image/jpeg';
           }
-
-          const fileName = `${userId}/${post.id}/${Date.now()}-${i}.${fileExt}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('post-media')
-            .upload(fileName, uploadData, { contentType });
-
-          if (uploadError) {
-            console.error('Media upload failed for image', i, JSON.stringify(uploadError));
-            throw uploadError;
+          fileExt = contentType.split('/')[1]?.replace('jpeg', 'jpg') || 'jpg';
+          uploadData = blob;
+        } else {
+          fileExt = file.uri.split('.').pop()?.split('?')[0]?.toLowerCase() || 'jpg';
+          // HEIC should have been converted by ensureJpeg() before reaching here,
+          // but normalise the extension/type if it somehow wasn't.
+          if (fileExt === 'heic' || fileExt === 'heif') {
+            fileExt = 'jpg';
           }
+          contentType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
+          uploadData = await new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', file.uri);
+            xhr.responseType = 'arraybuffer';
+            xhr.onload = () => resolve(xhr.response);
+            xhr.onerror = reject;
+            xhr.send();
+          });
+        }
 
-          const { data: urlData } = supabase.storage
-            .from('post-media')
-            .getPublicUrl(fileName);
-
-          const { error: mediaInsertError } = await supabase.from('post_media').insert([{
-            post_id: post.id,
-            media_url: urlData.publicUrl,
-            media_type: 'image',
-            position: i,
-          }]);
-
-          if (mediaInsertError) {
-            console.error('post_media insert failed:', JSON.stringify(mediaInsertError));
-            throw mediaInsertError;
+        const mediaRes = await fetch(
+          `${AUTH_URL}/api/posts/${post.id}/media?ext=${encodeURIComponent(fileExt)}&position=${i}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': contentType,
+            },
+            body: uploadData,
           }
+        );
+        if (!mediaRes.ok) {
+          const body = await mediaRes.json().catch(() => ({}));
+          console.error('Media upload failed for image', i, JSON.stringify(body));
+          throw new Error(body.message || 'Failed to upload image');
         }
       }
 

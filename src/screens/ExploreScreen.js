@@ -252,8 +252,11 @@ export default function ExploreScreen() {
   const wordStartsWith = (str, q) =>
     str ? str.toLowerCase().split(/[\s\-_]+/).some(w => w.startsWith(q)) : false;
 
+  // Deduplicate posts by ID to prevent React key warnings during pagination or optimistic updates
+  const uniquePosts = [...new Map(posts.map(p => [p.id, p])).values()];
+
   const filteredPosts = isSearching
-    ? posts.filter((p) => {
+    ? uniquePosts.filter((p) => {
         const q = query.toLowerCase().replace(/^#/, '');
         const matchesUser =
           wordStartsWith(p.profiles?.username, q) ||
@@ -262,7 +265,7 @@ export default function ExploreScreen() {
           Array.isArray(p.tags) && p.tags.some(t => wordStartsWith(t, q));
         return matchesUser || matchesTag;
       })
-    : posts;
+    : uniquePosts;
 
   // Batch dimension updates into a single setState per animation frame
   const flushDims = useCallback(() => {

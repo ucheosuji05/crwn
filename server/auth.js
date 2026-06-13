@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth';
 import { bearer } from 'better-auth/plugins';
 import { Pool } from 'pg';
+import { randomUUID } from 'crypto';
 
 // Send via Resend if key is present, otherwise log the link to console (dev)
 async function sendEmail({ to, subject, html }) {
@@ -49,6 +50,14 @@ export const auth = betterAuth({
     connectionString: process.env.DATABASE_URL,
   }),
 
+  // Generate UUIDs (in JS) for all Better Auth records so public.user.id stays
+  // compatible with profiles.id (uuid) and auth.uid() (casts the JWT `sub` to uuid).
+  advanced: {
+    database: {
+      generateId: () => randomUUID(),
+    },
+  },
+
   // Email + password sign up / sign in
   emailAndPassword: {
     enabled: true,
@@ -95,10 +104,10 @@ export const auth = betterAuth({
   },
 
   socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    },
+    // google: {
+    //   clientId: process.env.GOOGLE_CLIENT_ID,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    // },
     facebook: {
       clientId: process.env.META_CLIENT_ID,
       clientSecret: process.env.META_CLIENT_SECRET,

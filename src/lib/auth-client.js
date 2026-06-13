@@ -1,7 +1,7 @@
 import { createAuthClient } from 'better-auth/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AUTH_URL } from './auth-url';
 
-const AUTH_URL = process.env.EXPO_PUBLIC_AUTH_URL || 'http://localhost:3001';
 const TOKEN_KEY = '@crwn/auth_token';
 
 let cachedToken = null;

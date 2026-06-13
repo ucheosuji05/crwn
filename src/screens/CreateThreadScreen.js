@@ -56,7 +56,7 @@ export default function CreateThreadScreen({ onBack, onThreadCreated }) {
     }
 
     setLoading(true);
-    const { data, error } = await threadService.createThread(user.id, {
+    const { data, error } = await threadService.createThread({
       category,
       title: title.trim(),
       body: body.trim(),
