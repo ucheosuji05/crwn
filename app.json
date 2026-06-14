@@ -24,7 +24,7 @@
       "expo-web-browser"
     ],
     "extra": {
-      "authUrl": "http://10.107.11.194:3001",
+      "authUrl": "https://crwn-production.up.railway.app",
       "eas": {
         "projectId": "e3eed5ea-2ccd-4f33-b260-59d3aba14152"
       }

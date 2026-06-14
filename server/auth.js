@@ -44,6 +44,8 @@ export const auth = betterAuth({
     'crwn://',
     'crwn://reset-password',
     'crwn://auth/callback',
+    // Production Railway URL
+    'https://crwn-production.up.railway.app',
     // Local dev IPs — phone on same Wi-Fi network
     'http://10.107.11.194:3001',
     'http://172.24.192.1:3001',
