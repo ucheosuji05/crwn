@@ -1,8 +1,10 @@
+import dotenv from 'dotenv';
+dotenv.config(); // load env first, before anything else
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
+//import path from 'path';
+//import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from './auth.js';
@@ -16,17 +18,17 @@ process.on('unhandledRejection', (err) => {
 });
 
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const serverEnvPath = path.join(__dirname, 'server.env');
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+// const serverEnvPath = path.join(__dirname, 'server.env');
 
-const dotenvResult = dotenv.config({ path: serverEnvPath });
-if (dotenvResult.error) {
-  console.warn(`server/index.js: could not load ${serverEnvPath}, falling back to default .env file`);
-  dotenv.config();
-} else {
-  console.log(`server/index.js: loaded environment from ${serverEnvPath}`);
-}
+// const dotenvResult = dotenv.config({ path: serverEnvPath });
+// if (dotenvResult.error) {
+//   console.warn(`server/index.js: could not load ${serverEnvPath}, falling back to default .env file`);
+//   dotenv.config();
+// } else {
+//   console.log(`server/index.js: loaded environment from ${serverEnvPath}`);
+// }
 
 const app = express();
 const PORT = process.env.PORT || 3001;
