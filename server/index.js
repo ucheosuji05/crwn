@@ -666,6 +666,10 @@ app.all('/api/auth/*', toNodeHandler(auth));
 // Health check
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.listen(PORT, () => {
+// app.listen(PORT, () => {
+//   console.log(`CRWN auth server running on port ${PORT}`);
+// });
+
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`CRWN auth server running on port ${PORT}`);
 });
