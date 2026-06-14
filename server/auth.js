@@ -44,6 +44,14 @@ export const auth = betterAuth({
     'crwn://',
     'crwn://reset-password',
     'crwn://auth/callback',
+    // Local dev IPs — phone on same Wi-Fi network
+    'http://10.107.11.194:3001',
+    'http://172.24.192.1:3001',
+    'http://localhost:3001',
+    // Expo web dev server origins
+    'http://localhost:8081',
+    'http://localhost:19006',
+    'http://localhost:19000',
   ].filter(Boolean),
 
   database: new Pool({

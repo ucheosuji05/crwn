@@ -19,15 +19,15 @@ export const authClient = createAuthClient({
   baseURL: AUTH_URL,
   fetchOptions: {
     onRequest: async (ctx) => {
-      // Wait for AsyncStorage to finish loading before the first request
       await tokenLoaded;
-      if (cachedToken) {
-        if (!ctx.headers) ctx.headers = {};
-        if (ctx.headers instanceof Headers) {
-          ctx.headers.set('Authorization', `Bearer ${cachedToken}`);
-        } else {
-          ctx.headers['Authorization'] = `Bearer ${cachedToken}`;
-        }
+      if (!ctx.headers) ctx.headers = {};
+      // React Native omits Origin; Better Auth requires it for CSRF validation
+      if (ctx.headers instanceof Headers) {
+        ctx.headers.set('Origin', AUTH_URL);
+        if (cachedToken) ctx.headers.set('Authorization', `Bearer ${cachedToken}`);
+      } else {
+        ctx.headers['Origin'] = AUTH_URL;
+        if (cachedToken) ctx.headers['Authorization'] = `Bearer ${cachedToken}`;
       }
       return ctx;
     },
