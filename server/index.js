@@ -7,6 +7,15 @@ import crypto from 'crypto';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from './auth.js';
 
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled Rejection:', err);
+});
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const serverEnvPath = path.join(__dirname, 'server.env');
