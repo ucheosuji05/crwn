@@ -58,6 +58,8 @@ export const auth = betterAuth({
 
   database: new Pool({
     connectionString: process.env.DATABASE_URL,
+    // Supabase pooler requires SSL from external hosts (Railway, etc.)
+    ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
   }),
 
   // Generate UUIDs (in JS) for all Better Auth records so public.user.id stays
