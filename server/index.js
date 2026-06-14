@@ -660,11 +660,11 @@ app.get('/api/auth/supabase-token', async (req, res) => {
   return res.json({ token, exp });
 });
 
+// Health check — must come before the Better Auth catch-all
+app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
 // Better Auth handles all /api/auth/* routes
 app.all('/api/auth/*', toNodeHandler(auth));
-
-// Health check
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // app.listen(PORT, () => {
 //   console.log(`CRWN auth server running on port ${PORT}`);
