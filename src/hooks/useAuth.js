@@ -1,6 +1,7 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
 import { authClient, initAuth } from '../lib/auth-client';
 import { authService } from '../services/authService';
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext({});
 
@@ -13,8 +14,19 @@ const DEV_USER = {
   userType: 'explorer',
 };
 
+async function fetchSupabaseProfile(userId) {
+  if (!userId) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('id, username, full_name, avatar_url, is_stylist')
+    .eq('id', userId)
+    .single();
+  return data || null;
+}
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(DEV_BYPASS_AUTH ? DEV_USER : null);
+  const [profile, setProfile] = useState(DEV_BYPASS_AUTH ? DEV_USER : null);
   const [session, setSession] = useState(DEV_BYPASS_AUTH ? { id: 'dev-session' } : null);
   const [loading, setLoading] = useState(!DEV_BYPASS_AUTH);
 
@@ -29,8 +41,15 @@ export const AuthProvider = ({ children }) => {
           setTimeout(() => reject(new Error('Session check timed out')), 8000)
         );
         const { data } = await Promise.race([authClient.getSession(), timeout]);
+        const authUser = data?.user || null;
         setSession(data?.session || null);
-        setUser(data?.user || null);
+        setUser(authUser);
+        if (authUser?.id) {
+          const supabaseProfile = await fetchSupabaseProfile(authUser.id);
+          setProfile(supabaseProfile ? { ...authUser, ...supabaseProfile } : authUser);
+        } else {
+          setProfile(null);
+        }
       } catch (err) {
         console.error('AuthProvider: Failed to load session', err);
       } finally {
@@ -44,10 +63,14 @@ export const AuthProvider = ({ children }) => {
   const signUp = useCallback(async (email, password, userData) => {
     const result = await authService.signUp(email, password, userData);
     if (result.user) {
-      // Refresh session after sign up
       const { data } = await authClient.getSession();
+      const authUser = data?.user || null;
       setSession(data?.session || null);
-      setUser(data?.user || null);
+      setUser(authUser);
+      if (authUser?.id) {
+        const supabaseProfile = await fetchSupabaseProfile(authUser.id);
+        setProfile(supabaseProfile ? { ...authUser, ...supabaseProfile } : authUser);
+      }
     }
     return result;
   }, []);
@@ -57,6 +80,8 @@ export const AuthProvider = ({ children }) => {
     if (result.user) {
       setSession(result.session);
       setUser(result.user);
+      const supabaseProfile = await fetchSupabaseProfile(result.user.id);
+      setProfile(supabaseProfile ? { ...result.user, ...supabaseProfile } : result.user);
     }
     return result;
   }, []);
@@ -66,6 +91,8 @@ export const AuthProvider = ({ children }) => {
     if (result.data?.user) {
       setUser(result.data.user);
       setSession(result.data.session);
+      const supabaseProfile = await fetchSupabaseProfile(result.data.user.id);
+      setProfile(supabaseProfile ? { ...result.data.user, ...supabaseProfile } : result.data.user);
     }
     return result;
   }, []);
@@ -75,6 +102,8 @@ export const AuthProvider = ({ children }) => {
     if (result.data?.user) {
       setUser(result.data.user);
       setSession(result.data.session);
+      const supabaseProfile = await fetchSupabaseProfile(result.data.user.id);
+      setProfile(supabaseProfile ? { ...result.data.user, ...supabaseProfile } : result.data.user);
     }
     return result;
   }, []);
@@ -83,13 +112,21 @@ export const AuthProvider = ({ children }) => {
     await authService.signOut();
     setUser(null);
     setSession(null);
+    setProfile(null);
   }, []);
 
   const refreshProfile = useCallback(async () => {
     try {
       const { data } = await authClient.getSession();
+      const authUser = data?.user || null;
       setSession(data?.session || null);
-      setUser(data?.user || null);
+      setUser(authUser);
+      if (authUser?.id) {
+        const supabaseProfile = await fetchSupabaseProfile(authUser.id);
+        setProfile(supabaseProfile ? { ...authUser, ...supabaseProfile } : authUser);
+      } else {
+        setProfile(null);
+      }
     } catch (err) {
       console.error('refreshProfile error:', err);
     }
@@ -99,8 +136,8 @@ export const AuthProvider = ({ children }) => {
     user,
     session,
     loading,
-    profile: user,        // BottomTabNavigator uses profile?.is_stylist
-    profileLoaded: !loading, // BottomTabNavigator gates the Stylists tab on this
+    profile,
+    profileLoaded: !loading,
     signUp,
     signIn,
     signInWithGoogle,
