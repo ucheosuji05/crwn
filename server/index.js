@@ -671,7 +671,12 @@ app.get('/api/auth/supabase-token', async (req, res) => {
 });
 
 // Better Auth handles all /api/auth/* routes
-app.all('/api/auth/*', toNodeHandler(auth));
+app.all('/api/auth/*', (req, res, next) => {
+  Promise.resolve(toNodeHandler(auth)(req, res)).catch((err) => {
+    console.error('[better-auth crash]', err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message || String(err) });
+  });
+});
 
 // app.listen(PORT, () => {
 //   console.log(`CRWN auth server running on port ${PORT}`);
