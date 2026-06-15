@@ -75,7 +75,10 @@ app.get('/api/auth/oauth-start/:provider', (req, res) => {
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var url = data.url || (data.data && data.data.url);
-        if (url) { window.location.href = url; }
+        if (url) {
+          document.getElementById('msg').textContent = url;
+          setTimeout(function() { window.location.href = url; }, 8000);
+        }
         else { document.getElementById('msg').textContent = 'Sign-in failed - close and try again.'; }
       })
       .catch(function() { document.getElementById('msg').textContent = 'Connection error - close and try again.'; });
