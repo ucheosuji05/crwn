@@ -34,9 +34,6 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 console.log(`[startup] PORT=${PORT} NODE_ENV=${process.env.NODE_ENV}`);
-console.log(`[startup] GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID || 'NOT SET'}`);
-console.log(`[startup] GOOGLE_CLIENT_SECRET=${process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOGLE_CLIENT_SECRET.substring(0, 10) + '...' : 'NOT SET'}`);
-console.log(`[startup] BETTER_AUTH_URL=${process.env.BETTER_AUTH_URL || 'NOT SET'}`);
 
 // Health check first — before CORS and everything else
 app.use((req, res, next) => {
@@ -75,10 +72,7 @@ app.get('/api/auth/oauth-start/:provider', (req, res) => {
       .then(function(r) { return r.json(); })
       .then(function(data) {
         var url = data.url || (data.data && data.data.url);
-        if (url) {
-          document.getElementById('msg').textContent = url;
-          setTimeout(function() { window.location.href = url; }, 8000);
-        }
+        if (url) { window.location.href = url; }
         else { document.getElementById('msg').textContent = 'Sign-in failed - close and try again.'; }
       })
       .catch(function() { document.getElementById('msg').textContent = 'Connection error - close and try again.'; });
