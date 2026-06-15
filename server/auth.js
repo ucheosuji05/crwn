@@ -2,6 +2,10 @@ import { betterAuth } from 'better-auth';
 import { bearer } from 'better-auth/plugins';
 import { Pool } from 'pg';
 import { randomUUID } from 'crypto';
+import dns from 'dns';
+
+// Railway containers can't reach IPv6 — force pg to resolve hostnames to IPv4
+dns.setDefaultResultOrder('ipv4first');
 
 // Send via Resend if key is present, otherwise log the link to console (dev)
 async function sendEmail({ to, subject, html }) {
