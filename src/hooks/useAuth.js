@@ -88,12 +88,46 @@ export const AuthProvider = ({ children }) => {
 
   const signInWithGoogle = useCallback(async () => {
     const result = await authService.signInWithGoogle();
-    if (result.data?.user) {
-      setUser(result.data.user);
-      setSession(result.data.session);
-      const supabaseProfile = await fetchSupabaseProfile(result.data.user.id);
-      setProfile(supabaseProfile ? { ...result.data.user, ...supabaseProfile } : result.data.user);
+    if (result.error) return result;
+
+    // Prefer data from _socialSignIn, but fall back to a fresh getSession if empty
+    let authUser = result.data?.user || null;
+    let authSession = result.data?.session || null;
+
+    if (!authUser) {
+      console.log('[signInWithGoogle] result.data empty — retrying getSession');
+      const { data } = await authClient.getSession();
+      authUser = data?.user || null;
+      authSession = data?.session || null;
     }
+
+    console.log('[signInWithGoogle] authUser:', authUser?.email);
+
+    if (authUser) {
+      setUser(authUser);
+      setSession(authSession);
+
+      let supabaseProfile = await fetchSupabaseProfile(authUser.id);
+
+      // New Google user — auto-create a minimal Supabase profile
+      if (!supabaseProfile) {
+        try {
+          const base = (authUser.email?.split('@')[0] || `user`).toLowerCase().replace(/[^a-z0-9_]/g, '_');
+          await supabase.from('profiles').insert([{
+            id: authUser.id,
+            full_name: authUser.name || '',
+            username: base,
+            avatar_url: authUser.image || null,
+          }]);
+          supabaseProfile = await fetchSupabaseProfile(authUser.id);
+        } catch (err) {
+          console.warn('[signInWithGoogle] profile auto-create failed:', err.message);
+        }
+      }
+
+      setProfile(supabaseProfile ? { ...authUser, ...supabaseProfile } : authUser);
+    }
+
     return result;
   }, []);
 

@@ -196,15 +196,34 @@ app.post('/api/auth/web-reset', async (req, res) => {
 
 // Custom mobile callback MUST come before the Better Auth catch-all,
 // otherwise toNodeHandler consumes the request and this handler is never reached.
-app.get('/api/auth/mobile-callback', (req, res) => {
+app.get('/api/auth/mobile-callback', async (req, res) => {
   const cookieHeader = req.headers.cookie || '';
-  const match = cookieHeader.match(/better-auth\.session_token=([^;]+)/);
-  const token = match ? decodeURIComponent(match[1]) : null;
+  console.log('[mobile-callback] cookies:', cookieHeader ? cookieHeader.substring(0, 300) : '(none)');
 
-  if (!token) {
-    return res.redirect('crwn://auth/callback?error=no_session');
+  // Primary: use Better Auth's session API to get the verified session token
+  try {
+    const sessionData = await auth.api.getSession({
+      headers: { cookie: cookieHeader },
+    });
+    if (sessionData?.session?.token) {
+      console.log('[mobile-callback] session via API for:', sessionData.user?.email);
+      return res.redirect(`crwn://auth/callback?token=${encodeURIComponent(sessionData.session.token)}`);
+    }
+    console.log('[mobile-callback] auth.api.getSession returned no session');
+  } catch (err) {
+    console.error('[mobile-callback] auth.api.getSession error:', err.message);
   }
-  res.redirect(`crwn://auth/callback?token=${encodeURIComponent(token)}`);
+
+  // Fallback: extract token directly from the session cookie
+  const match = cookieHeader.match(/better-auth\.session_token=([^;]+)/);
+  const rawToken = match ? decodeURIComponent(match[1]) : null;
+  if (rawToken) {
+    console.log('[mobile-callback] using raw cookie token (fallback)');
+    return res.redirect(`crwn://auth/callback?token=${encodeURIComponent(rawToken)}`);
+  }
+
+  console.log('[mobile-callback] no session found');
+  res.redirect('crwn://auth/callback?error=no_session');
 });
 
 // ── Shared helpers ────────────────────────────────────────────────────────────

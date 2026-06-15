@@ -56,15 +56,20 @@ export const authService = {
       const startUrl = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}`;
       const result = await WebBrowser.openAuthSessionAsync(startUrl, 'crwn://auth/callback');
 
+      console.log('[_socialSignIn] browser result type:', result.type, 'url prefix:', result.url?.substring(0, 60));
+
       if (result.type !== 'success') {
         return { data: null, error: new Error('Sign-in was cancelled') };
       }
 
-      // Parse token from the deep link (crwn://auth/callback?token=...)
-      const qs = result.url.split('?')[1] || '';
-      const params = Object.fromEntries(qs.split('&').map(p => p.split('=')).filter(p => p.length === 2).map(([k, v]) => [k, decodeURIComponent(v)]));
-      const token = params.token;
-      const oauthError = params.error;
+      // Robust URL parsing using URLSearchParams
+      const qsStart = result.url.indexOf('?');
+      const qs = qsStart >= 0 ? result.url.slice(qsStart + 1) : '';
+      const params = new URLSearchParams(qs);
+      const token = params.get('token');
+      const oauthError = params.get('error');
+
+      console.log('[_socialSignIn] oauthError:', oauthError, 'hasToken:', !!token);
 
       if (oauthError || !token) {
         return { data: null, error: new Error(oauthError || 'No token received') };
@@ -72,6 +77,7 @@ export const authService = {
 
       await storeAuthToken(token);
       const { data: sessionData } = await authClient.getSession();
+      console.log('[_socialSignIn] getSession result — user:', sessionData?.user?.email, 'session:', !!sessionData?.session);
       return { data: sessionData, error: null };
     } catch (err) {
       return { data: null, error: new Error(err?.message || `${provider} sign-in failed`) };
