@@ -39,8 +39,13 @@ export const auth = betterAuth({
   secret: process.env.BETTER_AUTH_SECRET,
 
   rateLimit: {
-    window: 60,   // 60 seconds
-    max: 20,      // allow 20 attempts per window
+    window: 60,
+    max: 20,
+  },
+
+  logger: {
+    disabled: false,
+    level: 'debug',
   },
 
   // Allow crwn:// deep links and the server's own origin (browser form POSTs from the bridge page)
