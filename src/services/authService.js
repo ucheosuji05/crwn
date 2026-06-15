@@ -62,9 +62,10 @@ export const authService = {
         return { data: null, error: new Error('Sign-in was cancelled') };
       }
 
-      // Robust URL parsing using URLSearchParams
-      const qsStart = result.url.indexOf('?');
-      const qs = qsStart >= 0 ? result.url.slice(qsStart + 1) : '';
+      // Strip fragment (#) before parsing — iOS can append a bare # to deep links
+      const urlWithoutFragment = result.url.split('#')[0];
+      const qsStart = urlWithoutFragment.indexOf('?');
+      const qs = qsStart >= 0 ? urlWithoutFragment.slice(qsStart + 1) : '';
       const params = new URLSearchParams(qs);
       const token = params.get('token');
       const oauthError = params.get('error');
