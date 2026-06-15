@@ -17,6 +17,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { AUTH_URL } from '../lib/auth-url';
 
+const colors = {
+  gradientTop: '#E8C4B8',
+  gradientMiddle: '#D4A574',
+  gradientBottom: '#A67B5B',
+  white: '#FFFFFF',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#5E5E5E',
+  textBrown: '#5D3A1A',
+  maroon: '#5D1F1F',
+};
+
 export default function AuthScreen({ onBack, onForgotPassword }) {
   const { signIn, signInWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
@@ -24,6 +35,8 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const isDisabled = loading || googleLoading;
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -34,12 +47,10 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
     try {
       console.log('[AuthScreen] signing in to', AUTH_URL, 'email:', email.trim().toLowerCase());
       const result = await signIn(email.trim().toLowerCase(), password);
-      console.log('[AuthScreen] signIn result:', result);
       if (result.error) {
         Alert.alert('Sign In Failed', result.error.message || 'Invalid email or password');
       }
     } catch (err) {
-      console.error('[AuthScreen] signIn exception:', err);
       Alert.alert('Error', err?.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
@@ -61,64 +72,69 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
     }
   };
 
-  const isDisabled = loading || googleLoading;
-
   return (
     <LinearGradient
-      colors={['#E8C4B8', '#D4A574', '#A67B5B']}
+      colors={[colors.gradientTop, colors.gradientMiddle, colors.gradientBottom]}
       locations={[0, 0.5, 1]}
-      style={styles.container}
+      style={styles.gradient}
     >
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.container}
+          style={styles.flex}
         >
           <ScrollView
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* Back button */}
             {onBack && (
-              <TouchableOpacity style={styles.backButton} onPress={onBack}>
-                <Ionicons name="arrow-back" size={24} color="#fff" />
+              <TouchableOpacity style={styles.backButton} onPress={onBack} disabled={isDisabled}>
+                <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             )}
 
-            <View style={styles.content}>
-              <Text style={styles.title}>crâ™›n</Text>
-              <Text style={styles.subtitle}>Welcome back</Text>
+            {/* Logo */}
+            <View style={styles.logoSection}>
+              <Text style={styles.logo}>crwn.</Text>
+              <Text style={styles.tagline}>Welcome back</Text>
+            </View>
 
-              {/* ── Google sign in ───────────────────────────────── */}
+            {/* Form */}
+            <View style={styles.formSection}>
+
+              {/* Google button */}
               <TouchableOpacity
                 style={[styles.googleButton, isDisabled && styles.buttonDisabled]}
                 onPress={handleGoogleSignIn}
                 disabled={isDisabled}
+                activeOpacity={0.85}
               >
                 {googleLoading ? (
-                  <ActivityIndicator color="#444" />
+                  <ActivityIndicator color={colors.textBrown} />
                 ) : (
                   <>
-                    <Ionicons name="logo-google" size={20} color="#444" />
+                    <Ionicons name="logo-google" size={18} color={colors.textBrown} />
                     <Text style={styles.googleButtonText}>Continue with Google</Text>
                   </>
                 )}
               </TouchableOpacity>
 
-              {/* ── Divider ───────────────────────────────────────── */}
+              {/* Divider */}
               <View style={styles.dividerRow}>
                 <View style={styles.dividerLine} />
                 <Text style={styles.dividerText}>or sign in with email</Text>
                 <View style={styles.dividerLine} />
               </View>
 
-              {/* ── Email ─────────────────────────────────────────── */}
-              <View style={styles.inputContainer}>
+              {/* Email */}
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Email</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="you@example.com"
-                  placeholderTextColor="#999"
+                  placeholderTextColor="#B0A898"
                   value={email}
                   onChangeText={setEmail}
                   keyboardType="email-address"
@@ -128,14 +144,14 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
                 />
               </View>
 
-              {/* ── Password ──────────────────────────────────────── */}
-              <View style={styles.inputContainer}>
+              {/* Password */}
+              <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Password</Text>
                 <View style={styles.passwordContainer}>
                   <TextInput
                     style={styles.passwordInput}
                     placeholder="Enter your password"
-                    placeholderTextColor="#999"
+                    placeholderTextColor="#B0A898"
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry={!showPassword}
@@ -144,39 +160,38 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
                   />
                   <TouchableOpacity
                     style={styles.eyeButton}
-                    onPress={() => setShowPassword(!showPassword)}
+                    onPress={() => setShowPassword(v => !v)}
                   >
-                    <Ionicons
-                      name={showPassword ? 'eye-off' : 'eye'}
-                      size={22}
-                      color="#666"
-                    />
+                    <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.forgotButton} onPress={onForgotPassword}>
+              {/* Forgot password */}
+              <TouchableOpacity style={styles.forgotButton} onPress={onForgotPassword} disabled={isDisabled}>
                 <Text style={styles.forgotText}>Forgot password?</Text>
               </TouchableOpacity>
 
-              {/* ── Email sign in button ──────────────────────────── */}
+              {/* Sign In */}
               <TouchableOpacity
-                style={[styles.button, isDisabled && styles.buttonDisabled]}
+                style={[styles.signInButton, isDisabled && styles.buttonDisabled]}
                 onPress={handleSignIn}
                 disabled={isDisabled}
+                activeOpacity={0.85}
               >
                 {loading ? (
-                  <ActivityIndicator color="#8B4513" />
+                  <ActivityIndicator color={colors.white} />
                 ) : (
-                  <Text style={styles.buttonText}>Sign In</Text>
+                  <Text style={styles.signInButtonText}>Sign In</Text>
                 )}
               </TouchableOpacity>
 
+              {/* Switch to sign up */}
               {onBack && (
-                <TouchableOpacity onPress={onBack} disabled={isDisabled}>
+                <TouchableOpacity onPress={onBack} disabled={isDisabled} style={styles.switchRow}>
                   <Text style={styles.switchText}>
                     Don't have an account?{' '}
-                    <Text style={styles.switchLink}>Create one</Text>
+                    <Text style={styles.switchLink}>Sign Up</Text>
                   </Text>
                 </TouchableOpacity>
               )}
@@ -189,128 +204,144 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  gradient: { flex: 1 },
   safeArea: { flex: 1 },
-  scrollContent: { flexGrow: 1 },
+  flex: { flex: 1 },
+  scrollContent: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 32 },
+
   backButton: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
     marginTop: 8,
-  },
-  content: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 24,
-    paddingBottom: 40,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 'bold',
-    textAlign: 'center',
+    marginLeft: -8,
     marginBottom: 8,
-    color: '#fff',
-    letterSpacing: 2,
   },
-  subtitle: {
-    fontSize: 18,
-    textAlign: 'center',
-    marginBottom: 32,
-    color: '#fff',
-    opacity: 0.9,
+
+  logoSection: {
+    alignItems: 'center',
+    paddingTop: 32,
+    paddingBottom: 36,
   },
+  logo: {
+    fontSize: 52,
+    fontFamily: 'LibreBaskerville_700Bold',
+    color: colors.textBrown,
+    lineHeight: 60,
+  },
+  tagline: {
+    fontSize: 17,
+    fontFamily: 'LibreBaskerville_400Regular',
+    fontStyle: 'italic',
+    color: colors.textBrown,
+    marginTop: 6,
+  },
+
+  formSection: { flex: 1 },
+
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 10,
-    backgroundColor: '#fff',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.6)',
-    padding: 14,
-    borderRadius: 10,
-    marginBottom: 16,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    paddingVertical: 16,
+    borderRadius: 14,
+    width: '100%',
+    marginBottom: 20,
   },
   googleButtonText: {
-    color: '#444',
-    fontWeight: '700',
+    color: colors.textBrown,
     fontSize: 15,
+    fontFamily: 'Figtree_600SemiBold',
   },
+
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
     gap: 10,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'rgba(93,58,26,0.25)',
   },
   dividerText: {
-    color: '#fff',
+    color: colors.textBrown,
     fontSize: 13,
+    fontFamily: 'Figtree_400Regular',
     opacity: 0.8,
   },
-  inputContainer: { marginBottom: 16 },
+
+  inputGroup: { marginBottom: 20 },
   inputLabel: {
-    color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
+    color: colors.textSecondary,
     marginBottom: 8,
-    opacity: 0.9,
+    fontFamily: 'Figtree_400Regular',
   },
   input: {
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 14,
+    borderColor: '#D1D1D1',
     borderRadius: 10,
-    fontSize: 16,
-    color: '#111',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: colors.textPrimary,
+    backgroundColor: colors.white,
+    fontFamily: 'Figtree_400Regular',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#D1D1D1',
     borderRadius: 10,
+    backgroundColor: colors.white,
   },
   passwordInput: {
     flex: 1,
-    padding: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: colors.textPrimary,
+    fontFamily: 'Figtree_400Regular',
+  },
+  eyeButton: { paddingHorizontal: 12 },
+
+  forgotButton: { alignSelf: 'flex-end', marginBottom: 24, marginTop: -8 },
+  forgotText: {
+    color: colors.textBrown,
+    fontSize: 13,
+    fontFamily: 'Figtree_400Regular',
+  },
+
+  signInButton: {
+    backgroundColor: colors.maroon,
+    paddingVertical: 18,
+    borderRadius: 14,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  signInButtonText: {
+    color: colors.white,
     fontSize: 16,
-    color: '#111',
+    fontFamily: 'Figtree_600SemiBold',
+    letterSpacing: 0.3,
   },
-  eyeButton: { paddingHorizontal: 14 },
-  forgotButton: {
-    alignSelf: 'flex-end',
-    marginBottom: 24,
-  },
-  forgotText: { color: '#fff', fontSize: 14 },
-  button: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 10,
-    marginBottom: 16,
-  },
+
   buttonDisabled: { opacity: 0.6 },
-  buttonText: {
-    color: '#8B4513',
-    textAlign: 'center',
-    fontWeight: '700',
-    fontSize: 16,
-  },
+
+  switchRow: { alignItems: 'center' },
   switchText: {
-    textAlign: 'center',
-    color: '#fff',
-    marginTop: 8,
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 15,
+    fontFamily: 'Figtree_400Regular',
   },
   switchLink: {
-    fontWeight: '700',
-    textDecorationLine: 'underline',
+    fontFamily: 'Figtree_700Bold',
+    color: colors.white,
   },
 });
