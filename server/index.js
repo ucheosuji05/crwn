@@ -36,6 +36,7 @@ const PORT = process.env.PORT || 3001;
 console.log(`[startup] PORT=${PORT} NODE_ENV=${process.env.NODE_ENV}`);
 console.log(`[startup] GOOGLE_CLIENT_ID=${process.env.GOOGLE_CLIENT_ID || 'NOT SET'}`);
 console.log(`[startup] GOOGLE_CLIENT_SECRET=${process.env.GOOGLE_CLIENT_SECRET ? process.env.GOOGLE_CLIENT_SECRET.substring(0, 10) + '...' : 'NOT SET'}`);
+console.log(`[startup] BETTER_AUTH_URL=${process.env.BETTER_AUTH_URL || 'NOT SET'}`);
 
 // Health check first — before CORS and everything else
 app.use((req, res, next) => {
