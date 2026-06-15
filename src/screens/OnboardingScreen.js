@@ -303,7 +303,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         }
       );
       if (error) {
-        Alert.alert('Signup Failed', error.message || 'Please try again');
+        console.error('[Signup] error:', JSON.stringify(error));
+        Alert.alert('Signup Failed', error.message || `${error.status || ''} ${error.statusText || error.code || 'Please try again'}`);
         goToStep(STEPS.EMAIL);
         return;
       }
