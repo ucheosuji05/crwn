@@ -33,6 +33,16 @@ process.on('unhandledRejection', (err) => {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+console.log(`[startup] PORT=${PORT} NODE_ENV=${process.env.NODE_ENV}`);
+
+// Health check first — before CORS and everything else
+app.use((req, res, next) => {
+  if (req.method === 'GET' && req.path === '/health') {
+    return res.json({ status: 'ok' });
+  }
+  next();
+});
+
 app.use(cors({
   origin: (origin, callback) => callback(null, origin || true),
   credentials: true,
@@ -659,9 +669,6 @@ app.get('/api/auth/supabase-token', async (req, res) => {
 
   return res.json({ token, exp });
 });
-
-// Health check — must come before the Better Auth catch-all
-app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // Better Auth handles all /api/auth/* routes
 app.all('/api/auth/*', toNodeHandler(auth));
