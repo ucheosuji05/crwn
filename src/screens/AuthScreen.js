@@ -104,29 +104,32 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
             {/* Form */}
             <View style={styles.formSection}>
 
-              {/* Google button */}
-              <TouchableOpacity
-                style={[styles.googleButton, isDisabled && styles.buttonDisabled]}
-                onPress={handleGoogleSignIn}
-                disabled={isDisabled}
-                activeOpacity={0.85}
-              >
-                {googleLoading ? (
-                  <ActivityIndicator color={colors.textBrown} />
-                ) : (
-                  <>
-                    <Ionicons name="logo-google" size={18} color={colors.textBrown} />
-                    <Text style={styles.googleButtonText}>Continue with Google</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+              {/* Google button — deep-link callback only works on native */}
+              {Platform.OS !== 'web' && (
+                <>
+                  <TouchableOpacity
+                    style={[styles.googleButton, isDisabled && styles.buttonDisabled]}
+                    onPress={handleGoogleSignIn}
+                    disabled={isDisabled}
+                    activeOpacity={0.85}
+                  >
+                    {googleLoading ? (
+                      <ActivityIndicator color={colors.textBrown} />
+                    ) : (
+                      <>
+                        <Ionicons name="logo-google" size={18} color={colors.textBrown} />
+                        <Text style={styles.googleButtonText}>Continue with Google</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
 
-              {/* Divider */}
-              <View style={styles.dividerRow}>
-                <View style={styles.dividerLine} />
-                <Text style={styles.dividerText}>or sign in with email</Text>
-                <View style={styles.dividerLine} />
-              </View>
+                  <View style={styles.dividerRow}>
+                    <View style={styles.dividerLine} />
+                    <Text style={styles.dividerText}>or sign in with email</Text>
+                    <View style={styles.dividerLine} />
+                  </View>
+                </>
+              )}
 
               {/* Email */}
               <View style={styles.inputGroup}>
