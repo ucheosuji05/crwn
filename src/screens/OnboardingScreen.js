@@ -213,7 +213,8 @@ const MOCK_HAIR_LOOKS = [
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function OnboardingScreen({ onDone, onSignIn }) {
-  const { /* refreshProfile, signInWithGoogle */ } = useAuth();
+  const { signInWithGoogle } = useAuth();
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(STEPS.SPLASH);
   const [formData, setFormData] = useState({
     email: '',
@@ -604,17 +605,20 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     </GradientScreen>
   );
 
-  // const handleGoogleSignIn = async () => {
-  //   try {
-  //     const result = await signInWithGoogle();
-  //     if (result.error) {
-  //       Alert.alert('Google Sign In Failed', result.error.message || 'Please try again.');
-  //     }
-  //     // On success AuthProvider sets user and App.js navigates away automatically
-  //   } catch {
-  //     Alert.alert('Error', 'Something went wrong. Please try again.');
-  //   }
-  // };
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.error) {
+        Alert.alert('Google Sign In Failed', result.error.message || 'Please try again.');
+      }
+      // On success AuthProvider sets user and App.js navigates away automatically
+    } catch (e) {
+      Alert.alert('Error', e?.message || 'Something went wrong. Please try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const renderWelcome = () => (
     <GradientScreen>
@@ -626,10 +630,23 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         <TouchableOpacity style={styles.createAccountButton} onPress={goNext}>
           <Text style={styles.createAccountText}>Create Account</Text>
         </TouchableOpacity>
-        {/* <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignIn}>
-          <Ionicons name="logo-google" size={18} color="#5D3A1A" />
-          <Text style={styles.googleButtonText}>Continue with Google</Text>
-        </TouchableOpacity> */}
+        {Platform.OS !== 'web' && (
+          <TouchableOpacity
+            style={[styles.googleButton, googleLoading && { opacity: 0.6 }]}
+            onPress={handleGoogleSignIn}
+            disabled={googleLoading}
+            activeOpacity={0.85}
+          >
+            {googleLoading ? (
+              <ActivityIndicator color="#5D3A1A" />
+            ) : (
+              <>
+                <Ionicons name="logo-google" size={18} color="#5D3A1A" />
+                <Text style={styles.googleButtonText}>Continue with Google</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
         <TouchableOpacity onPress={onSignIn}>
           <Text style={styles.signInText}>
             Have an account? <Text style={styles.signInLink}>Sign in</Text>
