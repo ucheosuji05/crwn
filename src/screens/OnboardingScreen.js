@@ -319,6 +319,17 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
 
       setLoadingMessage('Setting up your hair profile...');
 
+      // Ensure the profiles row exists with all core onboarding fields BEFORE any
+      // update/avatar calls (all of which are UPDATEs that silently no-op without a row).
+      if (user?.id) {
+        await profileService.upsertProfile(user.id, {
+          full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+          username,
+          location: formData.location,
+          is_stylist: formData.userType === 'stylist',
+        });
+      }
+
       // Save onboarding data to profile
       await Promise.allSettled([
         // Upload profile photo

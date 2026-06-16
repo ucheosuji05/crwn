@@ -37,13 +37,28 @@ export const profileService = {
     }
   },
 
-  // Update user profile
+  // Create or update user profile (safe whether or not the row exists yet)
+  upsertProfile: async (userId, fields) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert({ id: userId, ...fields }, { onConflict: 'id' })
+        .select()
+        .single();
+      if (error) throw error;
+      return { data, error: null };
+    } catch (error) {
+      console.error('Error upserting profile:', error);
+      return { data: null, error };
+    }
+  },
+
+  // Update user profile (upserts so it never silently no-ops on a missing row)
   updateProfile: async (userId, updates) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .update(updates)
-        .eq('id', userId)
+        .upsert({ id: userId, ...updates }, { onConflict: 'id' })
         .select()
         .single();
 

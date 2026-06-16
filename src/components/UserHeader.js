@@ -70,8 +70,8 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
         // Fallback for own profile only
         if (isOwnProfile && user) {
           setProfile({
-            full_name: user.user_metadata?.name || user.email?.split('@')[0] || 'User',
-            username: user.email?.split('@')[0] || 'user',
+            full_name: user.name || user.user_metadata?.name || user.email?.split('@')[0] || 'User',
+            username: user.username || user.email?.split('@')[0] || 'user',
             email: user.email,
             avatar_url: null,
             followers_count: 0,

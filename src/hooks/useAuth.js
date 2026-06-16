@@ -18,7 +18,7 @@ async function fetchSupabaseProfile(userId) {
   if (!userId) return null;
   const { data } = await supabase
     .from('profiles')
-    .select('id, username, full_name, avatar_url, is_stylist')
+    .select('id, username, full_name, avatar_url, is_stylist, location, preferences')
     .eq('id', userId)
     .single();
   return data || null;
