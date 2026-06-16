@@ -10,12 +10,8 @@ import { supabase } from '../config/supabase';
 // Import all settings screens
 import AccountSettings from './settings/AccountSettings';
 import PreferencesSettings from './settings/PreferencesSettings';
-import NotificationSettings from './settings/NotificationSettings';
 import PrivacySettings from './settings/PrivacySettings';
-import MyCrownSettings from './settings/MyCrownSettings';
-import CommunityGuidelines from './settings/CommunityGuidelines';
 import SupportFeedback from './settings/SupportFeedback';
-import AboutCRWN from './settings/AboutCRWN';
 
 export default function SettingsScreen({ onClose, onProfileUpdated }) {
   const { clearAuth } = useAuth();
@@ -45,29 +41,10 @@ export default function SettingsScreen({ onClose, onProfileUpdated }) {
       description: 'Personalize your experience'
     },
     {
-      title: 'Notifications',
-      icon: 'notifications-outline',
-      screen: 'notifications',
-      description: 'Manage your alerts'
-    },
-    {
       title: 'Privacy & Safety',
       icon: 'shield-checkmark-outline',
       screen: 'privacy',
       description: 'Control your data and privacy'
-    },
-    {
-      title: 'My Crown 👑',
-      icon: 'sparkles-outline',
-      screen: 'mycrown',
-      description: 'Affirmations & celebrations',
-      special: true
-    },
-    {
-      title: 'Community Guidelines',
-      icon: 'people-outline',
-      screen: 'guidelines',
-      description: 'Our values and culture'
     },
     {
       title: 'Support & Feedback',
@@ -75,12 +52,6 @@ export default function SettingsScreen({ onClose, onProfileUpdated }) {
       screen: 'support',
       description: 'Help us improve CRWN'
     },
-    {
-      title: 'About CRWN',
-      icon: 'information-circle-outline',
-      screen: 'about',
-      description: 'Our mission and story'
-    }
   ];
 
   const handleSignOut = () => {
@@ -112,25 +83,17 @@ export default function SettingsScreen({ onClose, onProfileUpdated }) {
     switch (activeScreen) {
       case 'account':
         return (
-          <AccountSettings 
-            onBack={() => setActiveScreen(null)} 
+          <AccountSettings
+            onBack={() => setActiveScreen(null)}
             onProfileUpdated={handleProfileUpdated}
           />
         );
       case 'preferences':
         return <PreferencesSettings onBack={() => setActiveScreen(null)} />;
-      case 'notifications':
-        return <NotificationSettings onBack={() => setActiveScreen(null)} />;
       case 'privacy':
         return <PrivacySettings onBack={() => setActiveScreen(null)} />;
-      case 'mycrown':
-        return <MyCrownSettings onBack={() => setActiveScreen(null)} />;
-      case 'guidelines':
-        return <CommunityGuidelines onBack={() => setActiveScreen(null)} />;
       case 'support':
         return <SupportFeedback onBack={() => setActiveScreen(null)} />;
-      case 'about':
-        return <AboutCRWN onBack={() => setActiveScreen(null)} />;
       default:
         return null;
     }

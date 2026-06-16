@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../config/supabase';
+import CommunityGuidelines from './CommunityGuidelines';
 
 const DEFAULTS = {
   profileVisibility: 'public',
@@ -22,6 +23,7 @@ export default function PrivacySettings({ onBack }) {
   const [settings, setSettings] = useState(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showGuidelines, setShowGuidelines] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -54,6 +56,10 @@ export default function PrivacySettings({ onBack }) {
     { value: 'community', label: 'Community Only', description: 'Only CRWN members can see your profile' },
     { value: 'private', label: 'Private', description: 'Only people you approve can see your profile' },
   ];
+
+  if (showGuidelines) {
+    return <CommunityGuidelines onBack={() => setShowGuidelines(false)} />;
+  }
 
   return (
     <View style={styles.fullContainer}>
@@ -166,6 +172,14 @@ export default function PrivacySettings({ onBack }) {
             >
               <Ionicons name="flag-outline" size={22} color={colors.textSecondary} />
               <Text style={styles.actionText}>Report Content or Users</Text>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => setShowGuidelines(true)}
+            >
+              <Ionicons name="people-outline" size={22} color={colors.textSecondary} />
+              <Text style={styles.actionText}>Community Guidelines</Text>
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
