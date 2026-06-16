@@ -20,13 +20,7 @@ import { useAuth } from '../hooks/useAuth';
 import { threadService } from '../services/threadService';
 import { useTheme } from '../context/ThemeContext';
 
-const BRAND   = '#5D1F1F';
-const OCHRE   = '#B35D2B';
-const CHAMPA  = '#FAFAFA';
-const NEST_LINE = '#F0EAE0';
-const HEART_OUTLINE = '#D1D1D1';
 const HEART_FILLED  = '#D4726E';
-const GREY_MUTED    = '#9CA3AF';
 
 function formatTimeAgo(dateString) {
   if (!dateString) return '';
@@ -96,7 +90,7 @@ function ReplyNode({
     <View style={[styles.replyCard, nested && styles.replyCardNested]}>
       <View style={styles.replyHeader}>
         <View style={styles.replyAuthorRow}>
-          {isStylist && <Scissors size={13} color={OCHRE} style={{ marginRight: 4 }} />}
+          {isStylist && <Scissors size={13} color={colors.accent} style={{ marginRight: 4 }} />}
           <Text style={styles.replyAuthor}>@{author}</Text>
         </View>
         <View style={styles.replyHeaderRight}>
@@ -117,7 +111,7 @@ function ReplyNode({
           onPress={handleUpvote}
           disabled={toggling || !currentUserId}
         >
-          <Heart size={14} color={isUpvoted ? HEART_FILLED : HEART_OUTLINE} fill={isUpvoted ? HEART_FILLED : 'transparent'} />
+          <Heart size={14} color={isUpvoted ? HEART_FILLED : colors.border} fill={isUpvoted ? HEART_FILLED : 'transparent'} />
           <Text style={[styles.replyUpvoteText, isUpvoted && styles.replyUpvoteActive]}>
             {upvotes}
           </Text>
@@ -133,7 +127,7 @@ function ReplyNode({
   );
 
   return isNew ? (
-    <Animated.View style={[styles.highlightWrap, { opacity: highlightAnim, backgroundColor: CHAMPA }]}>
+    <Animated.View style={[styles.highlightWrap, { opacity: highlightAnim, backgroundColor: colors.surface }]}>
       {cardContent}
     </Animated.View>
   ) : cardContent;
@@ -368,7 +362,7 @@ export default function ThreadDetailScreen({
           <View style={styles.post}>
             <View style={styles.postMeta}>
               <View style={styles.postAuthorRow}>
-                {isThreadStylist && <Scissors size={13} color={OCHRE} style={{ marginRight: 4 }} />}
+                {isThreadStylist && <Scissors size={13} color={colors.accent} style={{ marginRight: 4 }} />}
                 <Text style={styles.postAuthor}>@{author}</Text>
               </View>
               {thread.category ? (
@@ -387,7 +381,7 @@ export default function ThreadDetailScreen({
               >
                 <Heart
                   size={15}
-                  color={isThreadUpvoted ? HEART_FILLED : HEART_OUTLINE}
+                  color={isThreadUpvoted ? HEART_FILLED : colors.border}
                   fill={isThreadUpvoted ? HEART_FILLED : 'transparent'}
                 />
                 <Text style={[styles.footerText, isThreadUpvoted && styles.footerTextActive]}>
@@ -406,7 +400,7 @@ export default function ThreadDetailScreen({
             </Text>
 
             {loadingReplies ? (
-              <ActivityIndicator color={BRAND} style={{ marginTop: 24 }} />
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 24 }} />
             ) : replies.length === 0 ? (
               <Text style={styles.noReplies}>Be the first to reply!</Text>
             ) : (
@@ -468,7 +462,7 @@ export default function ThreadDetailScreen({
               ref={inputRef}
               style={styles.input}
               placeholder={user ? 'Add your reply...' : 'Sign in to reply'}
-              placeholderTextColor={GREY_MUTED}
+              placeholderTextColor={colors.placeholder}
               value={replyText}
               onChangeText={setReplyText}
               multiline
@@ -536,7 +530,7 @@ const makeStyles = (c) => StyleSheet.create({
 
   // ── Thread post ──
   post: {
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
@@ -553,9 +547,9 @@ const makeStyles = (c) => StyleSheet.create({
     justifyContent: 'space-between', marginBottom: 10,
   },
   postAuthorRow: { flexDirection: 'row', alignItems: 'center' },
-  postAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: OCHRE },
-  categoryTag: { alignSelf: 'flex-start', backgroundColor: '#F0EAE0', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  categoryTagText: { fontSize: 12, color: '#7A5C2E', fontFamily: 'Figtree_600SemiBold' },
+  postAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.accent },
+  categoryTag: { alignSelf: 'flex-start', backgroundColor: c.borderLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  categoryTagText: { fontSize: 12, color: c.textSecondary, fontFamily: 'Figtree_600SemiBold' },
   postTitle: { fontSize: 19, fontFamily: 'Figtree_700Bold', color: c.text, lineHeight: 26, marginBottom: 10 },
   postBody: { fontSize: 14, color: c.textSecondary, lineHeight: 21, marginBottom: 16 },
   postFooter: { flexDirection: 'row', alignItems: 'center' },
@@ -567,13 +561,13 @@ const makeStyles = (c) => StyleSheet.create({
   // ── Replies section ──
   repliesSection: { paddingHorizontal: 18, paddingTop: 4, paddingBottom: 12 },
   repliesHeading: { fontSize: 16, fontFamily: 'Figtree_700Bold', color: c.text, marginTop: 16, marginBottom: 12 },
-  noReplies: { color: GREY_MUTED, fontSize: 14, marginTop: 20, textAlign: 'center' },
+  noReplies: { color: c.textMuted, fontSize: 14, marginTop: 20, textAlign: 'center' },
 
   // ── Reply card ──
   replyCard: {
     paddingVertical: 14,
     borderTopWidth: 1,
-    borderTopColor: '#F0EAE0',
+    borderTopColor: c.borderLight,
   },
   replyCardNested: {
     borderTopWidth: 0,
@@ -590,21 +584,21 @@ const makeStyles = (c) => StyleSheet.create({
   },
   replyHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   replyAuthorRow: { flexDirection: 'row', alignItems: 'center' },
-  replyAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: OCHRE },
+  replyAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.accent },
   replyTime: { fontSize: 12, color: c.textMuted },
   deleteBtn: { padding: 2 },
-  replyBody: { fontSize: 14, color: '#1A1A1A', lineHeight: 20, marginTop: 4, marginBottom: 10 },
+  replyBody: { fontSize: 14, color: c.text, lineHeight: 20, marginTop: 4, marginBottom: 10 },
   replyFooter: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   replyUpvote: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   replyUpvoteText: { fontSize: 13, color: c.textMuted, marginLeft: 3 },
   replyUpvoteActive: { color: HEART_FILLED, fontFamily: 'Figtree_600SemiBold' },
-  replyLink: { fontSize: 13, color: GREY_MUTED, fontFamily: 'Figtree_500Medium', marginLeft: 12 },
+  replyLink: { fontSize: 13, color: c.textMuted, fontFamily: 'Figtree_500Medium', marginLeft: 12 },
 
   // ── Nesting ──
   nestedBlock: {
     paddingLeft: 20,
     borderLeftWidth: 2,
-    borderLeftColor: NEST_LINE,
+    borderLeftColor: c.border,
     marginTop: 6,
   },
 
@@ -632,7 +626,7 @@ const makeStyles = (c) => StyleSheet.create({
     fontSize: 14, color: c.text, maxHeight: 100,
   },
   postBtn: {
-    backgroundColor: OCHRE, borderRadius: 20,
+    backgroundColor: c.accent, borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 10,
     minWidth: 56, alignItems: 'center',
   },

@@ -949,11 +949,11 @@ const makeStyles = (c) => StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: 999,
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#F0EAE0',
+    borderColor: c.borderLight,
   },
 
   // ── End-of-feed ──

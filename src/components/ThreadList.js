@@ -16,8 +16,7 @@ import { useTheme } from '../context/ThemeContext';
 import { HEADER_BAR_HEIGHT } from './ScreenHeader';
 
 const FILTERS = [
-  'All', 'Hair Health', 'Product Recs', 'Styling Tips',
-  'Beginner', 'Protective Styles', 'Growth & Retention',
+  'All', 'Styling', 'Hair Health', 'Product Recommendations', 'Beginners', 'Other',
 ];
 
 export default function ThreadList({
@@ -198,7 +197,7 @@ export default function ThreadList({
       <TouchableOpacity style={styles.fab} onPress={() => setCreateMenuOpen((open) => !open)} activeOpacity={0.85}>
         {createMenuOpen ? (
           <View style={styles.fabClose}>
-            <X size={24} color="#5D1F1F" strokeWidth={2.5} />
+            <X size={24} color={colors.primary} strokeWidth={2.5} />
           </View>
         ) : (
           <LinearGradient
@@ -217,10 +216,10 @@ export default function ThreadList({
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FCFCFC' },
+  safe: { flex: 1, backgroundColor: c.background },
   header: {
     minHeight: HEADER_BAR_HEIGHT,
-    backgroundColor: '#FCFCFC',
+    backgroundColor: c.background,
   },
   searchToggleBtn: {
     width: 36,
@@ -243,10 +242,10 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: '#F1EEE8',
+    backgroundColor: c.surfaceAlt,
   },
-  filterChipActive: { backgroundColor: '#5D1F1F' },
-  filterText: { fontSize: 13, fontWeight: '500', color: '#5E5E5E' },
+  filterChipActive: { backgroundColor: c.primary },
+  filterText: { fontSize: 13, fontWeight: '500', color: c.textSecondary },
   filterTextActive: { color: '#fff' },
   listContent: { paddingBottom: 100, flexGrow: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
@@ -256,12 +255,12 @@ const makeStyles = (c) => StyleSheet.create({
   retryText: { color: '#fff', fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
   fabClose: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#F0EAE0',
+    borderColor: c.borderLight,
   },
   fab: {
     position: 'absolute',

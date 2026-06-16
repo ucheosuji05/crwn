@@ -752,7 +752,7 @@ const makeBookingStyles = (c) => StyleSheet.create({
   },
   stylistIconWrap: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: c.surface, alignItems: 'center', justifyContent: 'center',
   },
   stylistName: { fontSize: 15, fontFamily: 'Figtree_700Bold' },
   stylistLoc:  { fontSize: 12, fontFamily: 'Figtree_400Regular', marginTop: 1 },
@@ -1564,10 +1564,10 @@ const makeStyles = (c) => StyleSheet.create({
   specialtyTag: {
     paddingHorizontal: 10, paddingVertical: 3,
     borderRadius: 999,
-    backgroundColor: '#F0EAE0',
+    backgroundColor: c.borderLight,
   },
   specialtyTagText: {
-    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#4F4032',
+    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.textSecondary,
   },
   stats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 24 },
   stat: { alignItems: 'center', paddingHorizontal: 4 },
@@ -1663,8 +1663,8 @@ const makeStyles = (c) => StyleSheet.create({
   requirementsExpandedCard: { borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 8 },
   requirementsExpandedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   requirementsExpandedTitle: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', flex: 1, marginRight: 10 },
-  requirementsCountPill: { backgroundColor: '#F0EAE0', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  requirementsCountPillText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#B35D2B' },
+  requirementsCountPill: { backgroundColor: c.borderLight, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  requirementsCountPillText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.accent },
   requirementsBody: { gap: 10 },
   requirementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   requirementBullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },

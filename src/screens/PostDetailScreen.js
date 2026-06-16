@@ -13,9 +13,6 @@ import { useAuth } from '../hooks/useAuth';
 import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
 
-const MAROON  = '#5D1F1F';
-const OCHRE   = '#B35D2B';
-const CHAMPAGNE = '#E8E2D9';
 const CARD_H_MARGIN = 16; // card sits 16px from each screen edge
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
@@ -40,6 +37,8 @@ export default function PostDetailScreen({ route, navigation }) {
   const goBack = () => navigation.goBack();
 
   const { colors } = useTheme();
+  const MAROON = colors.primary;
+  const OCHRE = colors.accent;
   const { user, profile: currentUserProfile } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const scrollRef       = useRef(null);
@@ -913,7 +912,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   avatar: { width: 38, height: 38, borderRadius: 19 },
   avatarPlaceholder: {
-    backgroundColor: MAROON,
+    backgroundColor: c.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -969,16 +968,16 @@ const makeStyles = (c) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: '#EDDCD2',
+    backgroundColor: c.primaryLight,
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
     flexShrink: 0,
     maxWidth: 160,
   },
-  stylistPillText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: OCHRE },
+  stylistPillText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.accent },
   caption: { fontSize: 15, fontFamily: 'Figtree_500Medium', lineHeight: 22, marginBottom: 10 },
-  hashtags: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: MAROON, lineHeight: 20 },
+  hashtags: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.primary, lineHeight: 20 },
 
   // ── Comments bottom sheet ────────────────────────────────────────────────────
   sheetBackdrop: { backgroundColor: 'rgba(0,0,0,0.5)' },
@@ -1027,16 +1026,16 @@ const makeStyles = (c) => StyleSheet.create({
   cmtAvatarImg: { width: 32, height: 32, borderRadius: 16 },
   cmtAvatarInitial: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.textSecondary },
   cmtHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
-  cmtUsername: { fontSize: 13, fontFamily: 'Figtree_700Bold', color: OCHRE },
+  cmtUsername: { fontSize: 13, fontFamily: 'Figtree_700Bold', color: c.accent },
   cmtText: { fontSize: 14, fontFamily: 'Figtree_500Medium', lineHeight: 20 },
   cmtActions: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 6 },
   cmtActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   cmtMeta: { fontSize: 12, fontFamily: 'Figtree_500Medium' },
   viewRepliesBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
-  viewRepliesText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: MAROON },
+  viewRepliesText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.primary },
   repliesContainer: { marginTop: 10, paddingLeft: 4 },
   loadMoreBtn: { paddingVertical: 8 },
-  loadMoreText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: MAROON },
+  loadMoreText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.primary },
 
   // ── Comment input (pinned) ────────────────────────────────────────────────────
   replyBanner: {
@@ -1058,7 +1057,7 @@ const makeStyles = (c) => StyleSheet.create({
     gap: 8,
   },
   inputAvatar: { width: 30, height: 30, borderRadius: 15, flexShrink: 0, overflow: 'hidden' },
-  inputAvatarPlaceholder: { backgroundColor: MAROON, alignItems: 'center', justifyContent: 'center' },
+  inputAvatarPlaceholder: { backgroundColor: c.primary, alignItems: 'center', justifyContent: 'center' },
   inputAvatarInitial: { fontSize: 11, fontFamily: 'Figtree_700Bold', color: '#fff' },
   commentInput: {
     flex: 1,

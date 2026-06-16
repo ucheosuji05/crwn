@@ -104,7 +104,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   tagBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F0EAE0',
+    backgroundColor: c.borderLight,
     borderRadius: 8,
     paddingHorizontal: 8,
     paddingVertical: 3,
@@ -113,7 +113,7 @@ const makeStyles = (c) => StyleSheet.create({
   tagText: {
     fontSize: 12,
     fontFamily: 'Figtree_600SemiBold',
-    color: '#7A5C2E',
+    color: c.textSecondary,
     letterSpacing: 0.2,
   },
   title: {

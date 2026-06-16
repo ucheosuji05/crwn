@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { s } from '../utils/responsive';
 import {
   View,
@@ -9,17 +9,175 @@ import {
   Image,
   Alert,
   ScrollView,
-  FlatList,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
+  PanResponder,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Scissors } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { postService } from '../services/postService';
 import { stylistService } from '../services/stylistService';
 import { useTheme } from '../context/ThemeContext';
+
+const PUBLISH_BTN_COLOR = '#4B5945';
+const PHOTO_W = s(100);
+const PHOTO_H = s(120);
+const PHOTO_GAP = 10;
+const PHOTO_STEP = PHOTO_W + PHOTO_GAP;
+
+// ─── Drag-to-reorder photo row ────────────────────────────────────────────────
+
+function DraggablePhotoRow({ images, onReorder, onRemove, styles }) {
+  // Refs: stable between renders, no re-render on change
+  const activeIdxRef = useRef(-1);
+  const imagesRef    = useRef(images);
+  imagesRef.current  = images;
+  const dragAnim     = useRef(new Animated.Value(0)).current;
+
+  // State: drive visual updates
+  const [draggingIdx, setDraggingIdx] = useState(-1);
+  const [hoverSlot,   setHoverSlot]   = useState(-1);
+
+  // One PanResponder per slot, created once and cached
+  const panRefs = useRef([]);
+
+  const makePanResponder = useCallback((index) => PanResponder.create({
+    // Don't claim on start — let ScrollView and TouchableOpacity do their thing
+    onStartShouldSetPanResponder:            () => false,
+    onStartShouldSetPanResponderCapture:     () => false,
+    // Only claim move events once the long-press activated this slot
+    onMoveShouldSetPanResponder: (_, gs) =>
+      activeIdxRef.current === index && (Math.abs(gs.dx) > 2 || Math.abs(gs.dy) > 2),
+    onMoveShouldSetPanResponderCapture:      () => false,
+
+    onPanResponderGrant: () => {
+      dragAnim.setValue(0);
+    },
+    onPanResponderMove: (_, gs) => {
+      if (activeIdxRef.current !== index) return;
+      dragAnim.setValue(gs.dx);
+      const slot = Math.max(0, Math.min(
+        imagesRef.current.length - 1,
+        Math.round((index * PHOTO_STEP + gs.dx) / PHOTO_STEP)
+      ));
+      setHoverSlot(slot);
+    },
+    onPanResponderRelease: (_, gs) => {
+      if (activeIdxRef.current !== index) return;
+      const dropSlot = Math.max(0, Math.min(
+        imagesRef.current.length - 1,
+        Math.round((index * PHOTO_STEP + gs.dx) / PHOTO_STEP)
+      ));
+
+      Animated.spring(dragAnim, {
+        toValue: 0, useNativeDriver: true, tension: 80, friction: 8,
+      }).start();
+
+      if (dropSlot !== index) {
+        const next = [...imagesRef.current];
+        const [moved] = next.splice(index, 1);
+        next.splice(dropSlot, 0, moved);
+        onReorder(next);
+      }
+
+      activeIdxRef.current = -1;
+      setDraggingIdx(-1);
+      setHoverSlot(-1);
+    },
+    onPanResponderTerminate: () => {
+      Animated.spring(dragAnim, { toValue: 0, useNativeDriver: true }).start();
+      activeIdxRef.current = -1;
+      setDraggingIdx(-1);
+      setHoverSlot(-1);
+    },
+  }), []);
+
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      scrollEnabled={draggingIdx === -1}
+      style={{ marginBottom: 12 }}
+      contentContainerStyle={{ paddingRight: 4 }}
+    >
+      {images.map((img, index) => {
+        if (!panRefs.current[index]) {
+          panRefs.current[index] = makePanResponder(index);
+        }
+
+        const isDragging = index === draggingIdx;
+
+        // Non-dragging items shift to visually make room
+        let displaceX = 0;
+        if (draggingIdx !== -1 && !isDragging) {
+          const d = draggingIdx, h = hoverSlot;
+          if (d < h && index > d && index <= h) displaceX = -PHOTO_STEP;
+          else if (d > h && index < d && index >= h) displaceX = PHOTO_STEP;
+        }
+
+        return (
+          <Animated.View
+            key={img.uri || index}
+            style={[
+              styles.imageItem,
+              {
+                transform: [{
+                  translateX: isDragging ? dragAnim : displaceX,
+                }],
+                zIndex:     isDragging ? 100 : 1,
+                opacity:    isDragging ? 0.85 : 1,
+              },
+              isDragging && {
+                shadowColor:   '#000',
+                shadowOpacity: 0.2,
+                shadowRadius:  10,
+                elevation:     10,
+              },
+            ]}
+            {...panRefs.current[index].panHandlers}
+          >
+            {/* Long-press area — activates drag */}
+            <TouchableOpacity
+              activeOpacity={0.9}
+              delayLongPress={180}
+              onLongPress={() => {
+                activeIdxRef.current = index;
+                setDraggingIdx(index);
+                setHoverSlot(index);
+              }}
+            >
+              <Image source={{ uri: img.uri }} style={styles.thumbnail} />
+              {index === 0 && (
+                <View style={styles.coverBadge}>
+                  <Text style={styles.coverBadgeText}>Cover</Text>
+                </View>
+              )}
+              {isDragging && (
+                <View style={styles.dragOverlay}>
+                  <Ionicons name="reorder-three-outline" size={22} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Remove button — separate from long-press area */}
+            <TouchableOpacity
+              style={styles.removeImageBtn}
+              onPress={() => onRemove(index)}
+              hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+            >
+              <Ionicons name="close-circle" size={22} color="#fff" />
+            </TouchableOpacity>
+          </Animated.View>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function CreatePostScreen({ navigation }) {
   const { colors } = useTheme();
@@ -30,7 +188,6 @@ export default function CreatePostScreen({ navigation }) {
   const [images, setImages]         = useState([]);
   const [tags, setTags]             = useState([]);
   const [tagInput, setTagInput]     = useState('');
-  const [showStylistTag, setShowStylistTag] = useState(false);
   const [stylistQuery, setStylistQuery]     = useState('');
   const [stylistResults, setStylistResults] = useState([]);
   const [selectedStylist, setSelectedStylist] = useState(null);
@@ -113,6 +270,12 @@ export default function CreatePostScreen({ navigation }) {
     setStylistSearching(false);
   };
 
+  const clearStylist = () => {
+    setSelectedStylist(null);
+    setStylistQuery('');
+    setStylistResults([]);
+  };
+
   const handlePost = async () => {
     if (images.length === 0) {
       Alert.alert('No images', 'Please add at least one photo.');
@@ -127,7 +290,7 @@ export default function CreatePostScreen({ navigation }) {
       {
         title: title.trim(),
         description: caption.trim(),
-        stylistId: showStylistTag ? (selectedStylist?.id || null) : null,
+        stylistId: selectedStylist?.id || null,
         tags,
       },
       images
@@ -140,19 +303,7 @@ export default function CreatePostScreen({ navigation }) {
     navigation?.goBack();
   };
 
-  const renderImageItem = ({ item, index }) => (
-    <View style={styles.imageItem}>
-      <Image source={{ uri: item.uri }} style={styles.thumbnail} />
-      <TouchableOpacity style={styles.removeImageBtn} onPress={() => removeImage(index)}>
-        <Ionicons name="close-circle" size={24} color="#ef4444" />
-      </TouchableOpacity>
-      {index === 0 && (
-        <View style={styles.coverBadge}>
-          <Text style={styles.coverBadgeText}>Cover</Text>
-        </View>
-      )}
-    </View>
-  );
+  const canPublish = images.length > 0 && title.trim() && !loading;
 
   return (
     <View style={styles.container}>
@@ -162,11 +313,14 @@ export default function CreatePostScreen({ navigation }) {
         keyboardVerticalOffset={90}
       >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: colors.borderLight }]}>
+        <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation?.goBack()} style={styles.closeBtn}>
-            <Ionicons name="close" size={26} color={colors.text} />
+            <Ionicons name="close" size={24} color={colors.text} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>New Post</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Create Post</Text>
+            <Text style={styles.headerSub}>Explore</Text>
+          </View>
           <View style={{ width: 40 }} />
         </View>
 
@@ -178,87 +332,56 @@ export default function CreatePostScreen({ navigation }) {
         >
           {/* ── Photos ── */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.text }]}>
+            <Text style={styles.label}>
               Photos <Text style={styles.required}>*</Text>
             </Text>
 
             {images.length > 0 && (
-              <FlatList
-                data={images}
-                renderItem={renderImageItem}
-                keyExtractor={(_, i) => i.toString()}
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginBottom: 12 }}
+              <DraggablePhotoRow
+                images={images}
+                onReorder={setImages}
+                onRemove={removeImage}
+                styles={styles}
               />
             )}
 
             <View style={styles.photoButtons}>
-              <TouchableOpacity style={[styles.photoBtn, { borderColor: colors.primary }]} onPress={pickImages}>
-                <Ionicons name="images-outline" size={20} color={colors.primary} />
-                <Text style={[styles.photoBtnText, { color: colors.primary }]}>Choose Photo</Text>
+              <TouchableOpacity style={styles.photoBtn} onPress={pickImages}>
+                <Ionicons name="images-outline" size={20} color={colors.text} />
+                <Text style={styles.photoBtnText}>Add Photos</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.photoBtn, { borderColor: colors.primary }]} onPress={takePhoto}>
-                <Ionicons name="camera-outline" size={20} color={colors.primary} />
-                <Text style={[styles.photoBtnText, { color: colors.primary }]}>Take Photo</Text>
+              <TouchableOpacity style={styles.photoBtn} onPress={takePhoto}>
+                <Ionicons name="camera-outline" size={20} color={colors.text} />
+                <Text style={styles.photoBtnText}>Take Photo</Text>
               </TouchableOpacity>
             </View>
-            <Text style={[styles.subLabel, { color: colors.textMuted }]}>Max 10</Text>
+            <Text style={styles.subLabel}>Max 10</Text>
           </View>
 
           {/* ── Title ── */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.text }]}>
+            <Text style={styles.label}>
               Title <Text style={styles.required}>*</Text>
             </Text>
             <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight, color: colors.text }]}
+              style={styles.input}
               placeholder="Please write your title here"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.placeholder}
               value={title}
               onChangeText={setTitle}
               maxLength={100}
             />
-            <Text style={[styles.count, { color: colors.textMuted }]}>{title.length} / 100</Text>
-          </View>
-
-          {/* ── Caption ── */}
-          <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.text }]}>Caption</Text>
-            <TextInput
-              style={[styles.input, styles.multilineInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight, color: colors.text }]}
-              placeholder="Please write your caption here"
-              placeholderTextColor={colors.textMuted}
-              multiline
-              numberOfLines={5}
-              value={caption}
-              onChangeText={setCaption}
-              maxLength={300}
-              textAlignVertical="top"
-            />
-            <Text style={[styles.count, { color: colors.textMuted }]}>{caption.length} / 300</Text>
+            <Text style={styles.count}>{title.length}/100</Text>
           </View>
 
           {/* ── Tags ── */}
           <View style={styles.section}>
-            <Text style={[styles.label, { color: colors.text }]}>Tags</Text>
-
-            {tags.length > 0 && (
-              <View style={styles.tagList}>
-                {tags.map((tag, i) => (
-                  <TouchableOpacity key={i} style={[styles.tag, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight }]} onPress={() => removeTag(tag)}>
-                    <Text style={[styles.tagText, { color: colors.primary }]}>#{tag}</Text>
-                    <Ionicons name="close" size={14} color={colors.textMuted} />
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
+            <Text style={styles.label}>Tags</Text>
             <View style={styles.tagRow}>
               <TextInput
-                style={[styles.input, styles.tagInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight, color: colors.text }]}
+                style={[styles.input, styles.rowInput]}
                 placeholder="Add a tag"
-                placeholderTextColor={colors.textMuted}
+                placeholderTextColor={colors.placeholder}
                 value={tagInput}
                 onChangeText={setTagInput}
                 onSubmitEditing={addTag}
@@ -266,84 +389,117 @@ export default function CreatePostScreen({ navigation }) {
                 autoCapitalize="none"
               />
               <TouchableOpacity
-                style={[styles.addTagBtn, { backgroundColor: colors.primary, opacity: tagInput.trim() ? 1 : 0.4 }]}
+                style={[styles.addBtn, { opacity: tagInput.trim() ? 1 : 0.4 }]}
                 onPress={addTag}
                 disabled={!tagInput.trim()}
               >
-                <Ionicons name="add" size={22} color="#fff" />
+                <Ionicons name="add" size={24} color="#fff" />
               </TouchableOpacity>
             </View>
-            <Text style={[styles.count, { color: colors.textMuted }]}>{tags.length} / 10</Text>
-          </View>
-
-          {/* ── Tag a stylist (optional) ── */}
-          <View style={styles.section}>
-            <View style={styles.switchRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Scissors size={18} color={colors.primary} strokeWidth={1.5} />
-                <Text style={[styles.label, { color: colors.text, marginBottom: 0 }]}>Tag a Stylist</Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.toggle, showStylistTag && { backgroundColor: colors.primary }]}
-                onPress={() => { setShowStylistTag(v => !v); setStylistQuery(''); setStylistResults([]); setSelectedStylist(null); }}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.toggleThumb, showStylistTag && styles.toggleThumbOn]} />
-              </TouchableOpacity>
-            </View>
-
-            {showStylistTag && (
-              <View style={{ marginTop: 12 }}>
-                {selectedStylist ? (
-                  <View style={[styles.selectedStylist, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight }]}>
-                    <Scissors size={16} color={colors.primary} strokeWidth={1.5} />
-                    <Text style={[styles.selectedStylistText, { color: colors.primary }]} numberOfLines={1}>
-                      {selectedStylist.full_name || selectedStylist.username}
-                    </Text>
-                    <TouchableOpacity onPress={() => { setSelectedStylist(null); setStylistQuery(''); setStylistResults([]); }}>
-                      <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <>
-                    <TextInput
-                      style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.borderLight, color: colors.text }]}
-                      placeholder="Search stylist by name..."
-                      placeholderTextColor={colors.textMuted}
-                      value={stylistQuery}
-                      onChangeText={handleStylistSearch}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
-                    {stylistSearching && <Text style={[styles.subLabel, { color: colors.textMuted }]}>Searching...</Text>}
-                    {stylistResults.length > 0 && (
-                      <View style={[styles.stylistDropdown, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-                        {stylistResults.slice(0, 5).map((s) => (
-                          <TouchableOpacity key={s.id} style={[styles.stylistOption, { borderBottomColor: colors.borderLight }]} onPress={() => { setSelectedStylist(s); setStylistResults([]); }}>
-                            <Text style={[styles.stylistName, { color: colors.text }]} numberOfLines={1}>{s.full_name || s.username}</Text>
-                            {s.username && <Text style={[styles.stylistHandle, { color: colors.textMuted }]}>@{s.username}</Text>}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
-                  </>
-                )}
+            {tags.length > 0 && (
+              <View style={styles.chipRow}>
+                {tags.map((tag, i) => (
+                  <TouchableOpacity key={i} style={styles.chip} onPress={() => removeTag(tag)}>
+                    <Text style={styles.chipText}>#{tag.toUpperCase()}</Text>
+                    <Ionicons name="close" size={12} color="#F5DFB8" />
+                  </TouchableOpacity>
+                ))}
               </View>
             )}
+            <Text style={styles.count}>{tagInput.length}/100</Text>
           </View>
 
-          <View style={{ height: 100 }} />
+          {/* ── Service Provider Tag ── */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Service Provider Tag</Text>
+            <View style={styles.tagRow}>
+              {selectedStylist ? (
+                <View style={[styles.input, styles.rowInput, styles.stylistSelectedRow]}>
+                  <Text style={styles.stylistSelectedText} numberOfLines={1}>
+                    @{selectedStylist.full_name || selectedStylist.username}
+                  </Text>
+                  <TouchableOpacity onPress={clearStylist} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TextInput
+                  style={[styles.input, styles.rowInput]}
+                  placeholder="Tag your service provider"
+                  placeholderTextColor={colors.placeholder}
+                  value={stylistQuery}
+                  onChangeText={handleStylistSearch}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+              )}
+              <TouchableOpacity
+                style={[styles.addBtn, { opacity: stylistResults.length > 0 && !selectedStylist ? 1 : 0.4 }]}
+                onPress={() => {
+                  if (stylistResults.length > 0 && !selectedStylist) {
+                    setSelectedStylist(stylistResults[0]);
+                    setStylistResults([]);
+                  }
+                }}
+              >
+                <Ionicons name="add" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {stylistSearching && (
+              <ActivityIndicator size="small" color={colors.primary} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
+            )}
+            {stylistResults.length > 0 && !selectedStylist && (
+              <View style={styles.dropdown}>
+                {stylistResults.slice(0, 5).map((stylist) => (
+                  <TouchableOpacity
+                    key={stylist.id}
+                    style={styles.dropdownItem}
+                    onPress={() => { setSelectedStylist(stylist); setStylistResults([]); }}
+                  >
+                    <Text style={styles.dropdownName} numberOfLines={1}>
+                      {stylist.full_name || stylist.username}
+                    </Text>
+                    {stylist.username && (
+                      <Text style={styles.dropdownHandle}>@{stylist.username}</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            <Text style={styles.count}>{stylistQuery.length}/100</Text>
+          </View>
+
+          {/* ── Caption ── */}
+          <View style={styles.section}>
+            <Text style={styles.label}>Caption</Text>
+            <TextInput
+              style={[styles.input, styles.multilineInput]}
+              placeholder="Share more details about your post"
+              placeholderTextColor={colors.placeholder}
+              multiline
+              numberOfLines={4}
+              value={caption}
+              onChangeText={setCaption}
+              maxLength={300}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={{ height: 80 }} />
         </ScrollView>
 
-        {/* Share button */}
-        <View style={[styles.bottom, { backgroundColor: colors.surface, borderTopColor: colors.borderLight }]}>
+        {/* Publish button */}
+        <View style={[styles.bottom, { borderTopColor: colors.borderLight }]}>
           <TouchableOpacity
-            style={[styles.shareBtn, { backgroundColor: colors.primary, opacity: (images.length === 0 || !title.trim() || loading) ? 0.5 : 1 }]}
+            style={[styles.publishBtn, { opacity: canPublish ? 1 : 0.5 }]}
             onPress={handlePost}
-            disabled={images.length === 0 || !title.trim() || loading}
+            disabled={!canPublish}
             activeOpacity={0.85}
           >
-            <Text style={styles.shareBtnText}>{loading ? 'Sharing...' : 'Share'}</Text>
+            {loading
+              ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={styles.publishBtnText}>Publish</Text>
+            }
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -352,72 +508,116 @@ export default function CreatePostScreen({ navigation }) {
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  container:   { flex: 1, backgroundColor: c.surface },
+  container:   { flex: 1, backgroundColor: c.background },
   header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.borderLight,
   },
   closeBtn:    { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { fontSize: 16, fontFamily: 'Figtree_700Bold' },
+  headerCenter: { alignItems: 'center', flex: 1 },
+  headerTitle: { fontSize: 16, fontFamily: 'Figtree_700Bold', color: c.text },
+  headerSub:   { fontSize: 12, fontFamily: 'Figtree_500Medium', color: c.accent, marginTop: 1 },
   scrollContent: { paddingBottom: 20 },
-  section:     { paddingHorizontal: 20, paddingVertical: 18 },
-  label:       { fontSize: 15, fontFamily: 'Figtree_600SemiBold', marginBottom: 10 },
+  section:     { paddingHorizontal: 20, paddingTop: 20 },
+  label:       { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: c.text, marginBottom: 10 },
   required:    { color: '#ef4444' },
-  subLabel:    { fontSize: 12, marginTop: 6 },
+  subLabel:    { fontSize: 12, color: c.textMuted, marginTop: 6 },
+  count:       { fontSize: 12, color: c.textMuted, marginTop: 6, textAlign: 'right' },
   input: {
-    fontSize: 15, paddingHorizontal: 14, paddingVertical: 12,
-    borderRadius: 10, borderWidth: 1, color: c.text,
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 10,
+    backgroundColor: c.surfaceAlt,
+    color: c.text,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.borderLight,
   },
   multilineInput: { minHeight: 110, textAlignVertical: 'top' },
-  count:       { fontSize: 12, marginTop: 6, color: c.textMuted },
   photoButtons: { flexDirection: 'row', gap: 12 },
   photoBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1,
-    backgroundColor: 'transparent',
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surfaceAlt,
   },
-  photoBtnText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
-  imageItem:   { marginRight: 12, position: 'relative' },
-  thumbnail:   { width: s(120), height: s(150), borderRadius: 12, backgroundColor: c.borderLight },
+  photoBtnText: { fontSize: 14, fontFamily: 'Figtree_500Medium', color: c.text },
+
+  // ── Photo drag row ──
+  imageItem:      { width: PHOTO_W, marginRight: PHOTO_GAP, position: 'relative' },
+  thumbnail:      { width: PHOTO_W, height: PHOTO_H, borderRadius: 10, backgroundColor: c.borderLight },
   removeImageBtn: {
-    position: 'absolute', top: 6, right: 6,
-    backgroundColor: c.surface, borderRadius: 12,
+    position: 'absolute', top: 5, right: 5,
+    backgroundColor: 'rgba(0,0,0,0.45)', borderRadius: 11,
   },
   coverBadge: {
-    position: 'absolute', bottom: 6, left: 6,
-    backgroundColor: c.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6,
+    position: 'absolute', bottom: 5, left: 5,
+    backgroundColor: c.primary, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6,
   },
-  coverBadgeText: { color: '#fff', fontSize: 11, fontFamily: 'Figtree_600SemiBold' },
-  tagList:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  tag: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1,
+  coverBadgeText: { color: '#fff', fontSize: 10, fontFamily: 'Figtree_600SemiBold' },
+  dragOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  tagText:     { fontSize: 13, fontFamily: 'Figtree_500Medium' },
+
+  // ── Tags / chips ──
   tagRow:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  tagInput:    { flex: 1 },
-  addTagBtn:   { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
-  switchRow:   { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  toggle: {
-    width: 48, height: 28, borderRadius: 14,
-    backgroundColor: c.border, padding: 3, justifyContent: 'center',
+  rowInput:    { flex: 1 },
+  addBtn: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: '#B35D2B',
+    alignItems: 'center', justifyContent: 'center',
   },
-  toggleThumb: {
-    width: 22, height: 22, borderRadius: 11, backgroundColor: c.surface,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.15, shadowRadius: 2, elevation: 2,
+  chipRow:     { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(93, 31, 31, 0.8)',
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20,
   },
-  toggleThumbOn:     { alignSelf: 'flex-end' },
-  selectedStylist:   { flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
-  selectedStylistText: { flex: 1, fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
-  stylistDropdown:   { marginTop: 4, borderWidth: 1, borderRadius: 10, overflow: 'hidden' },
-  stylistOption:     { paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
-  stylistName:       { fontSize: 15, fontFamily: 'Figtree_500Medium', flex: 1 },
-  stylistHandle:     { fontSize: 13 },
+  chipText:    { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#F5DFB8' },
+
+  // ── Stylist ──
+  stylistSelectedRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingVertical: 13,
+  },
+  stylistSelectedText: { flex: 1, fontSize: 14, fontFamily: 'Figtree_500Medium', color: c.text },
+  dropdown: {
+    marginTop: 4, borderWidth: 1, borderColor: c.border,
+    borderRadius: 10, overflow: 'hidden', backgroundColor: c.surface,
+  },
+  dropdownItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.borderLight,
+  },
+  dropdownName:   { fontSize: 14, fontFamily: 'Figtree_500Medium', color: c.text, flex: 1 },
+  dropdownHandle: { fontSize: 12, color: c.textMuted },
+
+  // ── Bottom ──
   bottom: {
-    paddingHorizontal: 20, paddingVertical: 14, borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 20, paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    backgroundColor: c.background,
   },
-  shareBtn: {
+  publishBtn: {
     paddingVertical: 16, borderRadius: 12, alignItems: 'center',
+    backgroundColor: PUBLISH_BTN_COLOR,
   },
-  shareBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Figtree_700Bold' },
+  publishBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Figtree_700Bold' },
 });

@@ -10,41 +10,49 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Modal,
+  Pressable,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Globe } from 'lucide-react-native';
 import { useAuth } from '../hooks/useAuth';
 import { threadService } from '../services/threadService';
 import { useTheme } from '../context/ThemeContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const CATEGORIES =[
-  'Low Porosity',
-  'High Porosity',
-  'Protective Styles',
-  'Styling Tips',
-  'Beginner',
-  'Product Reviews',
+const PUBLISH_BTN_COLOR = '#4B5945';
+const OCHRE = '#B35D2B';
+
+const CATEGORIES = [
+  'Styling',
   'Hair Health',
-  'General',
+  'Product Recommendations',
+  'Beginners',
+  'Other',
 ];
 
-/**
- * CreateThreadScreen
- *
- * Props:
- *   onBack()                 — go back without creating
- *   onThreadCreated(thread)  — called with the new thread row after successful creation
- */
+const GUIDELINES = [
+  'Be respectful.',
+  'Be helpful.',
+  'Share facts, not misinformation.',
+  'Keep content relevant to textured hair.',
+  'No hate, harassment, or spam.',
+  'Respect privacy.',
+  'Celebrate every hair journey.',
+];
+
 export default function CreateThreadScreen({ onBack, onThreadCreated }) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const [category, setCategory] = useState('');
-  const [title, setTitle]       = useState('');
-  const [body, setBody]         = useState('');
-  const [loading, setLoading]   = useState(false);
+  const [category, setCategory]         = useState('');
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [title, setTitle]               = useState('');
+  const [body, setBody]                 = useState('');
+  const [loading, setLoading]           = useState(false);
+  const [guidelinesOpen, setGuidelinesOpen] = useState(false);
 
   const isValid = category && title.trim().length >= 5 && body.trim().length >= 10;
 
@@ -54,7 +62,6 @@ export default function CreateThreadScreen({ onBack, onThreadCreated }) {
       Alert.alert('Sign in required', 'You need to be signed in to post.');
       return;
     }
-
     setLoading(true);
     const { data, error } = await threadService.createThread({
       category,
@@ -62,29 +69,29 @@ export default function CreateThreadScreen({ onBack, onThreadCreated }) {
       body: body.trim(),
     });
     setLoading(false);
-
     if (error) {
       Alert.alert('Error', 'Could not create your discussion. Please try again.');
-      console.error('Create thread error:', error);
       return;
     }
-
     onThreadCreated?.(data);
   };
 
   return (
     <KeyboardAvoidingView
-      style={styles.root}
+      style={[styles.root, { paddingTop: insets.top }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={80}
     >
       {/* ── Header ── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={onBack} style={styles.closeBtn}>
+          <Ionicons name="close" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Discussion</Text>
-        <View style={{ width: 36 }} />
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerTitle}>Create Post</Text>
+          <Text style={styles.headerSub}>Community</Text>
+        </View>
+        <View style={{ width: 40 }} />
       </View>
 
       <ScrollView
@@ -93,225 +100,296 @@ export default function CreateThreadScreen({ onBack, onThreadCreated }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* ── Category ── */}
+        {/* ── Category dropdown ── */}
         <View style={styles.section}>
-          <Text style={styles.label}>
-            Category <Text style={styles.required}>*</Text>
-          </Text>
-          <View style={styles.categoryGrid}>
-            {CATEGORIES.map((cat) => {
-              const active = cat === category;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.catChip, active && styles.catChipActive]}
-                  onPress={() => setCategory(cat)}
-                >
-                  <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <Text style={styles.label}>Category</Text>
+          <TouchableOpacity
+            style={styles.dropdownTrigger}
+            onPress={() => setDropdownOpen(v => !v)}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.dropdownTriggerText, !category && styles.dropdownPlaceholder]}>
+              {category || 'Select a category'}
+            </Text>
+            <Ionicons
+              name={dropdownOpen ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color={colors.textMuted}
+            />
+          </TouchableOpacity>
+
+          {dropdownOpen && (
+            <View style={styles.dropdownList}>
+              {CATEGORIES.map((cat, i) => {
+                const isSelected = cat === category;
+                const isLast = i === CATEGORIES.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.dropdownItem, !isLast && styles.dropdownItemBorder, isSelected && styles.dropdownItemSelected]}
+                    onPress={() => { setCategory(cat); setDropdownOpen(false); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.dropdownItemText, isSelected && styles.dropdownItemActive]}>
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         {/* ── Title ── */}
         <View style={styles.section}>
-          <Text style={styles.label}>
-            Title <Text style={styles.required}>*</Text>
-          </Text>
+          <Text style={styles.label}>Title</Text>
           <TextInput
-            style={styles.titleInput}
-            placeholder="Ask a question or share a topic..."
+            style={styles.input}
+            placeholder="What's your question or topic?"
             placeholderTextColor={colors.placeholder}
             value={title}
             onChangeText={setTitle}
-            maxLength={120}
+            maxLength={100}
             returnKeyType="next"
           />
-          <Text style={styles.charCount}>{title.length}/120</Text>
+          <Text style={styles.count}>{title.length}/100</Text>
         </View>
 
-        {/* ── Body ── */}
+        {/* ── Description ── */}
         <View style={styles.section}>
-          <Text style={styles.label}>
-            Details <Text style={styles.required}>*</Text>
-          </Text>
+          <Text style={styles.label}>Description</Text>
           <TextInput
-            style={styles.bodyInput}
-            placeholder="Share more context, your experience, or what you're looking for..."
+            style={[styles.input, styles.bodyInput]}
+            placeholder="Share more details about your question or experience..."
             placeholderTextColor={colors.placeholder}
             value={body}
             onChangeText={setBody}
             multiline
             numberOfLines={6}
-            maxLength={1000}
+            maxLength={500}
             textAlignVertical="top"
           />
-          <Text style={styles.charCount}>{body.length}/1000</Text>
+          <Text style={styles.count}>{body.length}/500</Text>
         </View>
+
+        {/* ── Post Guidelines button ── */}
+        <View style={styles.guidelinesRow}>
+          <TouchableOpacity
+            style={styles.guidelinesBtn}
+            onPress={() => setGuidelinesOpen(true)}
+            activeOpacity={0.8}
+          >
+            <Globe size={15} color="#fff" strokeWidth={2} />
+            <Text style={styles.guidelinesBtnText}>POST GUIDELINES</Text>
+            <Ionicons name="chevron-down" size={13} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* ── Post button ── */}
-      <View style={styles.bottomBar}>
+      {/* ── Publish button ── */}
+      <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 14) }]}>
         <TouchableOpacity
-          style={[styles.postBtn, (!isValid || loading) && styles.postBtnDisabled]}
+          style={[styles.publishBtn, { opacity: isValid && !loading ? 1 : 0.5 }]}
           onPress={handlePost}
           disabled={!isValid || loading}
+          activeOpacity={0.85}
         >
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-              <Text style={styles.postBtnText}>Post Discussion</Text>
-            </>
-          )}
+          {loading
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={styles.publishBtnText}>Publish</Text>
+          }
         </TouchableOpacity>
       </View>
+
+      {/* ── Post Guidelines modal ── */}
+      <Modal
+        visible={guidelinesOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGuidelinesOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setGuidelinesOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            {/* Modal header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.modalIconWrap}>
+                <Globe size={22} color={OCHRE} strokeWidth={2} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Community Post</Text>
+                <Text style={styles.modalSubtitle}>Guidelines</Text>
+              </View>
+              <TouchableOpacity onPress={() => setGuidelinesOpen(false)} style={styles.modalClose}>
+                <Ionicons name="close" size={22} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Guidelines list */}
+            <View style={styles.modalBody}>
+              {GUIDELINES.map((g, i) => (
+                <View key={i} style={styles.guidelineRow}>
+                  <Text style={styles.guidelineCheck}>✓</Text>
+                  <Text style={styles.guidelineText}>{g}</Text>
+                </View>
+              ))}
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  root: {
-    flex: 1,
-    backgroundColor: c.background,
-  },
+  root:          { flex: 1, backgroundColor: c.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.borderLight,
+    backgroundColor: c.background,
+  },
+  closeBtn:      { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerCenter:  { alignItems: 'center', flex: 1 },
+  headerTitle:   { fontSize: 16, fontFamily: 'Figtree_700Bold', color: c.text },
+  headerSub:     { fontSize: 12, fontFamily: 'Figtree_500Medium', color: c.accent, marginTop: 1 },
+  scroll:        { flex: 1 },
+  scrollContent: { paddingBottom: 20 },
+  section:       { paddingHorizontal: 20, paddingTop: 20 },
+  label:         { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: c.text, marginBottom: 10 },
+  count:         { fontSize: 12, color: c.textMuted, marginTop: 6, textAlign: 'right' },
+
+  // ── Category dropdown ──
+  dropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: c.surfaceAlt,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.borderLight,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+  },
+  dropdownTriggerText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: OCHRE },
+  dropdownPlaceholder: { color: c.placeholder, fontFamily: 'Figtree_500Medium' },
+  dropdownList: {
+    marginTop: 4,
     backgroundColor: c.surface,
-    borderBottomWidth: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  dropdownItemSelected: {
+    backgroundColor: 'rgba(179, 93, 43, 0.08)',
+  },
+  dropdownItemBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.borderLight,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_500Medium',
+    color: c.text,
+  },
+  dropdownItemActive: {
+    color: OCHRE,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+
+  // ── Inputs ──
+  input: {
+    fontSize: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    borderRadius: 10,
+    backgroundColor: c.surfaceAlt,
+    color: c.text,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: c.borderLight,
+  },
+  bodyInput: { minHeight: 160, textAlignVertical: 'top' },
+
+  // ── Post Guidelines button ──
+  guidelinesRow: { paddingHorizontal: 20, paddingTop: 20 },
+  guidelinesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    backgroundColor: OCHRE,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  guidelinesBtnText: {
+    fontSize: 12,
+    fontFamily: 'Figtree_700Bold',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+
+  // ── Publish button ──
+  bottom: {
+    paddingHorizontal: 20,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: c.borderLight,
+    backgroundColor: c.background,
+  },
+  publishBtn: {
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: PUBLISH_BTN_COLOR,
+  },
+  publishBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Figtree_700Bold' },
+
+  // ── Guidelines modal ──
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#f0ece8',
   },
-  backBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
+  modalIconWrap: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#FEF3E2',
+    alignItems: 'center', justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 17,
-    fontFamily: 'Figtree_700Bold',
-    color: c.text,
+  modalTitle:    { fontSize: 15, fontFamily: 'Figtree_700Bold', color: '#111' },
+  modalSubtitle: { fontSize: 12, fontFamily: 'Figtree_400Regular', color: '#888', marginTop: 1 },
+  modalClose: {
+    width: 36, height: 36, alignItems: 'center', justifyContent: 'center',
   },
-  scroll: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 120,
-  },
-  section: {
-    backgroundColor: c.surface,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#f0ece8',
-  },
-  label: {
-    fontSize: 15,
-    fontFamily: 'Figtree_600SemiBold',
-    color: c.text,
-    marginBottom: 10,
-  },
-  required: {
-    color: '#ef4444',
-  },
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  catChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: '#f3f0ee',
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  catChipActive: {
-    backgroundColor: c.primary,
-    borderColor: c.primary,
-  },
-  catChipText: {
-    fontSize: 13,
-    color: c.textSecondary,
-    fontFamily: 'Figtree_500Medium',
-  },
-  catChipTextActive: {
-    color: '#fff',
-  },
-  titleInput: {
-    fontSize: 16,
-    padding: 14,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.border,
-    color: c.text,
-  },
-  bodyInput: {
-    fontSize: 15,
-    padding: 14,
-    backgroundColor: c.surfaceAlt,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: c.border,
-    minHeight: 130,
-    color: c.text,
-  },
-  charCount: {
-    fontSize: 12,
-    color: c.textMuted,
-    textAlign: 'right',
-    marginTop: 4,
-  },
-  bottomBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: c.surface,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#f0ece8',
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: -2 },
-    elevation: 5,
-  },
-  postBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: c.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: c.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  postBtnDisabled: {
-    backgroundColor: c.textMuted,
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  postBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontFamily: 'Figtree_700Bold',
-  },
+  modalBody:     { paddingHorizontal: 20, paddingVertical: 18, gap: 12 },
+  guidelineRow:  { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  guidelineCheck: { fontSize: 14, color: OCHRE, fontFamily: 'Figtree_700Bold', lineHeight: 20 },
+  guidelineText:  { flex: 1, fontSize: 14, fontFamily: 'Figtree_400Regular', color: '#222', lineHeight: 20 },
 });

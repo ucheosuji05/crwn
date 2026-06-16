@@ -30,7 +30,7 @@ export default function CreatePostMenu({ visible, onClose, onSelectExplore, onSe
       <View style={styles.menu}>
         <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={onSelectExplore}>
           <View style={[styles.iconCircle, styles.exploreCircle]}>
-            <Compass size={20} color="#5D1F1F" strokeWidth={2} />
+            <Compass size={20} color={colors.primary} strokeWidth={2} />
           </View>
           <View style={styles.textCol}>
             <Text style={styles.title}>Explore Post</Text>
@@ -42,7 +42,7 @@ export default function CreatePostMenu({ visible, onClose, onSelectExplore, onSe
 
         <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={onSelectCommunity}>
           <View style={[styles.iconCircle, styles.communityCircle]}>
-            <Globe size={20} color="#D9A441" strokeWidth={2} />
+            <Globe size={20} color={colors.accent} strokeWidth={2} />
           </View>
           <View style={styles.textCol}>
             <Text style={styles.title}>Community Post</Text>
@@ -68,7 +68,7 @@ const makeStyles = (c) => StyleSheet.create({
     bottom: 96,
     right: 20,
     width: 250,
-    backgroundColor: '#fff',
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingVertical: 6,
     shadowColor: '#000',
@@ -91,10 +91,10 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  exploreCircle: { backgroundColor: '#F6E2DF' },
-  communityCircle: { backgroundColor: '#FBEFD9' },
+  exploreCircle: { backgroundColor: c.primaryLight },
+  communityCircle: { backgroundColor: c.surfaceAlt },
   textCol: { flex: 1 },
-  title: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#1A1A1A' },
+  title: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: c.text },
   subtitle: { fontSize: 12, fontFamily: 'Figtree_400Regular', color: c.textMuted, marginTop: 1 },
-  divider: { height: 1, backgroundColor: '#F0EAE0', marginHorizontal: 14 },
+  divider: { height: 1, backgroundColor: c.borderLight, marginHorizontal: 14 },
 });
