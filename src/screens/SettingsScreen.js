@@ -112,54 +112,51 @@ export default function SettingsScreen({ onClose, onProfileUpdated }) {
       {activeScreen ? (
         renderScreen()
       ) : (
-        <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.headerSubtitle}>Manage your CRWN experience</Text>
-          </View>
+        <>
+          <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+            <View style={styles.header}>
+              <Text style={styles.headerSubtitle}>Manage your CRWN experience</Text>
+            </View>
 
-          {settingsSections.map((section, index) => (
+            {settingsSections.map((section, index) => (
+              <TouchableOpacity
+                key={index}
+                style={styles.settingItem}
+                onPress={() => setActiveScreen(section.screen)}
+              >
+                <View style={styles.settingIcon}>
+                  <Ionicons name={section.icon} size={24} color="#6b7280" />
+                </View>
+                <View style={styles.settingContent}>
+                  <Text style={styles.settingTitle}>{section.title}</Text>
+                  <Text style={styles.settingDescription}>{section.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          <View style={styles.footer}>
             <TouchableOpacity
-              key={index}
-              style={[styles.settingItem, section.special && styles.specialItem]}
-              onPress={() => setActiveScreen(section.screen)}
+              style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]}
+              onPress={handleSignOut}
+              disabled={signingOut}
             >
-              <View style={styles.settingIcon}>
-                <Ionicons 
-                  name={section.icon} 
-                  size={24} 
-                  color={section.special ? colors.primary : '#6b7280'}
-                />
-              </View>
-              <View style={styles.settingContent}>
-                <Text style={[styles.settingTitle, section.special && styles.specialTitle]}>
-                  {section.title}
-                </Text>
-                <Text style={styles.settingDescription}>{section.description}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+              {signingOut ? (
+                <>
+                  <ActivityIndicator size="small" color="#ef4444" />
+                  <Text style={styles.signOutText}>Signing out...</Text>
+                </>
+              ) : (
+                <>
+                  <Ionicons name="log-out-outline" size={20} color="#ef4444" />
+                  <Text style={styles.signOutText}>Sign Out</Text>
+                </>
+              )}
             </TouchableOpacity>
-          ))}
-
-          <TouchableOpacity 
-            style={[styles.signOutButton, signingOut && styles.signOutButtonDisabled]} 
-            onPress={handleSignOut}
-            disabled={signingOut}
-          >
-            {signingOut ? (
-              <>
-                <ActivityIndicator size="small" color="#ef4444" />
-                <Text style={styles.signOutText}>Signing out...</Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-                <Text style={styles.signOutText}>Sign Out</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          <Text style={styles.version}>CRWN v1.0.0</Text>
-        </ScrollView>
+            <Text style={styles.version}>CRWN v1.0.0</Text>
+          </View>
+        </>
       )}
     </SafeAreaView>
   );
@@ -197,7 +194,14 @@ const makeStyles = (c) => StyleSheet.create({
     flex: 1,
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: 16,
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: c.borderLight,
   },
   header: {
     padding: 20,
@@ -247,8 +251,6 @@ const makeStyles = (c) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 20,
-    marginTop: 20,
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
@@ -266,7 +268,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   version: {
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 12,
     fontSize: 12,
     color: c.textMuted,
   },
