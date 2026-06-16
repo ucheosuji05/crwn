@@ -1,5 +1,7 @@
-import { useState, useCallback, useEffect } from 'react';
-import { View, ScrollView, StyleSheet, Modal, TouchableOpacity, Platform, RefreshControl, ActivityIndicator } from 'react-native';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { View, ScrollView, StyleSheet, TouchableOpacity, Platform, RefreshControl, ActivityIndicator, Animated, Dimensions } from 'react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 import { WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
 import { useTheme } from '../context/ThemeContext';
@@ -18,6 +20,25 @@ export default function ProfileScreen({ route, navigation }) {
 
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [profileVersion, setProfileVersion] = useState(0);
+  const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
+
+  useEffect(() => {
+    if (settingsVisible) {
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [settingsVisible]);
+
+  const closeSettings = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_WIDTH,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => setSettingsVisible(false));
+  };
   const [refreshing, setRefreshing] = useState(false);
   // null = still checking, false = regular user, true = stylist (redirecting)
   const [checkingRole, setCheckingRole] = useState(false);
@@ -130,17 +151,16 @@ export default function ProfileScreen({ route, navigation }) {
         </TouchableOpacity>
       )}
 
-      <Modal
-        visible={settingsVisible}
-        animationType="slide"
-        presentationStyle="pageSheet"
-        onRequestClose={() => setSettingsVisible(false)}
-      >
-        <SettingsScreen
-          onClose={() => setSettingsVisible(false)}
-          onProfileUpdated={() => setProfileVersion(v => v + 1)}
-        />
-      </Modal>
+      {settingsVisible && (
+        <Animated.View
+          style={[StyleSheet.absoluteFillObject, styles.settingsSlide, { transform: [{ translateX: slideAnim }] }]}
+        >
+          <SettingsScreen
+            onClose={closeSettings}
+            onProfileUpdated={() => setProfileVersion(v => v + 1)}
+          />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -160,5 +180,8 @@ const styles = StyleSheet.create({
     right: 14,
     padding: 6,
     zIndex: 100,
+  },
+  settingsSlide: {
+    zIndex: 200,
   },
 });
