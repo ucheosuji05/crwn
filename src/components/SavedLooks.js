@@ -23,6 +23,7 @@ import { useNavigation } from '@react-navigation/native';
 import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
 import { WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../config/supabase';
 import PostCard from './PostCard';
 
@@ -293,20 +294,20 @@ export default function SavedLooks() {
                 <Ionicons name="bookmark-outline" size={26} color={colors.border} />
               </View>
             )}
+            {/* Dark gradient scrim behind the name pill */}
+            <LinearGradient
+              colors={['transparent', 'rgba(26,22,18,0.9)']}
+              locations={[0, 1]}
+              style={styles.collNameGradient}
+              pointerEvents="none"
+            />
+            {/* Frosted glass name pill — matches Explore stylistTag */}
+            <View style={styles.collNameOverlay}>
+              <Ionicons name="bookmark" size={10} color="#fff" />
+              <Text style={styles.collNameOverlayText} numberOfLines={1}>{name}</Text>
+            </View>
           </View>
         </TouchableOpacity>
-        <View style={styles.collFooter}>
-          <Text style={styles.collName} numberOfLines={1}>{name}</Text>
-          {!isAll && (
-            <TouchableOpacity
-              onPress={() => setGroupMenuTarget(col)}
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              style={styles.collMenuBtn}
-            >
-              <Ionicons name="ellipsis-horizontal" size={16} color={colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
     );
   };
@@ -413,6 +414,14 @@ export default function SavedLooks() {
         <Pressable style={styles.menuBackdrop} onPress={() => setGroupMenuTarget(null)}>
           <View style={styles.menuSheet}>
             <Text style={styles.menuTitle}>{groupMenuTarget?.name}</Text>
+            <TouchableOpacity style={styles.menuRow} onPress={() => {
+              setGroupMenuTarget(null);
+              setSelectedToAdd(new Set());
+              setAddPostsVisible(true);
+            }}>
+              <Ionicons name="add-circle-outline" size={18} color={colors.textSecondary} />
+              <Text style={styles.menuRowText}>Add to "{groupMenuTarget?.name}"</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.menuRow} onPress={() => {
               setRenameText(groupMenuTarget?.name || '');
               setRenameVisible(true);
@@ -579,10 +588,10 @@ export default function SavedLooks() {
         </Text>
         {openedCollection ? (
           <TouchableOpacity
-            onPress={() => { setSelectedToAdd(new Set()); setAddPostsVisible(true); }}
+            onPress={() => setGroupMenuTarget(openedCollection)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="add" size={26} color={colors.primary} />
+            <Ionicons name="ellipsis-horizontal" size={22} color={colors.text} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 26 }} />
@@ -593,7 +602,7 @@ export default function SavedLooks() {
         <View style={styles.emptyState}>
           <Text style={styles.emptyTitle}>No posts here</Text>
           <Text style={styles.emptyText}>
-            {openedCollection ? 'Tap + to add posts to this collection' : 'Bookmark posts to see them here'}
+            {openedCollection ? 'Tap ··· to add posts to this collection' : 'Bookmark posts to see them here'}
           </Text>
         </View>
       ) : (
@@ -712,6 +721,41 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
     },
     collMenuBtn: {
       paddingLeft: 4,
+    },
+    collNameGradient: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: '50%',
+    },
+    collNameOverlay: {
+      position: 'absolute',
+      bottom: 10,
+      left: 10,
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255,255,255,0.15)',
+      borderRadius: 999,
+      paddingVertical: 4,
+      paddingHorizontal: 8,
+    },
+    collNameOverlayText: {
+      fontSize: 12,
+      fontFamily: 'Figtree_500Medium',
+      color: '#fff',
+      marginLeft: 4,
+    },
+    collMenuOverlay: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      backgroundColor: 'rgba(0,0,0,0.38)',
+      borderRadius: 12,
+      width: 26,
+      height: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
     },
 
     // ── Posts drill-in view ───────────────────────────────────────────────────
