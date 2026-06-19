@@ -59,6 +59,10 @@ app.use(express.json());
 // in a 302 redirect — so the browser receives it via navigation and it stays
 // present when Google redirects back to the callback.
 app.get('/api/auth/oauth-start/:provider', async (req, res) => {
+  // Prevent any caching — every OAuth request needs a fresh state cookie.
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  res.setHeader('Pragma', 'no-cache');
+
   const provider = req.params.provider.replace(/[^a-z]/g, '');
   const callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback`;
 
