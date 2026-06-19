@@ -53,7 +53,7 @@ export const authService = {
       // Open a bridge page that auto-submits the POST in the browser so the
       // entire OAuth flow (state generation → Google → callback) stays in one
       // continuous browser session, preventing state_mismatch errors.
-      const startUrl = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}`;
+      const startUrl = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}?_t=${Date.now()}`;
       const result = await WebBrowser.openAuthSessionAsync(startUrl, 'crwn://auth/callback');
 
       console.log('[_socialSignIn] browser result type:', result.type, 'url prefix:', result.url?.substring(0, 60));

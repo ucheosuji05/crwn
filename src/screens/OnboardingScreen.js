@@ -22,6 +22,8 @@ import { authService } from '../services/authService';
 import { profileService } from '../services/profileService';
 import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
+import AuthScreen from './AuthScreen';
+import ForgotPasswordScreen from './ForgotPasswordScreen';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -212,9 +214,12 @@ const MOCK_HAIR_LOOKS = [
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function OnboardingScreen({ onDone, onSignIn }) {
-  const { signInWithGoogle } = useAuth();
+export default function OnboardingScreen({ onDone = () => {} }) {
+  const { signInWithGoogle, signUp, user: authUser } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [isGoogleUser, setIsGoogleUser] = useState(false);
+  const [showAuth, setShowAuth] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [currentStep, setCurrentStep] = useState(STEPS.SPLASH);
   const [formData, setFormData] = useState({
     email: '',
@@ -245,6 +250,8 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const [services, setServices] = useState([{ name: '', price: '' }]);
   const [portfolioPhotos, setPortfolioPhotos] = useState([]);
   const [showPassword, setShowPassword] = useState(false);
+  const [checkingUsername, setCheckingUsername] = useState(false);
+  const [usernameAvailError, setUsernameAvailError] = useState('');
   const [stylistFilter, setStylistFilter] = useState('All');
   const [hairLookFilter, setHairLookFilter] = useState('All');
   const [phoneStage, setPhoneStage] = useState('enter'); // 'enter' | 'code'
@@ -254,6 +261,15 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const loadingProgress = useRef(new Animated.Value(0)).current;
   const [loadingMessage, setLoadingMessage] = useState('Creating your account...');
+
+  // Returning user: signed in via the internal AuthScreen (not Google).
+  // authUser will be set but isGoogleUser is false and showAuth is true.
+  // Call onDone so AppContent treats them as having completed onboarding.
+  useEffect(() => {
+    if (authUser && showAuth && !isGoogleUser) {
+      onDone();
+    }
+  }, [authUser]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (currentStep === STEPS.SPLASH) {
@@ -283,93 +299,87 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   const handleSignup = async () => {
     loadingProgress.setValue(0);
     Animated.timing(loadingProgress, { toValue: 0.3, duration: 500, useNativeDriver: false }).start();
-    setLoadingMessage('Creating your account...');
+    setLoadingMessage(isGoogleUser ? 'Saving your profile...' : 'Creating your account...');
     try {
       const username = formData.username.trim().toLowerCase();
-      const { user, error } = await authService.signUp(
-        formData.email.trim(),
-        formData.password,
-        {
-          name: `${formData.firstName} ${formData.lastName}`.trim(),
-          username,
-          location: formData.location,
-          userType: formData.userType,
-          selectedStyles: formData.selectedStyles,
-          stylistSpecialties: formData.stylistSpecialties,
-          stylistWorkType: formData.stylistWorkType,
-          stylistExperience: formData.stylistExperience,
-          businessName: formData.businessName,
-          stylistAvailability: formData.stylistAvailability,
-          services: services.filter(s => s.name.trim()),
-        }
-      );
-      if (error) {
-        console.error('[Signup] error:', JSON.stringify(error));
-        Alert.alert('Signup Failed', error.message || `${error.status || ''} ${error.statusText || error.code || 'Please try again'}`);
-        goToStep(STEPS.EMAIL);
-        return;
-      }
+      let userId;
 
-      // Progress animation
-      Animated.timing(loadingProgress, {
-        toValue: 0.6,
-        duration: 500,
-        useNativeDriver: false,
-      }).start();
-
-      setLoadingMessage('Setting up your hair profile...');
-
-      // Ensure the profiles row exists with all core onboarding fields BEFORE any
-      // update/avatar calls (all of which are UPDATEs that silently no-op without a row).
-      if (user?.id) {
-        await profileService.upsertProfile(user.id, {
+      if (isGoogleUser) {
+        // Already authenticated via Google — skip sign-up, just save onboarding data
+        userId = authUser?.id;
+        if (!userId) throw new Error('Missing user id for Google sign-in');
+        await profileService.upsertProfile(userId, {
           full_name: `${formData.firstName} ${formData.lastName}`.trim(),
           username,
           location: formData.location,
           is_stylist: formData.userType === 'stylist',
         });
+      } else {
+        const { user, error } = await signUp(
+          formData.email.trim(),
+          formData.password,
+          {
+            name: `${formData.firstName} ${formData.lastName}`.trim(),
+            username,
+            location: formData.location,
+            userType: formData.userType,
+            selectedStyles: formData.selectedStyles,
+            stylistSpecialties: formData.stylistSpecialties,
+            stylistWorkType: formData.stylistWorkType,
+            stylistExperience: formData.stylistExperience,
+            businessName: formData.businessName,
+            stylistAvailability: formData.stylistAvailability,
+            services: services.filter(s => s.name.trim()),
+          }
+        );
+        if (error) {
+          console.error('[Signup] error:', JSON.stringify(error));
+          Alert.alert('Signup Failed', error.message || `${error.status || ''} ${error.statusText || error.code || 'Please try again'}`);
+          goToStep(STEPS.EMAIL);
+          return;
+        }
+        userId = user?.id;
+        if (userId) {
+          await profileService.upsertProfile(userId, {
+            full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+            username,
+            location: formData.location,
+            is_stylist: formData.userType === 'stylist',
+          });
+        }
       }
 
-      // Save onboarding data to profile
-      await Promise.allSettled([
-        // Upload profile photo
-        formData.profilePhoto && user?.id
-          ? profileService.uploadAvatar(user.id, formData.profilePhoto)
-          : Promise.resolve(),
+      Animated.timing(loadingProgress, { toValue: 0.6, duration: 500, useNativeDriver: false }).start();
+      setLoadingMessage('Setting up your hair profile...');
 
-        // Save hair style preferences (explorer flow)
-        formData.selectedStyles.length > 0 && user?.id
-          ? profileService.updateHairProfile(user.id, { goals: formData.selectedStyles })
+      await Promise.allSettled([
+        formData.profilePhoto && userId
+          ? profileService.uploadAvatar(userId, formData.profilePhoto)
+          : Promise.resolve(),
+        formData.selectedStyles.length > 0 && userId
+          ? profileService.updateHairProfile(userId, { goals: formData.selectedStyles })
           : Promise.resolve(),
       ]);
 
-      // Preferences object (profiles.preferences JSONB) — built up for all users
       const prefs = {};
       if (formData.phone) prefs.phone = formData.phone;
       if (formData.usageGoals.length) prefs.usage_goals = formData.usageGoals;
 
-      // Stylist-specific data (sequential: photos must upload before registering)
-      if (formData.userType === 'stylist' && user?.id) {
-        // Upload portfolio photos and collect public URLs
+      if (formData.userType === 'stylist' && userId) {
         const photoUrls = [];
         for (let i = 0; i < portfolioPhotos.length; i++) {
-          const { url } = await profileService.uploadPortfolioPhoto(user.id, portfolioPhotos[i], i);
+          const { url } = await profileService.uploadPortfolioPhoto(userId, portfolioPhotos[i], i);
           if (url) photoUrls.push(url);
         }
-
-        // Upload professional credentials photo
         let credentialsPhotoUrl = null;
         if (formData.credentialsPhoto) {
-          const { url } = await profileService.uploadCredentialsPhoto(user.id, formData.credentialsPhoto);
+          const { url } = await profileService.uploadCredentialsPhoto(userId, formData.credentialsPhoto);
           credentialsPhotoUrl = url;
         }
-
-        // Register stylist: sets is_stylist, specialties, portfolio_photos
-        await stylistService.registerAsStylist(user.id, {
+        await stylistService.registerAsStylist(userId, {
           specialties: formData.stylistSpecialties,
           portfolioPhotos: photoUrls,
         });
-
         if (formData.businessName)      prefs.business_name = formData.businessName;
         if (formData.stylistWorkType)   prefs.work_type = formData.stylistWorkType;
         if (formData.stylistExperience) prefs.experience = formData.stylistExperience;
@@ -377,43 +387,19 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         const social = Object.fromEntries(Object.entries(formData.socialLinks).filter(([, v]) => v?.trim()));
         if (Object.keys(social).length) prefs.social_links = social;
         if (credentialsPhotoUrl)        prefs.credentials_photo_url = credentialsPhotoUrl;
-
-        // -- Superseded by the unified `prefs` object above (kept for reference) --
-        // const stylistPrefs = {};
-        // if (formData.businessName)       stylistPrefs.business_name  = formData.businessName;
-        // if (formData.stylistWorkType)    stylistPrefs.work_type      = formData.stylistWorkType;
-        // if (formData.stylistExperience)  stylistPrefs.experience     = formData.stylistExperience;
-        // if (formData.stylistAvailability) stylistPrefs.availability  = formData.stylistAvailability;
-        // const activeServices = services.filter(s => s.name.trim());
-        // if (activeServices.length > 0)   stylistPrefs.services       = activeServices;
-        //
-        // if (Object.keys(stylistPrefs).length > 0) {
-        //   await profileService.updateProfile(user.id, { preferences: stylistPrefs });
-        // }
       }
 
-      if (Object.keys(prefs).length > 0 && user?.id) {
-        await profileService.updateProfile(user.id, { preferences: prefs });
+      if (Object.keys(prefs).length > 0 && userId) {
+        await profileService.updateProfile(userId, { preferences: prefs });
       }
 
-      Animated.timing(loadingProgress, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: false,
-      }).start();
-
+      Animated.timing(loadingProgress, { toValue: 1, duration: 500, useNativeDriver: false }).start();
       setLoadingMessage('Almost there...');
-
-      // refreshProfile isn't part of useAuth's context value yet — skip to avoid a crash
-      // if (user?.id) await refreshProfile(user.id);
-
       await new Promise(resolve => setTimeout(resolve, 500));
-
-      // Success! Go to complete
       goToStep(STEPS.COMPLETE);
     } catch (err) {
       Alert.alert('Error', 'Something went wrong. Please try again.');
-      goToStep(STEPS.EMAIL);
+      goToStep(isGoogleUser ? STEPS.USERNAME : STEPS.EMAIL);
     }
   };
 
@@ -422,6 +408,19 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       setCurrentStep(step);
       Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     });
+  };
+
+  const handleUsernameNext = async () => {
+    if (!isUsernameValid(formData.username)) return;
+    setCheckingUsername(true);
+    const { available } = await profileService.checkUsernameAvailable(formData.username);
+    setCheckingUsername(false);
+    if (!available) {
+      setUsernameAvailError('That username is already taken. Please choose another.');
+      return;
+    }
+    setUsernameAvailError('');
+    goNext();
   };
 
   const goNext = () => {
@@ -447,6 +446,11 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   };
 
   const goBack = () => {
+    // Google users skipped EMAIL and PHONE_VERIFY — jump back to WELCOME
+    if (isGoogleUser && currentStep === STEPS.USERNAME) {
+      goToStep(STEPS.WELCOME);
+      return;
+    }
     const stylistIdx = STYLIST_STEP_ORDER.indexOf(currentStep);
     if (stylistIdx !== -1) {
       goToStep(stylistIdx > 0 ? STYLIST_STEP_ORDER[stylistIdx - 1] : STEPS.USER_TYPE);
@@ -622,8 +626,29 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
       const result = await signInWithGoogle();
       if (result.error) {
         Alert.alert('Google Sign In Failed', result.error.message || 'Please try again.');
+        return;
       }
-      // On success AuthProvider sets user and App.js navigates away automatically
+
+      if (!result.isNewUser) {
+        // Returning user — already has a CRWN account, skip onboarding
+        onDone();
+        return;
+      }
+
+      // New user — pre-fill wizard with Google data and continue onboarding
+      const googleUser = result.data?.user || authUser;
+      if (googleUser) {
+        const nameParts = (googleUser.name || '').trim().split(' ');
+        setFormData(prev => ({
+          ...prev,
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' ') || '',
+          email: googleUser.email || '',
+          username: (googleUser.email?.split('@')[0] || '').toLowerCase().replace(/[^a-z0-9_]/g, '_'),
+        }));
+      }
+      setIsGoogleUser(true);
+      goToStep(STEPS.USERNAME);
     } catch (e) {
       Alert.alert('Error', e?.message || 'Something went wrong. Please try again.');
     } finally {
@@ -658,7 +683,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
             )}
           </TouchableOpacity>
         )}
-        <TouchableOpacity onPress={onSignIn}>
+        <TouchableOpacity onPress={() => setShowAuth(true)}>
           <Text style={styles.signInText}>
             Have an account? <Text style={styles.signInLink}>Sign in</Text>
           </Text>
@@ -812,7 +837,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
   };
 
   const renderUsername = () => (
-    <WhiteScreen scrollable footer={<ContinueButton onPress={goNext} disabled={!isUsernameValid(formData.username)} />}>
+    <WhiteScreen scrollable footer={<ContinueButton onPress={handleUsernameNext} disabled={!isUsernameValid(formData.username) || checkingUsername} loading={checkingUsername} />}>
       {renderBack()}
       {renderProgress()}
       <Text style={styles.questionTitle}>Choose your username</Text>
@@ -825,7 +850,7 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
           <TextInput
             style={styles.usernameInput}
             value={formData.username}
-            onChangeText={t => update('username', t.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
+            onChangeText={t => { update('username', t.toLowerCase().replace(/[^a-z0-9_.]/g, '')); setUsernameAvailError(''); }}
             placeholder="yourname"
             placeholderTextColor="#999"
             autoCapitalize="none"
@@ -835,6 +860,9 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
         </View>
         {formData.username.length > 0 && !isUsernameValid(formData.username) && (
           <Text style={styles.errorText}>Username must be 3-20 characters (letters, numbers, _ or .)</Text>
+        )}
+        {!!usernameAvailError && (
+          <Text style={styles.errorText}>{usernameAvailError}</Text>
         )}
       </View>
     </WhiteScreen>
@@ -1655,6 +1683,19 @@ export default function OnboardingScreen({ onDone, onSignIn }) {
     }
   };
 
+  if (showForgotPassword) {
+    return <ForgotPasswordScreen onBack={() => setShowForgotPassword(false)} />;
+  }
+
+  if (showAuth) {
+    return (
+      <AuthScreen
+        onBack={() => setShowAuth(false)}
+        onForgotPassword={() => { setShowAuth(false); setShowForgotPassword(true); }}
+      />
+    );
+  }
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
       {renderCurrentStep()}
@@ -1697,14 +1738,17 @@ const WhiteScreen = ({ children, scrollable, footer, header }) => (
   </SafeAreaView>
 );
 
-const ContinueButton = ({ onPress, disabled, label = 'Continue' }) => (
+const ContinueButton = ({ onPress, disabled, loading, label = 'Continue' }) => (
   <View style={styles.continueButtonContainer}>
     <TouchableOpacity
       style={[styles.continueButton, !disabled && styles.continueButtonActive]}
       onPress={onPress}
       disabled={disabled}
     >
-      <Text style={styles.continueButtonText}>{label}</Text>
+      {loading
+        ? <ActivityIndicator size="small" color="#fff" />
+        : <Text style={styles.continueButtonText}>{label}</Text>
+      }
     </TouchableOpacity>
   </View>
 );

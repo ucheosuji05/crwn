@@ -103,6 +103,8 @@ export const AuthProvider = ({ children }) => {
 
     console.log('[signInWithGoogle] authUser:', authUser?.email);
 
+    let isNewUser = false;
+
     if (authUser) {
       setUser(authUser);
       setSession(authSession);
@@ -111,6 +113,7 @@ export const AuthProvider = ({ children }) => {
 
       // New Google user — auto-create a minimal Supabase profile
       if (!supabaseProfile) {
+        isNewUser = true;
         try {
           const base = (authUser.email?.split('@')[0] || `user`).toLowerCase().replace(/[^a-z0-9_]/g, '_');
           await supabase.from('profiles').insert([{
@@ -128,7 +131,7 @@ export const AuthProvider = ({ children }) => {
       setProfile(supabaseProfile ? { ...authUser, ...supabaseProfile } : authUser);
     }
 
-    return result;
+    return { ...result, isNewUser };
   }, []);
 
   const signInWithInstagram = useCallback(async () => {

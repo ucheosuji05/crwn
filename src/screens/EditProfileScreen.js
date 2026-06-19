@@ -31,6 +31,7 @@ export default function EditProfileScreen({ onBack, onSave }) {
   // Profile fields
   const [fullName, setFullName] = useState('');
   const [username, setUsername] = useState('');
+  const [originalUsername, setOriginalUsername] = useState('');
   const [bio, setBio] = useState('');
   const [location, setLocation] = useState('');
   const [phone, setPhone] = useState('');
@@ -60,6 +61,7 @@ export default function EditProfileScreen({ onBack, onSave }) {
       setAvatarUrl(data.avatar_url || null);
       setFullName(data.full_name || '');
       setUsername(data.username || '');
+      setOriginalUsername(data.username || '');
       setBio(data.bio || '');
       setLocation(data.location || '');
       setPhone(data.phone || '');
@@ -146,6 +148,16 @@ export default function EditProfileScreen({ onBack, onSave }) {
     }
 
     setSaving(true);
+
+    const newUsername = username.trim().toLowerCase();
+    if (newUsername !== originalUsername) {
+      const { available } = await profileService.checkUsernameAvailable(newUsername, user.id);
+      if (!available) {
+        Alert.alert('Username taken', 'That username is already in use. Please choose a different one.');
+        setSaving(false);
+        return;
+      }
+    }
 
     // Update profile
     const { error: profileError } = await profileService.updateProfile(user.id, {

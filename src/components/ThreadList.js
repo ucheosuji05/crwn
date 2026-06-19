@@ -220,6 +220,8 @@ const makeStyles = (c) => StyleSheet.create({
   header: {
     minHeight: HEADER_BAR_HEIGHT,
     backgroundColor: c.background,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.hairline,
   },
   searchToggleBtn: {
     width: 36,
@@ -227,17 +229,17 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 14 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16 },
   searchBarWrap: { flex: 1 },
   searchBarContainer: { marginLeft: 6, marginRight: 14, marginVertical: 8 },
   filterFlatList: { flex: 1 },
   chipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: HEADER_BAR_HEIGHT,
-    paddingLeft: 14,
+    height: HEADER_BAR_HEIGHT,
+    paddingLeft: 16,
   },
-  filterList: { paddingLeft: 6, paddingVertical: 10, paddingRight: 14, gap: 8, alignItems: 'center' },
+  filterList: { paddingLeft: 6, paddingVertical: 6, paddingRight: 14, gap: 8, alignItems: 'center' },
   filterChip: {
     borderRadius: 8,
     paddingHorizontal: 14,

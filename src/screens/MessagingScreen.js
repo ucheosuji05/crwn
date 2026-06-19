@@ -14,7 +14,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
@@ -63,6 +63,7 @@ export default function MessagingScreen() {
   const { user }    = useAuth();
   const { colors }  = useTheme();
   const { refreshMessages } = useUnreadCount();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   // Inbox state
@@ -346,7 +347,7 @@ export default function MessagingScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { paddingBottom: insets.bottom > 0 ? insets.bottom - 16 : 10 }]}>
             <TextInput
               style={styles.chatInput}
               placeholder="Message..."
@@ -711,7 +712,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingVertical: 10,
   },
   bubbleMine: {
-    backgroundColor: c.primary,
+    backgroundColor: c.isDark ? '#C8860A' : c.primary,
     borderBottomRightRadius: 4,
   },
   bubbleTheirs: {

@@ -1,8 +1,10 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
-  TextInput, Image, ScrollView, ActivityIndicator, RefreshControl,
+  Image, ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import SearchBar from '../components/SearchBar';
+import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -226,7 +228,7 @@ export default function StylistsScreen() {
         >
           {/* Search button */}
           <TouchableOpacity style={styles.searchIconBtn} onPress={() => setSearchOpen((v) => !v)}>
-            <Ionicons name="search-outline" size={18} color={searchOpen ? colors.text : colors.textMuted} />
+            <Ionicons name="search-outline" size={22} color={colors.text} />
           </TouchableOpacity>
 
           {/* Filter chips */}
@@ -246,23 +248,13 @@ export default function StylistsScreen() {
 
       {/* Expandable search input */}
       {searchOpen && (
-        <View style={styles.searchRow}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search stylists..."
-            placeholderTextColor={colors.placeholder}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCapitalize="none"
-            autoFocus
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search stylists..."
+          autoFocus
+          containerStyle={styles.searchBarOverride}
+        />
       )}
 
       {/* Loading */}
@@ -331,59 +323,40 @@ const makeStyles = (c) => StyleSheet.create({
 
   // ── Top bar (chips + search icon row) ──
   topBar: {
-    backgroundColor: c.surface,
+    height: HEADER_BAR_HEIGHT,
+    backgroundColor: c.background,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
-    height: 52,
     overflow: 'hidden',
   },
   filterContent: {
-    paddingHorizontal: 14,
-    paddingRight: 20,
+    paddingLeft: 16,
+    paddingRight: 14,
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 52,
+    height: HEADER_BAR_HEIGHT,
   },
   searchIconBtn: {
     width: 36,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: c.surfaceAlt,
-    borderWidth: 1,
-    borderColor: c.border,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   // ── Expandable search row ──
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: c.inputBackground,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.hairline,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
-    color: c.text,
-    fontFamily: 'Figtree_400Regular',
+  searchBarOverride: {
+    marginHorizontal: 12,
+    marginVertical: 8,
   },
   filterChip: {
+    borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    paddingVertical: 7,
     backgroundColor: c.surfaceAlt,
-    borderWidth: 1,
-    borderColor: c.border,
   },
   filterChipActive: {
-    backgroundColor: c.selected,
-    borderColor: c.selected,
+    backgroundColor: c.primary,
   },
   filterText: {
     fontSize: 13,
@@ -391,7 +364,7 @@ const makeStyles = (c) => StyleSheet.create({
     color: c.textSecondary,
   },
   filterTextActive: {
-    color: c.isDark ? '#111' : '#fff',
+    color: '#fff',
     fontFamily: 'Figtree_600SemiBold',
   },
 

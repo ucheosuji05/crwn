@@ -83,46 +83,50 @@ function AppContent() {
     );
   }
 
-  // ── Pre-auth screens (no NavigationContainer) ──────────────────────────
-  if (!user) {
-    if (authView === 'reset-password' && resetToken) {
-      return (
-        <ResetPasswordScreen
-          token={resetToken}
-          onDone={() => { setAuthView('default'); setResetToken(null); }}
-        />
-      );
-    }
-    if (authView === 'forgot-password') {
-      return <ForgotPasswordScreen onBack={() => setAuthView('default')} />;
-    }
-    if (hasOnboarded) {
-      return (
-        <AuthScreen
-          onBack={() => setHasOnboarded(false)}
-          onForgotPassword={() => setAuthView('forgot-password')}
-        />
-      );
-    }
+  // Deep-link screens — handled regardless of auth state
+  if (authView === 'reset-password' && resetToken) {
     return (
-      <OnboardingScreen
-        onDone={async () => {
-          await AsyncStorage.setItem('onboarded', 'true');
-          setHasOnboarded(true);
-        }}
-        onSignIn={() => setHasOnboarded(true)}
+      <ResetPasswordScreen
+        token={resetToken}
+        onDone={() => { setAuthView('default'); setResetToken(null); }}
+      />
+    );
+  }
+  if (authView === 'forgot-password') {
+    return <ForgotPasswordScreen onBack={() => setAuthView('default')} />;
+  }
+
+  // ── Fully authenticated + onboarding complete → main app ───────────────
+  if (user && hasOnboarded) {
+    return (
+      <>
+        <StatusBar barStyle={themeColors.statusBar} backgroundColor={themeColors.surface} />
+        <NavigationContainer>
+          <RootNavigator />
+        </NavigationContainer>
+      </>
+    );
+  }
+
+  // ── Returning user (previously onboarded) but not signed in → sign-in ──
+  if (!user && hasOnboarded) {
+    return (
+      <AuthScreen
+        onBack={() => setHasOnboarded(false)}
+        onForgotPassword={() => setAuthView('forgot-password')}
       />
     );
   }
 
-  // ── Authenticated — show main app ──────────────────────────────────────
+  // ── New user OR mid-onboarding Google sign-in (user set but not done) ──
   return (
-    <>
-      <StatusBar barStyle={themeColors.statusBar} backgroundColor={themeColors.surface} />
-      <NavigationContainer>
-        <RootNavigator />
-      </NavigationContainer>
-    </>
+    <OnboardingScreen
+      onDone={async () => {
+        await AsyncStorage.setItem('onboarded', 'true');
+        setHasOnboarded(true);
+      }}
+      onSignIn={() => setHasOnboarded(true)}
+    />
   );
 }
 

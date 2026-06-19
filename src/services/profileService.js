@@ -53,12 +53,28 @@ export const profileService = {
     }
   },
 
-  // Update user profile (upserts so it never silently no-ops on a missing row)
+  // Returns { available: bool } — pass excludeUserId to allow the current user's own username
+  checkUsernameAvailable: async (username, excludeUserId = null) => {
+    try {
+      let query = supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', username.trim().toLowerCase());
+      if (excludeUserId) query = query.neq('id', excludeUserId);
+      const { data } = await query.maybeSingle();
+      return { available: !data, error: null };
+    } catch (error) {
+      return { available: false, error };
+    }
+  },
+
+  // Update user profile
   updateProfile: async (userId, updates) => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .upsert({ id: userId, ...updates }, { onConflict: 'id' })
+        .update(updates)
+        .eq('id', userId)
         .select()
         .single();
 

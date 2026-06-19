@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  View, Text, Image, FlatList, StyleSheet,
+  View, Text, Image, FlatList, StyleSheet, ScrollView,
   TouchableOpacity, Pressable, RefreshControl, ActivityIndicator,
 } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
@@ -78,6 +78,7 @@ export default function NotificationsList({ panelMode = false }) {
   const [refreshing, setRefreshing]       = useState(false);
   const [searchOpen, setSearchOpen]       = useState(false);
   const [query, setQuery]                 = useState('');
+  const [notifFilter, setNotifFilter]     = useState('All');
 
   // ── Fetch + merge both feeds ─────────────────────────────────────────────────
 
@@ -282,20 +283,34 @@ export default function NotificationsList({ panelMode = false }) {
 
   // ── Search ───────────────────────────────────────────────────────────────────
 
+  const NOTIF_FILTERS = ['All', 'Likes', 'Comments', 'Follows', 'Bookings'];
+
   const toggleSearch = () => {
-    if (searchOpen) setQuery('');
+    if (searchOpen) { setQuery(''); setNotifFilter('All'); }
     setSearchOpen(prev => !prev);
   };
 
   const filteredNotifications = useMemo(() => {
+    let list = notifications;
+
+    if (notifFilter !== 'All') {
+      const typeMap = {
+        Likes:    n => n.type === 'like' || n.type === 'crown',
+        Comments: n => n.type === 'comment' || n.type === 'reply',
+        Follows:  n => n.type === 'follow',
+        Bookings: n => n._source === 'booking',
+      };
+      list = list.filter(typeMap[notifFilter] ?? (() => true));
+    }
+
     const q = query.trim().toLowerCase();
-    if (!q) return notifications;
-    return notifications.filter(n => {
+    if (!q) return list;
+    return list.filter(n => {
       const actorName = (n.actor?.username || n.actor?.full_name || '').toLowerCase();
       const text = `${n.title || ''} ${n.body || ''}`.toLowerCase();
       return actorName.includes(q) || text.includes(q);
     });
-  }, [notifications, query]);
+  }, [notifications, query, notifFilter]);
 
   // ── Render item ──────────────────────────────────────────────────────────────
 
@@ -431,7 +446,7 @@ export default function NotificationsList({ panelMode = false }) {
             onPress={toggleSearch}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.primary} />
+            <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.text} />
           </Pressable>
 
           <Text style={styles.headerTitle} pointerEvents="none">Notifications</Text>
@@ -441,7 +456,7 @@ export default function NotificationsList({ panelMode = false }) {
             onPress={() => navigation.navigate('Messaging')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chatbubble-outline" size={22} color={colors.primary} />
+            <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
             {msgCount > 0 && (
               <View style={styles.badgeCount}>
                 <Text style={styles.badgeCountText}>
@@ -453,16 +468,23 @@ export default function NotificationsList({ panelMode = false }) {
         </View>
 
         {searchOpen && (
-          <View style={styles.searchBarRow}>
+          <View style={styles.searchPanel}>
             <SearchBar value={query} onChangeText={setQuery} placeholder="Search notifications" autoFocus />
-          </View>
-        )}
-
-        {unreadCount > 0 && (
-          <View style={styles.markAllRow}>
-            <TouchableOpacity onPress={handleMarkAllRead}>
-              <Text style={styles.markAll}>Mark all read</Text>
-            </TouchableOpacity>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterRow}
+            >
+              {NOTIF_FILTERS.map(f => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterChip, notifFilter === f && styles.filterChipActive]}
+                  onPress={() => setNotifFilter(f)}
+                >
+                  <Text style={[styles.filterChipText, notifFilter === f && styles.filterChipTextActive]}>{f}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         )}
 
@@ -492,7 +514,7 @@ const makeStyles = (c) => StyleSheet.create({
     flex: 1,
     fontSize: 18,
     fontFamily: 'LibreBaskerville_700Bold',
-    color: c.primary,
+    color: c.text,
     position: 'absolute',
     left: 0,
     right: 0,
@@ -523,10 +545,38 @@ const makeStyles = (c) => StyleSheet.create({
     fontFamily: 'Figtree_700Bold',
     lineHeight: 12,
   },
-  searchBarRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
+  searchPanel: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.hairline,
     backgroundColor: c.surface,
+  },
+  filterRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: c.surfaceAlt,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  filterChipActive: {
+    backgroundColor: c.selected,
+    borderColor: c.selected,
+  },
+  filterChipText: {
+    fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
+    color: c.textSecondary,
+  },
+  filterChipTextActive: {
+    color: c.isDark ? '#111' : '#fff',
+    fontFamily: 'Figtree_600SemiBold',
   },
 
   markAllRow: {

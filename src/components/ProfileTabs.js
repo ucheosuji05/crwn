@@ -85,7 +85,7 @@ function computeProfileMasonry(posts, columnWidth, imageDimensions) {
 const ALL_TABS = [
   { key: 'posts',     label: 'Posts' },
   { key: 'tagged',    label: 'Tagged',   stylistOnly: true },
-  { key: 'favorites', label: 'Saved',    ownOnly: true },
+  { key: 'favorites', label: 'Saves',    ownOnly: true },
   { key: 'bookings',  label: 'Bookings', ownOnly: true },
   { key: 'hair',      label: 'Hair',     lock: true },
 ];
