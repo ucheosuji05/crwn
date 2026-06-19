@@ -53,31 +53,49 @@ app.use(cors({
 
 app.use(express.json());
 
-// Bridge page: opens in WebBrowser, uses in-browser fetch (JSON) to get the
-// OAuth URL, then navigates the browser to it — keeping the entire OAuth flow
-// in one browser session so Better Auth's state cookie is present for the callback.
-app.get('/api/auth/oauth-start/:provider', (req, res) => {
+// OAuth start: server-side proxy that avoids the WKWebView fetch/navigation
+// cookie-jar split. Instead of an in-browser fetch (which uses a separate jar),
+// this handler calls Better Auth server-side, then forwards the state cookie
+// in a 302 redirect — so the browser receives it via navigation and it stays
+// present when Google redirects back to the callback.
+app.get('/api/auth/oauth-start/:provider', async (req, res) => {
   const provider = req.params.provider.replace(/[^a-z]/g, '');
   const callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback`;
-  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Signing in...</title>
-    <style>body{display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;background:#1a1a1a;color:#fff}p{opacity:.7}</style>
-    </head><body><p id="msg">Redirecting...</p>
-    <script>
-      fetch('/api/auth/sign-in/social', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-        body: JSON.stringify({ provider: '${provider}', callbackURL: '${callbackURL}', disableRedirect: true })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(data) {
-        var url = data.url || (data.data && data.data.url);
-        if (url) { window.location.href = url; }
-        else { document.getElementById('msg').textContent = 'Sign-in failed - close and try again.'; }
-      })
-      .catch(function() { document.getElementById('msg').textContent = 'Connection error - close and try again.'; });
-    </script>
-    </body></html>`);
+
+  try {
+    const authRes = await fetch(`${process.env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Origin: process.env.BETTER_AUTH_URL,
+      },
+      body: JSON.stringify({ provider, callbackURL, disableRedirect: true }),
+      redirect: 'manual',
+    });
+
+    const body = await authRes.json().catch(() => ({}));
+    const oauthUrl = body.url || body.data?.url;
+
+    if (!oauthUrl) {
+      console.error('[oauth-start] no URL in response:', JSON.stringify(body));
+      return res.status(500).send('OAuth initialization failed');
+    }
+
+    // Forward the state cookie(s) Better Auth set so the browser's navigation
+    // jar has them when Google redirects back.
+    const rawCookies = typeof authRes.headers.getSetCookie === 'function'
+      ? authRes.headers.getSetCookie()
+      : (authRes.headers.get('set-cookie') ? [authRes.headers.get('set-cookie')] : []);
+
+    if (rawCookies.length > 0) {
+      res.setHeader('Set-Cookie', rawCookies);
+    }
+
+    return res.redirect(302, oauthUrl);
+  } catch (err) {
+    console.error('[oauth-start] error:', err);
+    return res.status(500).send('OAuth initialization failed');
+  }
 });
 
 // In-browser password reset form. Works from email → Safari without needing
