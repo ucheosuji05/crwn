@@ -33,6 +33,17 @@ process.on('unhandledRejection', (err) => {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Short-lived map: nonce → { origin, ts } for web OAuth flows.
+// Keyed on a random hex string passed through the callbackURL so mobile-callback
+// knows to redirect to the web app instead of the crwn:// deep link.
+const pendingWebNonces = new Map();
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000; // 10 min TTL
+  for (const [k, v] of pendingWebNonces) {
+    if (v.ts < cutoff) pendingWebNonces.delete(k);
+  }
+}, 60_000);
+
 console.log(`[startup] PORT=${PORT} NODE_ENV=${process.env.NODE_ENV}`);
 
 // Health check first — before CORS and everything else
@@ -64,7 +75,20 @@ app.get('/api/auth/oauth-start/:provider', async (req, res) => {
   res.setHeader('Pragma', 'no-cache');
 
   const provider = req.params.provider.replace(/[^a-z]/g, '');
-  const callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback`;
+  const isWeb = req.query.platform === 'web';
+  const webOrigin = isWeb && req.query.origin ? decodeURIComponent(req.query.origin) : null;
+
+  // Always use mobile-callback as the callbackURL — Better Auth reliably follows
+  // it. For web flows, append a one-time nonce so mobile-callback can redirect
+  // to the web app instead of the crwn:// deep link.
+  let callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback`;
+  if (isWeb) {
+    const nonce = crypto.randomBytes(16).toString('hex');
+    pendingWebNonces.set(nonce, { origin: webOrigin || process.env.WEB_APP_URL || '', ts: Date.now() });
+    callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback?_web=${nonce}`;
+  }
+
+  console.log(`[oauth-start] provider=${provider} isWeb=${isWeb} callbackURL=${callbackURL}`);
 
   try {
     const authRes = await fetch(`${process.env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
@@ -220,32 +244,76 @@ app.post('/api/auth/web-reset', async (req, res) => {
 // otherwise toNodeHandler consumes the request and this handler is never reached.
 app.get('/api/auth/mobile-callback', async (req, res) => {
   const cookieHeader = req.headers.cookie || '';
-  console.log('[mobile-callback] cookies:', cookieHeader ? cookieHeader.substring(0, 300) : '(none)');
+  const webNonce = req.query._web || null;
+  const webData = webNonce ? pendingWebNonces.get(webNonce) : null;
+  if (webData) pendingWebNonces.delete(webNonce);
 
-  // Primary: use Better Auth's session API to get the verified session token
+  console.log(`[mobile-callback] webNonce=${webNonce} webOrigin=${webData?.origin}`);
+
+  // Resolve the session token
+  let token = null;
   try {
-    const sessionData = await auth.api.getSession({
-      headers: { cookie: cookieHeader },
-    });
+    const sessionData = await auth.api.getSession({ headers: { cookie: cookieHeader } });
     if (sessionData?.session?.token) {
+      token = sessionData.session.token;
       console.log('[mobile-callback] session via API for:', sessionData.user?.email);
-      return res.redirect(`crwn://auth/callback?token=${encodeURIComponent(sessionData.session.token)}`);
     }
-    console.log('[mobile-callback] auth.api.getSession returned no session');
   } catch (err) {
     console.error('[mobile-callback] auth.api.getSession error:', err.message);
   }
+  if (!token) {
+    const match = cookieHeader.match(/better-auth\.session_token=([^;]+)/);
+    if (match) {
+      token = decodeURIComponent(match[1]);
+      console.log('[mobile-callback] using raw cookie token (fallback)');
+    }
+  }
 
-  // Fallback: extract token directly from the session cookie
+  // Web flow → redirect to web app with token in URL param
+  if (webData) {
+    const base = webData.origin || process.env.WEB_APP_URL || '/';
+    if (token) return res.redirect(`${base}?auth_token=${encodeURIComponent(token)}`);
+    return res.redirect(`${base}?auth_error=no_session`);
+  }
+
+  // Native flow → deep link
+  if (token) return res.redirect(`crwn://auth/callback?token=${encodeURIComponent(token)}`);
+  console.log('[mobile-callback] no session found');
+  res.redirect('crwn://auth/callback?error=no_session');
+});
+
+// Web OAuth callback — same logic as mobile-callback but redirects to the web app
+// origin with the token as a query param instead of a crwn:// deep link.
+app.get('/api/auth/web-callback', async (req, res) => {
+  const origin = req.query.origin ? decodeURIComponent(req.query.origin) : null;
+  const cookieHeader = req.headers.cookie || '';
+  console.log('[web-callback] origin:', origin, 'cookies:', cookieHeader.substring(0, 200));
+
+  const redirect = (token) => {
+    const base = origin || process.env.WEB_APP_URL || '/';
+    return res.redirect(`${base}?auth_token=${encodeURIComponent(token)}`);
+  };
+
+  try {
+    const sessionData = await auth.api.getSession({ headers: { cookie: cookieHeader } });
+    if (sessionData?.session?.token) {
+      console.log('[web-callback] session for:', sessionData.user?.email);
+      return redirect(sessionData.session.token);
+    }
+  } catch (err) {
+    console.error('[web-callback] getSession error:', err.message);
+  }
+
   const match = cookieHeader.match(/better-auth\.session_token=([^;]+)/);
   const rawToken = match ? decodeURIComponent(match[1]) : null;
   if (rawToken) {
-    console.log('[mobile-callback] using raw cookie token (fallback)');
-    return res.redirect(`crwn://auth/callback?token=${encodeURIComponent(rawToken)}`);
+    console.log('[web-callback] using cookie fallback token');
+    return redirect(rawToken);
   }
 
-  console.log('[mobile-callback] no session found');
-  res.redirect('crwn://auth/callback?error=no_session');
+  const base = origin || process.env.WEB_APP_URL || '/';
+  console.log('[web-callback] no session found');
+  res.redirect(`${base}?auth_error=no_session`);
 });
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
