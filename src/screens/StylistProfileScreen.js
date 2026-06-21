@@ -33,7 +33,59 @@ const MASONRY_MAX_HW = 1.6;
 const MASONRY_HW_LANDSCAPE_MAX = 0.8; // shorter than this (height:width) → landscape, spans full width
 const MASONRY_COLUMN_WIDTH = (SCREEN_WIDTH - MASONRY_PAD * 2 - MASONRY_GAP) / 2;
 
-const TABS = ['Posts', 'Services', 'Tagged'];
+const TABS = ['Posts', 'Services', 'Reviews', 'Tagged'];
+
+function reviewTimeAgo(dateStr) {
+  if (!dateStr) return '';
+  const secs = Math.floor((Date.now() - new Date(dateStr)) / 1000);
+  if (secs < 60)          return 'just now';
+  if (secs < 3600)        return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400)       return `${Math.floor(secs / 3600)}h ago`;
+  const days = Math.floor(secs / 86400);
+  if (days < 7)           return `${days} day${days !== 1 ? 's' : ''} ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5)          return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12)        return `${months} month${months !== 1 ? 's' : ''} ago`;
+  return `${Math.floor(months / 12)} year${Math.floor(months / 12) !== 1 ? 's' : ''} ago`;
+}
+
+function ReviewCard({ review, colors, styles }) {
+  const { client, rating, text, service_name, created_at } = review;
+  const displayName = client?.full_name || client?.username || 'Anonymous';
+  return (
+    <View style={[styles.reviewCard, { backgroundColor: colors.surface }]}>
+      <View style={styles.reviewHeader}>
+        {client?.avatar_url
+          ? <Image source={{ uri: client.avatar_url }} style={styles.reviewAvatar} />
+          : <View style={[styles.reviewAvatar, styles.reviewAvatarPlaceholder, { backgroundColor: colors.borderLight }]}>
+              <Ionicons name="person" size={18} color="#9ca3af" />
+            </View>
+        }
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.reviewClientName, { color: colors.text }]}>{displayName}</Text>
+          <Text style={[styles.reviewTime, { color: colors.textMuted }]}>{reviewTimeAgo(created_at)}</Text>
+        </View>
+        <View style={styles.reviewCrowns}>
+          {[1,2,3,4,5].map(n => (
+            <MaterialCommunityIcons
+              key={n}
+              name={n <= rating ? 'crown' : 'crown-outline'}
+              size={14}
+              color={n <= rating ? HONEY : colors.border}
+            />
+          ))}
+        </View>
+      </View>
+      {!!text && <Text style={[styles.reviewText, { color: colors.text }]}>{text}</Text>}
+      {!!service_name && (
+        <View style={[styles.reviewTag, { backgroundColor: colors.borderLight }]}>
+          <Text style={[styles.reviewTagText, { color: colors.textSecondary }]}>{service_name}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
 
 function formatStyleTag(tag) {
   if (!tag) return '';
@@ -1257,10 +1309,53 @@ export default function StylistProfileScreen({ route, navigation }) {
     );
   };
 
+  const renderReviews = () => {
+    if (reviewsLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
+    const isOwnProfile = user?.id === stylistId;
+    return (
+      <View style={styles.reviewsList}>
+        {/* Prompt the current user to leave reviews for completed unreviewed bookings */}
+        {!isOwnProfile && unreviewedBookings.map(b => (
+          <TouchableOpacity
+            key={b.id}
+            style={[styles.leaveReviewPrompt, { backgroundColor: 'rgba(93,31,31,0.06)', borderColor: 'rgba(93,31,31,0.18)' }]}
+            onPress={() => { setReviewRating(5); setReviewText(''); setReviewModal(b); }}
+            activeOpacity={0.8}
+          >
+            <MaterialCommunityIcons name="crown-outline" size={22} color={HONEY} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.leaveReviewTitle, { color: colors.text }]}>
+                Rate your {b.service_name || 'appointment'}
+              </Text>
+              <Text style={[styles.leaveReviewSub, { color: colors.textSecondary }]}>
+                How was your experience?
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        ))}
+
+        {reviews.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No reviews yet</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+              {isOwnProfile
+                ? 'Reviews from your clients will appear here'
+                : 'Be the first to leave a review after your appointment'}
+            </Text>
+          </View>
+        ) : (
+          reviews.map(r => <ReviewCard key={r.id} review={r} colors={colors} styles={styles} />)
+        )}
+      </View>
+    );
+  };
+
   const renderTabContent = () => {
     switch (activeTab) {
       case 'Posts':    return renderPosts();
       case 'Services': return renderServices();
+      case 'Reviews':  return renderReviews();
             case 'Tagged': {
         if (taggedLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
         if (taggedPosts.length === 0) return (
@@ -1305,20 +1400,22 @@ export default function StylistProfileScreen({ route, navigation }) {
             )}
           </View>
 
-          {/* Location + Specialty — same row */}
-          {(!!location || specialties.length > 0) && (
+          {/* Location row */}
+          {!!displayLocation && (
             <View style={styles.metaRow}>
-              {!!location && (
-                <>
-                  <Ionicons name="location-outline" size={14} color="#5E5E5E" />
-                  <Text style={styles.metaText}>{displayLocation}</Text>
-                </>
-              )}
-              {specialties[0] ? (
-                <View style={styles.specialtyTag}>
-                  <Text style={styles.specialtyTagText}>{specialties[0]}</Text>
+              <Ionicons name="location-outline" size={14} color="#5E5E5E" />
+              <Text style={styles.metaText}>{displayLocation}</Text>
+            </View>
+          )}
+
+          {/* Specialty chips — all of them */}
+          {specialties.length > 0 && (
+            <View style={styles.specialtyChipsRow}>
+              {specialties.map((s, i) => (
+                <View key={i} style={styles.specialtyTag}>
+                  <Text style={styles.specialtyTagText}>{s}</Text>
                 </View>
-              ) : null}
+              ))}
             </View>
           )}
 
@@ -1328,7 +1425,7 @@ export default function StylistProfileScreen({ route, navigation }) {
               <Text style={styles.statLabel}>Followers</Text>
             </TouchableOpacity>
             <View style={styles.statDivider} />
-            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => {/* view reviews */}}>
+            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => setActiveTab('Reviews')}>
               <Text style={styles.statNumber}>{reviewCount ?? 0}</Text>
               <Text style={styles.statLabel}>Reviews</Text>
             </TouchableOpacity>
@@ -1558,16 +1655,22 @@ const makeStyles = (c) => StyleSheet.create({
   avatarPlaceholder: { backgroundColor: c.border, alignItems: 'center', justifyContent: 'center' },
   info: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 4 },
 
-  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
   metaText: { fontSize: 13, color: '#5E5E5E', fontFamily: 'Figtree_400Regular' },
   metaDot: { fontSize: 13, color: c.textSecondary, marginHorizontal: 2 },
+  specialtyChipsRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 6,
+    justifyContent: 'center', marginBottom: 16,
+  },
   specialtyTag: {
-    paddingHorizontal: 10, paddingVertical: 3,
+    paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: c.borderLight,
+    backgroundColor: 'rgba(93,31,31,0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(93,31,31,0.18)',
   },
   specialtyTagText: {
-    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.textSecondary,
+    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#5D1F1F',
   },
   stats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 24 },
   stat: { alignItems: 'center', paddingHorizontal: 4 },

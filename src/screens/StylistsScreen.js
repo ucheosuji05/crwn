@@ -15,7 +15,18 @@ import { useProviderMode } from '../context/ProviderModeContext';
 import { stylistService, normalizeStylist } from '../services/stylistService';
 import { Crown } from 'lucide-react-native';
 
-const SPECIALTY_FILTERS = ['All', 'Braids', 'Locs', 'Twists', 'Natural Hair', 'Color', 'Silk Press', 'Fades'];
+const SPECIALTY_FILTERS = [
+  'All',
+  'Locs & loc maintenance',
+  'Box braids & protective styles',
+  'Silk press & blowouts',
+  'Natural styles & wash & go',
+  'Twists & twist outs',
+  'Wigs & installs',
+  'Color & highlights',
+  'Cuts & fades',
+  'Keratin & relaxers',
+];
 
 // ── Preview / demo cards — uncomment to re-enable until real stylists join ────
 // const PREVIEW_STYLISTS = [
@@ -251,7 +262,7 @@ export default function StylistsScreen() {
         <SearchBar
           value={searchQuery}
           onChangeText={setSearchQuery}
-          placeholder="Search stylists..."
+          placeholder="Search service providers..."
           autoFocus
           containerStyle={styles.searchBarOverride}
         />
@@ -288,11 +299,11 @@ export default function StylistsScreen() {
           )}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No stylists found</Text>
+              <Text style={styles.emptyTitle}>No service providers found</Text>
               <Text style={styles.emptySubtitle}>
                 {searchQuery || activeFilter !== 'All'
                   ? 'Try a different search or filter'
-                  : 'Stylists will appear here once they join CRWN'}
+                  : 'Service providers will appear here once they join CRWN'}
               </Text>
             </View>
           }
@@ -306,7 +317,7 @@ export default function StylistsScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: c.background },
+  safe: { flex: 1, backgroundColor: '#FCFCFC' },
   providerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -324,7 +335,7 @@ const makeStyles = (c) => StyleSheet.create({
   // ── Top bar (chips + search icon row) ──
   topBar: {
     height: HEADER_BAR_HEIGHT,
-    backgroundColor: c.background,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
     overflow: 'hidden',
@@ -353,7 +364,7 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: c.surfaceAlt,
+    backgroundColor: '#E8E2D9',
   },
   filterChipActive: {
     backgroundColor: c.primary,
@@ -372,7 +383,7 @@ const makeStyles = (c) => StyleSheet.create({
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // ── List ──
-  list: { flex: 1 },
+  list: { flex: 1, backgroundColor: '#FCFCFC' },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -382,16 +393,16 @@ const makeStyles = (c) => StyleSheet.create({
 
   // ── Stylist card ──
   card: {
-    backgroundColor: c.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: c.borderLight,
+    borderColor: '#E8DDD3',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: c.isDark ? 0 : 0.10,
+    shadowRadius: 12,
+    elevation: c.isDark ? 0 : 4,
   },
 
   // ── Photo grid ──
@@ -411,11 +422,11 @@ const makeStyles = (c) => StyleSheet.create({
     flex: 1,
     backgroundColor: c.borderLight,
     borderLeftWidth: 2,
-    borderLeftColor: c.surface,
+    borderLeftColor: '#FFFFFF',
   },
   photoSmallBottom: {
     borderTopWidth: 2,
-    borderTopColor: c.surface,
+    borderTopColor: '#FFFFFF',
   },
 
   // ── Card body ──
@@ -476,14 +487,17 @@ const makeStyles = (c) => StyleSheet.create({
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: c.backgroundAlt,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: c.border,
+    backgroundColor: '#F2E8DA',
+    borderRadius: 999,
+    shadowColor: '#8E683B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   chipText: {
     fontSize: 12,
-    color: c.textSecondary,
+    color: '#8E683B',
     fontFamily: 'Figtree_500Medium',
   },
 

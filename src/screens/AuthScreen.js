@@ -104,9 +104,8 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
             {/* Form */}
             <View style={styles.formSection}>
 
-              {/* Google button — deep-link callback only works on native */}
-              {Platform.OS !== 'web' && (
-                <>
+              {/* Google button */}
+              <>
                   <TouchableOpacity
                     style={[styles.googleButton, isDisabled && styles.buttonDisabled]}
                     onPress={handleGoogleSignIn}
@@ -128,8 +127,7 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
                     <Text style={styles.dividerText}>or sign in with email</Text>
                     <View style={styles.dividerLine} />
                   </View>
-                </>
-              )}
+              </>
 
               {/* Email */}
               <View style={styles.inputGroup}>

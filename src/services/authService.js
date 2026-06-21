@@ -1,4 +1,5 @@
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { authClient, storeAuthToken, clearAuthToken } from '../lib/auth-client';
 import { supabase, clearSupabaseTokenCache } from '../config/supabase'; // keep for profile/hair data writes
 import { AUTH_URL } from '../lib/auth-url';
@@ -49,6 +50,14 @@ export const authService = {
 
   // ─── Social OAuth helper ─────────────────────────────────────────────────
   async _socialSignIn(provider) {
+    // On web: redirect the whole page to the OAuth start URL; the server will
+    // redirect back to this origin with ?auth_token= after Google completes.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const origin = encodeURIComponent(window.location.origin);
+      window.location.href = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}?platform=web&origin=${origin}&_t=${Date.now()}`;
+      return new Promise(() => {}); // page navigates away — never resolves
+    }
+
     try {
       // Open a bridge page that auto-submits the POST in the browser so the
       // entire OAuth flow (state generation → Google → callback) stays in one

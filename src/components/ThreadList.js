@@ -172,6 +172,7 @@ export default function ThreadList({
               onPress={() => onThreadPress?.(item)}
             />
           )}
+          style={{ backgroundColor: '#FCFCFC' }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmpty}
@@ -200,15 +201,19 @@ export default function ThreadList({
             <X size={24} color={colors.primary} strokeWidth={2.5} />
           </View>
         ) : (
-          <LinearGradient
-            colors={['#5D1F1F', '#7D3F1D', '#B35D2B']}
-            locations={[0, 0.5, 1]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFill}
-          />
+          <>
+            <LinearGradient
+              colors={['#5D1F1F', '#7D3F1D', '#B35D2B']}
+              locations={[0, 0.5, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.fabIconWrap}>
+              <Plus size={24} color="#fff" strokeWidth={2} />
+            </View>
+          </>
         )}
-        {!createMenuOpen && <Plus size={24} color="#fff" strokeWidth={2} />}
       </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -216,10 +221,10 @@ export default function ThreadList({
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: c.background },
+  safe: { flex: 1, backgroundColor: '#FCFCFC' },
   header: {
     minHeight: HEADER_BAR_HEIGHT,
-    backgroundColor: c.background,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
   },
@@ -244,12 +249,12 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: c.surfaceAlt,
+    backgroundColor: '#E8E2D9',
   },
   filterChipActive: { backgroundColor: c.primary },
   filterText: { fontSize: 13, fontWeight: '500', color: c.textSecondary },
   filterTextActive: { color: '#fff' },
-  listContent: { paddingBottom: 100, flexGrow: 1 },
+  listContent: { paddingBottom: 100, flexGrow: 1, backgroundColor: '#FCFCFC' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   centerMessage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   centerText: { color: c.textMuted, fontSize: 15, fontFamily: 'Figtree_500Medium' },
@@ -263,6 +268,12 @@ const makeStyles = (c) => StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: c.borderLight,
+  },
+  fabIconWrap: {
+    position: 'relative',
+    zIndex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fab: {
     position: 'absolute',

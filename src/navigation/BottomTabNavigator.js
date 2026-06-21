@@ -85,7 +85,7 @@ function WebSidebar({
   ] : [
     { name: 'Crwn.',         label: 'Explore'   },
     { name: 'Community',     label: 'Community' },
-    { name: 'Stylists',      label: 'Stylists'  },
+    { name: 'Stylists',      label: 'Service Providers'  },
     { name: 'Notifications', label: 'Inbox'     },
     { name: 'Profile',       label: 'Profile'   },
   ];

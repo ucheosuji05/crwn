@@ -27,6 +27,7 @@ import { usePosts } from '../hooks/usePosts';
 import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
+import { supabase } from '../config/supabase';
 
 export const SIDE_PAD = 12;
 export const COLUMN_GAP = 10;
@@ -297,6 +298,28 @@ export default function ExploreScreen() {
 
   const { posts, loading, loadingMore, hasMore, loadMore, refresh } = usePosts();
   const isLoadingMoreRef = useRef(false);
+
+  // Live user search against the profiles table (all users, not just those in the feed)
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [usersSearching, setUsersSearching] = useState(false);
+  const userSearchTimerRef = useRef(null);
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) { setUserSearchResults([]); setUsersSearching(false); return; }
+    setUsersSearching(true);
+    clearTimeout(userSearchTimerRef.current);
+    userSearchTimerRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, username, avatar_url, is_stylist')
+        .or(`full_name.ilike.%${q}%,username.ilike.%${q}%`)
+        .limit(8);
+      setUserSearchResults((data || []).map(u => ({ ...u, userId: u.id })));
+      setUsersSearching(false);
+    }, 300);
+    return () => clearTimeout(userSearchTimerRef.current);
+  }, [query]);
   const { msgCount: unreadCount } = useUnreadCount();
 
   const isSearching = query.trim().length > 0;
@@ -374,22 +397,8 @@ export default function ExploreScreen() {
     }
   }, [navigation]);
 
-  // Search dropdown data
-  const matchingUsers = isSearching
-    ? (() => {
-        const q = query.toLowerCase().replace(/^#/, '');
-        return [
-          ...new Map(
-            posts
-              .filter((p) => p.profiles && (
-                wordStartsWith(p.profiles.username, q) ||
-                wordStartsWith(p.profiles.full_name, q)
-              ))
-              .map((p) => [p.user_id, { userId: p.user_id, ...p.profiles }])
-          ).values(),
-        ].slice(0, 5);
-      })()
-    : [];
+  // Search dropdown data — live DB results replace the old post-derived list
+  const matchingUsers = isSearching ? userSearchResults : [];
 
   const matchingTags = isSearching
     ? (() => {
@@ -531,7 +540,7 @@ export default function ExploreScreen() {
             onPress={() => navigation.navigate('Messaging')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+            <Ionicons name="mail-outline" size={22} color={colors.text} />
             {unreadCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>
@@ -558,7 +567,11 @@ export default function ExploreScreen() {
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: 300 }}
             >
-              {matchingUsers.length > 0 && (
+              {usersSearching && (
+                <ActivityIndicator size="small" color="#9ca3af" style={{ paddingVertical: 12 }} />
+              )}
+
+              {!usersSearching && matchingUsers.length > 0 && (
                 <>
                   <Text style={styles.dropdownSection}>People</Text>
                   {matchingUsers.map((u) => (
@@ -602,7 +615,7 @@ export default function ExploreScreen() {
                 </>
               )}
 
-              {matchingUsers.length === 0 && matchingTags.length === 0 && (
+              {!usersSearching && matchingUsers.length === 0 && matchingTags.length === 0 && (
                 <View style={styles.dropdownEmpty}>
                   <Text style={styles.dropdownEmptyText}>No results for "{query}"</Text>
                 </View>

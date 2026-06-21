@@ -665,7 +665,7 @@ export default function ProviderAnalyticsScreen() {
           style={styles.headerMsgBtn}
           activeOpacity={0.7}
         >
-          <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+          <Ionicons name="mail-outline" size={22} color={colors.text} />
           {msgCount > 0 && (
             <View style={[styles.headerMsgBadge, { backgroundColor: '#C8835A' }]}>
               <Text style={styles.headerMsgBadgeText}>{msgCount > 9 ? '9+' : msgCount}</Text>

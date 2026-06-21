@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, StatusBar, Linking } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, StatusBar, Linking, Platform } from 'react-native';
 
 // Apply Figtree as the default font for every Text in the app.
 // Explicit fontFamily overrides (e.g. LibreBaskerville on headers) take precedence.
@@ -15,6 +15,7 @@ if (typeof document !== 'undefined') {
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storeAuthToken } from './src/lib/auth-client';
 import { useFonts } from 'expo-font';
 import {
   LibreBaskerville_400Regular,
@@ -52,6 +53,25 @@ function AppContent() {
 
   useEffect(() => {
     AsyncStorage.getItem('onboarded').then(val => setHasOnboarded(val === 'true'));
+  }, []);
+
+  // Web: handle ?auth_token= redirect from the server OAuth web-callback
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get('auth_token');
+    const authError = params.get('auth_error');
+    if (token) {
+      storeAuthToken(token).then(() => {
+        // Clean the token out of the URL so it isn't bookmarked or shared
+        const clean = window.location.pathname;
+        window.history.replaceState({}, '', clean);
+      });
+    }
+    if (authError) {
+      console.warn('[web-oauth] auth error from server:', authError);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   // Handle crwn://reset-password?token=... deep links

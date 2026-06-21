@@ -456,7 +456,7 @@ export default function NotificationsList({ panelMode = false }) {
             onPress={() => navigation.navigate('Messaging')}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+            <Ionicons name="mail-outline" size={22} color={colors.text} />
             {msgCount > 0 && (
               <View style={styles.badgeCount}>
                 <Text style={styles.badgeCountText}>

@@ -523,7 +523,7 @@ export default function ProviderNotificationsScreen() {
           activeOpacity={0.7}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
-          <Ionicons name="chatbubble-outline" size={22} color={colors.text} />
+          <Ionicons name="mail-outline" size={22} color={colors.text} />
           {msgCount > 0 && (
             <View style={[styles.headerChatBadge, { backgroundColor: colors.primary }]}>
               <Text style={styles.headerChatBadgeText}>{msgCount > 9 ? '9+' : msgCount}</Text>

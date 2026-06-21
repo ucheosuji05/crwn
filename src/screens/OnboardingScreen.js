@@ -666,23 +666,21 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         <TouchableOpacity style={styles.createAccountButton} onPress={goNext}>
           <Text style={styles.createAccountText}>Create Account</Text>
         </TouchableOpacity>
-        {Platform.OS !== 'web' && (
-          <TouchableOpacity
-            style={[styles.googleButton, googleLoading && { opacity: 0.6 }]}
-            onPress={handleGoogleSignIn}
-            disabled={googleLoading}
-            activeOpacity={0.85}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color="#5D3A1A" />
-            ) : (
-              <>
-                <Ionicons name="logo-google" size={18} color="#5D3A1A" />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          style={[styles.googleButton, googleLoading && { opacity: 0.6 }]}
+          onPress={handleGoogleSignIn}
+          disabled={googleLoading}
+          activeOpacity={0.85}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color="#5D3A1A" />
+          ) : (
+            <>
+              <Ionicons name="logo-google" size={18} color="#5D3A1A" />
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </>
+          )}
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => setShowAuth(true)}>
           <Text style={styles.signInText}>
             Have an account? <Text style={styles.signInLink}>Sign in</Text>

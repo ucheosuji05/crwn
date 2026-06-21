@@ -55,3 +55,50 @@ CREATE POLICY "Users can insert own bookings"
 CREATE POLICY "Users can update own bookings"
   ON bookings FOR UPDATE
   USING (auth.uid() = user_id);
+
+-- Reviews table
+-- One review per booking (enforced by UNIQUE on booking_id).
+-- Clients can insert their own review; nobody can update or delete reviews.
+CREATE TABLE IF NOT EXISTS reviews (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id   UUID REFERENCES bookings(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  client_id    UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  stylist_id   UUID REFERENCES profiles(id) ON DELETE CASCADE NOT NULL,
+  rating       INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  text         TEXT,
+  service_name TEXT,
+  created_at   TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
+
+-- Anyone (including unauthenticated) can read reviews
+CREATE POLICY "Reviews are publicly readable"
+  ON reviews FOR SELECT
+  USING (true);
+
+-- Only the client who made the booking can insert a review
+CREATE POLICY "Clients can submit their own review"
+  ON reviews FOR INSERT
+  WITH CHECK (auth.uid() = client_id);
+
+-- No UPDATE or DELETE policies — reviews are immutable once submitted.
+-- Service providers cannot alter client reviews.
+
+-- RPC that safely recalculates a stylist's aggregate rating.
+-- SECURITY DEFINER so it can bypass RLS when writing back to profiles.
+CREATE OR REPLACE FUNCTION recalculate_stylist_rating(p_stylist_id UUID)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+BEGIN
+  UPDATE profiles
+  SET
+    rating       = COALESCE((
+      SELECT ROUND(AVG(rating)::numeric, 1)
+      FROM reviews WHERE stylist_id = p_stylist_id
+    ), 0),
+    review_count = COALESCE((
+      SELECT COUNT(*) FROM reviews WHERE stylist_id = p_stylist_id
+    ), 0)
+  WHERE id = p_stylist_id;
+END;
+$$;
