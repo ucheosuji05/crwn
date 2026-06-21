@@ -81,14 +81,17 @@ app.get('/api/auth/oauth-start/:provider', async (req, res) => {
   // Always use mobile-callback as the callbackURL — Better Auth reliably follows
   // it. For web flows, append a one-time nonce so mobile-callback can redirect
   // to the web app instead of the crwn:// deep link.
-  let callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback`;
+  // Always use mobile-callback (no query params) — Better Auth reliably follows it.
+  // For web flows, store origin in a same-domain cookie that survives the Google
+  // redirect chain. mobile-callback reads the cookie to decide where to redirect.
+  const callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback`;
+  let webNonce = null;
   if (isWeb) {
-    const nonce = crypto.randomBytes(16).toString('hex');
-    pendingWebNonces.set(nonce, { origin: webOrigin || process.env.WEB_APP_URL || '', ts: Date.now() });
-    callbackURL = `${process.env.BETTER_AUTH_URL}/api/auth/mobile-callback?_web=${nonce}`;
+    webNonce = crypto.randomBytes(16).toString('hex');
+    pendingWebNonces.set(webNonce, { origin: webOrigin || process.env.WEB_APP_URL || '', ts: Date.now() });
   }
 
-  console.log(`[oauth-start] provider=${provider} isWeb=${isWeb} callbackURL=${callbackURL}`);
+  console.log(`[oauth-start] provider=${provider} isWeb=${isWeb} webNonce=${webNonce} callbackURL=${callbackURL}`);
 
   try {
     const authRes = await fetch(`${process.env.BETTER_AUTH_URL}/api/auth/sign-in/social`, {
@@ -109,12 +112,15 @@ app.get('/api/auth/oauth-start/:provider', async (req, res) => {
       return res.status(500).send('OAuth initialization failed');
     }
 
-    // Forward the state cookie(s) Better Auth set so the browser's navigation
-    // jar has them when Google redirects back.
+    // Forward the state cookie(s) Better Auth set, plus our web-flow nonce cookie.
+    // SameSite=None lets it survive the cross-site Google redirect.
     const rawCookies = typeof authRes.headers.getSetCookie === 'function'
       ? authRes.headers.getSetCookie()
       : (authRes.headers.get('set-cookie') ? [authRes.headers.get('set-cookie')] : []);
 
+    if (webNonce) {
+      rawCookies.push(`_crwn_wcb=${webNonce}; Path=/; Max-Age=600; HttpOnly; Secure; SameSite=None`);
+    }
     if (rawCookies.length > 0) {
       res.setHeader('Set-Cookie', rawCookies);
     }
@@ -244,7 +250,11 @@ app.post('/api/auth/web-reset', async (req, res) => {
 // otherwise toNodeHandler consumes the request and this handler is never reached.
 app.get('/api/auth/mobile-callback', async (req, res) => {
   const cookieHeader = req.headers.cookie || '';
-  const webNonce = req.query._web || null;
+
+  // Detect web flow via the _crwn_wcb cookie set in oauth-start.
+  // This cookie survives the Google redirect chain independently of callbackURL.
+  const wcbMatch = cookieHeader.match(/(?:^|;\s*)_crwn_wcb=([^;]+)/);
+  const webNonce = (wcbMatch ? wcbMatch[1].trim() : null) || null;
   const webData = webNonce ? pendingWebNonces.get(webNonce) : null;
   if (webData) pendingWebNonces.delete(webNonce);
 
@@ -269,8 +279,9 @@ app.get('/api/auth/mobile-callback', async (req, res) => {
     }
   }
 
-  // Web flow → redirect to web app with token in URL param
+  // Web flow → redirect to web app (clear the nonce cookie first)
   if (webData) {
+    res.setHeader('Set-Cookie', '_crwn_wcb=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=None');
     const base = webData.origin || process.env.WEB_APP_URL || '/';
     if (token) return res.redirect(`${base}?auth_token=${encodeURIComponent(token)}`);
     return res.redirect(`${base}?auth_error=no_session`);
