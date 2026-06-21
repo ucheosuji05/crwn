@@ -1,5 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createStackNavigator } from '@react-navigation/stack';
+import { CardStyleInterpolators } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
 import { Compass, Globe, Scissors, Bell, User } from 'lucide-react-native';
 import {
@@ -9,7 +11,9 @@ import {
 } from 'react-native';
 
 import ExploreScreen from '../screens/ExploreScreen';
+import FilteredExploreScreen from '../screens/FilteredExploreScreen';
 import CommunityScreen from '../screens/CommunityScreen';
+import FilteredCommunityScreen from '../screens/FilteredCommunityScreen';
 import StylistsScreen from '../screens/StylistsScreen';
 import StylistDashboardScreen from '../screens/StylistDashboardScreen';
 import ProviderAnalyticsScreen from '../screens/ProviderAnalyticsScreen';
@@ -26,6 +30,29 @@ import { notificationService } from '../services/notificationService';
 import { bookingService } from '../services/bookingService';
 
 const Tab = createBottomTabNavigator();
+const ExploreStack = createStackNavigator();
+const CommunityStack = createStackNavigator();
+
+const isWeb = Platform.OS === 'web';
+const HZ = { gestureEnabled: !isWeb, gestureDirection: 'horizontal', cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS };
+
+function ExploreStackNavigator() {
+  return (
+    <ExploreStack.Navigator screenOptions={{ headerShown: false }}>
+      <ExploreStack.Screen name="ExploreHome" component={ExploreScreen} />
+      <ExploreStack.Screen name="FilteredExplore" component={FilteredExploreScreen} options={HZ} />
+    </ExploreStack.Navigator>
+  );
+}
+
+function CommunityStackNavigator() {
+  return (
+    <CommunityStack.Navigator screenOptions={{ headerShown: false }}>
+      <CommunityStack.Screen name="CommunityHome" component={CommunityScreen} />
+      <CommunityStack.Screen name="FilteredCommunity" component={FilteredCommunityScreen} options={HZ} />
+    </CommunityStack.Navigator>
+  );
+}
 
 const DOUBLE_TAP_MS = 400;
 const SIDEBAR_WIDTH = 210;
@@ -466,13 +493,13 @@ export default function BottomTabNavigator() {
         })}
       >
         <Tab.Screen name="Crwn." options={{ headerShown: false }}>
-          {(props) => <ExploreScreen {...props} key={resetKeys['Crwn.']} />}
+          {(props) => <ExploreStackNavigator {...props} key={resetKeys['Crwn.']} />}
         </Tab.Screen>
 
         <Tab.Screen name="Community" options={{ headerShown: false }}>
           {(props) => isStylist && isProviderMode
             ? <ProviderAnalyticsScreen {...props} key={resetKeys.Community} />
-            : <CommunityScreen {...props} key={resetKeys.Community} />}
+            : <CommunityStackNavigator {...props} key={resetKeys.Community} />}
         </Tab.Screen>
 
         <Tab.Screen name="Stylists" options={{ headerShown: false }}>

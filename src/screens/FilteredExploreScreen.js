@@ -8,14 +8,18 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
+  useWindowDimensions,
+  Platform,
 } from 'react-native';
+
+const SIDEBAR_WIDTH = 210;
 import { Ionicons } from '@expo/vector-icons';
 import { Scissors } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
-import { usePosts } from '../hooks/usePosts';
+import { postService } from '../services/postService';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import {
@@ -33,18 +37,31 @@ export default function FilteredExploreScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const tag = route.params?.tag || '';
 
+  const { width: windowWidth } = useWindowDimensions();
+  const effectiveWidth = Platform.OS === 'web'
+    ? Math.min(windowWidth - SIDEBAR_WIDTH, WEB_MAX_WIDTHS.grid)
+    : windowWidth;
+  const containerWidth = effectiveWidth - SIDE_PAD * 2;
+
   const [imageDimensions, setImageDimensions] = useState({});
-  const [containerWidth, setContainerWidth] = useState(0);
   const fetchedRef = useRef(new Set());
   const pendingDimsRef = useRef({});
   const rafRef = useRef(null);
 
-  const { posts, loading, refresh } = usePosts();
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const matchingPosts = useMemo(
-    () => posts.filter(p => Array.isArray(p.tags) && p.tags.some(t => t?.toLowerCase() === tag.toLowerCase())),
-    [posts, tag],
-  );
+  const loadPosts = useCallback(async () => {
+    setLoading(true);
+    const { data } = await postService.getPostsByTag(tag);
+    setPosts(data || []);
+    setLoading(false);
+  }, [tag]);
+
+  useEffect(() => { loadPosts(); }, [loadPosts]);
+
+  const refresh = loadPosts;
+  const matchingPosts = posts;
 
   const flushDims = useCallback(() => {
     const pending = pendingDimsRef.current;
@@ -74,7 +91,7 @@ export default function FilteredExploreScreen() {
   }, [matchingPosts, flushDims]);
 
   const columnWidth = containerWidth > 0
-    ? (containerWidth - SIDE_PAD * 2 - COLUMN_GAP) / 2
+    ? (containerWidth - COLUMN_GAP) / 2
     : 0;
 
   const feedItems = useMemo(
@@ -90,7 +107,7 @@ export default function FilteredExploreScreen() {
   );
 
   const openPost = useCallback((item) => {
-    navigation.push('PostDetail', { postId: item.id });
+    navigation.navigate('PostDetail', { postId: item.id });
   }, [navigation]);
 
   const renderMasonryItem = (item) => {
@@ -173,8 +190,7 @@ export default function FilteredExploreScreen() {
       <ScrollView
         style={[styles.scroll, webWrap(WEB_MAX_WIDTHS.grid)]}
         contentContainerStyle={styles.gridContent}
-        showsVerticalScrollIndicator={false}
-        onLayout={e => setContainerWidth(e.nativeEvent.layout.width)}
+        showsVerticalScrollIndicator={true}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.primary} />}
       >
         {matchingPosts.length === 0 && !loading ? (
@@ -231,7 +247,6 @@ const makeStyles = (c) => StyleSheet.create({
   gridContent: {
     paddingTop: 12,
     paddingBottom: 100,
-    flexGrow: 1,
   },
   masonryCanvas: {
     marginHorizontal: SIDE_PAD,

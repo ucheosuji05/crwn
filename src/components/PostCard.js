@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Scissors } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { postService } from '../services/postService';
@@ -35,6 +36,7 @@ export default function PostCard({
   scrollViewRef,
   initialCommentsOpen = false,
 }) {
+  const navigation = useNavigation();
   const controlsOpacity = useRef(new Animated.Value(0)).current;
   const heartAnim = useRef(new Animated.Value(0)).current;
   const lastTapTime = useRef(0);
@@ -918,7 +920,12 @@ export default function PostCard({
 
         {currentPost.tags?.length > 0 && (
           <Text style={styles.tagsRow}>
-            {currentPost.tags.map(t => `#${t}`).join(' ')}
+            {currentPost.tags.map((t, i) => (
+              <Text
+                key={t}
+                onPress={() => navigation.navigate('FilteredExplore', { tag: t })}
+              >{i > 0 ? ' ' : ''}#{t}</Text>
+            ))}
           </Text>
         )}
       </View>

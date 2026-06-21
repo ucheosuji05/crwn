@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { Platform, ActivityIndicator } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { useUnreadCount } from '../context/UnreadCountContext';
@@ -288,6 +289,9 @@ export default function ExploreScreen() {
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
   const postModalScrollRef = useRef(null);
+
+  // Close the post modal when navigating away (e.g. tapping a hashtag on web)
+  useFocusEffect(useCallback(() => () => setSelectedPost(null), []));
 
   // Masonry layout state
   const [imageDimensions, setImageDimensions] = useState({});

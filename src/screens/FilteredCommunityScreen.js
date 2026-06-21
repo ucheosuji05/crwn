@@ -106,8 +106,9 @@ export default function FilteredCommunityScreen() {
                 onPress={() => openThread(item)}
               />
             )}
+            style={{ flex: 1 }}
             contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={true}
             ListEmptyComponent={renderEmpty}
             refreshing={loading}
             onRefresh={refresh}

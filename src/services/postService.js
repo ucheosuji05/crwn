@@ -60,6 +60,29 @@ export const postService = {
     return { data, error };
   },
 
+  // Get posts that contain a given hashtag tag (for FilteredExploreScreen)
+  async getPostsByTag(tag) {
+    const { data, error } = await supabase
+      .from('posts')
+      .select(`
+        *,
+        profiles:user_id (id, username, full_name, avatar_url, is_stylist),
+        stylists:profiles!posts_stylist_id_fkey (id, username, full_name),
+        post_media (id, media_url, media_type, position),
+        likes(count),
+        comments(count)
+      `)
+      .contains('tags', [tag])
+      .or('is_public.eq.true,is_public.is.null')
+      .order('created_at', { ascending: false });
+
+    const sorted = data?.map(p => ({
+      ...p,
+      post_media: (p.post_media || []).sort((a, b) => a.position - b.position),
+    }));
+    return { data: sorted ?? data, error };
+  },
+
   // Get posts by specific user (for Profile page)
   async getPostsByUser(userId) {
     const { data, error } = await supabase

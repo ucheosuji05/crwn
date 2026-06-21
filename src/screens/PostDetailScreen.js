@@ -647,7 +647,14 @@ export default function PostDetailScreen({ route, navigation }) {
 
               {/* Hashtags */}
               {post.tags?.length > 0 && (
-                <Text style={styles.hashtags}>{post.tags.map(t => `#${t}`).join(' ')}</Text>
+                <Text style={styles.hashtags}>
+                  {post.tags.map((t, i) => (
+                    <Text
+                      key={t}
+                      onPress={() => navigation.navigate('FilteredExplore', { tag: t })}
+                    >{i > 0 ? ' ' : ''}#{t}</Text>
+                  ))}
+                </Text>
               )}
             </View>
           </View>

@@ -8,14 +8,9 @@ import CreatePostScreen from '../screens/CreatePostScreen';
 import MessagingScreen from '../screens/MessagingScreen';
 import StylistProfileScreen from '../screens/StylistProfileScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
-import FilteredExploreScreen from '../screens/FilteredExploreScreen';
-import FilteredCommunityScreen from '../screens/FilteredCommunityScreen';
 
 const Stack = createStackNavigator();
 
-// On web the horizontal-swipe gesture handler intercepts scroll events, so
-// we disable it.  The back arrow on the profile/detail screens handles
-// navigation instead.
 const isWeb = Platform.OS === 'web';
 
 export default function RootNavigator() {
@@ -58,24 +53,6 @@ export default function RootNavigator() {
       <Stack.Screen
         name="PostDetail"
         component={PostDetailScreen}
-        options={{
-          gestureEnabled: !isWeb,
-          gestureDirection: 'horizontal',
-          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-        }}
-      />
-      <Stack.Screen
-        name="FilteredExplore"
-        component={FilteredExploreScreen}
-        options={{
-          gestureEnabled: !isWeb,
-          gestureDirection: 'horizontal',
-          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
-        }}
-      />
-      <Stack.Screen
-        name="FilteredCommunity"
-        component={FilteredCommunityScreen}
         options={{
           gestureEnabled: !isWeb,
           gestureDirection: 'horizontal',
