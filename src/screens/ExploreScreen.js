@@ -66,14 +66,14 @@ const TOPIC_FIRST_INDEX = 6;
 const TOPIC_INTERVAL = 8; // ~6-8 posts apart → seeded at indices 6, 14, 22…
 
 // Interleaves TopicCards into the post feed at indices 6, 14, 22…
-function buildFeedItems(posts) {
+function buildFeedItems(posts, topicTags = TOPIC_TAGS) {
   const items = [];
   let nextTopicAt = TOPIC_FIRST_INDEX;
   let topicIndex = 0;
 
   posts.forEach((post, i) => {
     if (i === nextTopicAt) {
-      const tag = TOPIC_TAGS[topicIndex % TOPIC_TAGS.length];
+      const tag = topicTags[topicIndex % topicTags.length];
       const gradient = TOPIC_GRADIENTS[topicIndex % TOPIC_GRADIENTS.length];
       items.push({
         kind: 'topic',
@@ -378,12 +378,26 @@ export default function ExploreScreen() {
     ? (containerWidth - SIDE_PAD * 2 - COLUMN_GAP) / 2
     : 0;
 
+  // Count tag frequency across all loaded posts; fall back to static list if DB has none yet
+  const popularTags = useMemo(() => {
+    const counts = {};
+    for (const post of uniquePosts) {
+      for (const tag of (post.tags || [])) {
+        counts[tag] = (counts[tag] || 0) + 1;
+      }
+    }
+    const sorted = Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .map(([tag]) => tag);
+    return sorted.length >= 2 ? sorted : TOPIC_TAGS;
+  }, [uniquePosts]);
+
   // Topic filler cards are only seeded into the main feed, not search results
   const feedItems = useMemo(
     () => isSearching
       ? filteredPosts.map(post => ({ kind: 'post', key: post.id, post }))
-      : buildFeedItems(filteredPosts),
-    [filteredPosts, isSearching],
+      : buildFeedItems(filteredPosts, popularTags),
+    [filteredPosts, isSearching, popularTags],
   );
 
   const masonryLayout = useMemo(
