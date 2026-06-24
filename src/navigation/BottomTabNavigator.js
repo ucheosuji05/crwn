@@ -7,7 +7,7 @@ import { Compass, Globe, Scissors, Bell, User } from 'lucide-react-native';
 import {
   View, Text, StyleSheet, ActivityIndicator,
   TouchableOpacity, Platform, Image, Animated,
-  Pressable,
+  Pressable, useWindowDimensions,
 } from 'react-native';
 
 import ExploreScreen from '../screens/ExploreScreen';
@@ -287,6 +287,8 @@ export default function BottomTabNavigator() {
   const { isProviderMode } = useProviderMode();
   const isStylist = !!profile?.is_stylist;
   const isWeb = Platform.OS === 'web';
+  const { width: windowWidth } = useWindowDimensions();
+  const useSidebar = isWeb && windowWidth >= 768;
 
   const [resetKeys, setResetKeys] = useState({
     'Crwn.': 0, Community: 0, Stylists: 0, Notifications: 0, Profile: 0,
@@ -427,8 +429,8 @@ export default function BottomTabNavigator() {
   return (
     <View style={{ flex: 1 }}>
       <Tab.Navigator
-        screenListeners={isWeb ? undefined : screenListeners}
-        tabBar={isWeb ? (props) => (
+        screenListeners={useSidebar ? undefined : screenListeners}
+        tabBar={useSidebar ? (props) => (
           <WebSidebar
             {...props}
             colors={colors}
@@ -441,7 +443,7 @@ export default function BottomTabNavigator() {
             isProviderMode={isStylist && isProviderMode}
           />
         ) : undefined}
-        sceneContainerStyle={isWeb ? { marginLeft: SIDEBAR_WIDTH } : undefined}
+        sceneContainerStyle={useSidebar ? { marginLeft: SIDEBAR_WIDTH } : undefined}
         screenOptions={({ route }) => ({
           tabBarStyle: {
             backgroundColor: colors.tabBar,
@@ -522,7 +524,7 @@ export default function BottomTabNavigator() {
       </Tab.Navigator>
 
       {/* Web-only: sliding notifications panel — client mode only */}
-      {isWeb && !(isStylist && isProviderMode) && (
+      {useSidebar && !(isStylist && isProviderMode) && (
         <NotifPanel
           open={notifOpen}
           onClose={closeNotif}
