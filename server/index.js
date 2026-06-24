@@ -647,6 +647,30 @@ app.post('/api/posts/:postId/comments', async (req, res) => {
       { headers: supabaseAdminHeaders() }
     );
     const [full] = await pr.json().catch(() => [comment]);
+
+    // ── Mention notifications ─────────────────────────────────────────────────
+    const mentionMatches = [...content.matchAll(/@(\w+)/g)];
+    if (mentionMatches.length > 0) {
+      const usernames = [...new Set(mentionMatches.map(m => m[1]))];
+      const profilesRes = await fetch(
+        `${SUPABASE_URL}/rest/v1/profiles?username=in.(${usernames.join(',')})&select=id`,
+        { headers: supabaseAdminHeaders() }
+      ).catch(() => null);
+      if (profilesRes?.ok) {
+        const mentioned = await profilesRes.json().catch(() => []);
+        const notifs = mentioned
+          .filter(p => p.id !== userId)
+          .map(p => ({ user_id: p.id, actor_id: userId, type: 'mention', post_id: req.params.postId, comment_id: comment.id, is_read: false }));
+        if (notifs.length > 0) {
+          await fetch(`${SUPABASE_URL}/rest/v1/notifications`, {
+            method: 'POST',
+            headers: { ...supabaseAdminHeaders(), Prefer: 'return=minimal' },
+            body: JSON.stringify(notifs),
+          }).catch(() => {});
+        }
+      }
+    }
+
     return res.json({ data: full || comment });
   } catch { return res.status(500).json({ message: 'Server error' }); }
 });

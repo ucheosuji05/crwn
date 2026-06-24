@@ -424,6 +424,16 @@ export const postService = {
     }
   },
 
+  // Search users by username prefix (for @mention suggestions)
+  async searchUsers(query, limit = 6) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, username, full_name, avatar_url, is_stylist')
+      .ilike('username', `${query}%`)
+      .limit(limit);
+    return data || [];
+  },
+
   // Get posts where a specific stylist was tagged
   async getTaggedPosts(stylistId) {
     const { data, error } = await supabase

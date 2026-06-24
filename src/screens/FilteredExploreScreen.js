@@ -4,10 +4,12 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
+  Pressable,
   ScrollView,
   Image,
   ActivityIndicator,
   RefreshControl,
+  Modal,
   useWindowDimensions,
   Platform,
 } from 'react-native';
@@ -20,8 +22,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
 import { postService } from '../services/postService';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../hooks/useAuth';
+import PostCard from '../components/PostCard';
 import {
   SIDE_PAD,
   COLUMN_GAP,
@@ -34,6 +38,7 @@ export default function FilteredExploreScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { colors } = useTheme();
+  const { user } = useAuth();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const tag = route.params?.tag || '';
 
@@ -50,6 +55,14 @@ export default function FilteredExploreScreen() {
 
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Web popup state
+  const [selectedPost, setSelectedPost] = useState(null);
+  const [postCommentsOpen, setPostCommentsOpen] = useState(false);
+  const postModalScrollRef = useRef(null);
+
+  // Close popup when navigating away
+  useFocusEffect(useCallback(() => () => { setSelectedPost(null); setPostCommentsOpen(false); }, []));
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
@@ -107,7 +120,11 @@ export default function FilteredExploreScreen() {
   );
 
   const openPost = useCallback((item) => {
-    navigation.navigate('PostDetail', { postId: item.id });
+    if (Platform.OS === 'web') {
+      setSelectedPost(item);
+    } else {
+      navigation.navigate('PostDetail', { postId: item.id });
+    }
   }, [navigation]);
 
   const renderMasonryItem = (item) => {
@@ -208,6 +225,61 @@ export default function FilteredExploreScreen() {
           <ActivityIndicator color={colors.primary} style={{ paddingVertical: 40 }} />
         )}
       </ScrollView>
+
+      {/* ── Web: floating popup card ── */}
+      {Platform.OS === 'web' && (
+        <Modal
+          visible={!!selectedPost}
+          transparent
+          animationType="fade"
+          onRequestClose={() => { setSelectedPost(null); setPostCommentsOpen(false); }}
+        >
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}
+          >
+            <Pressable
+              style={[
+                styles.popupCard,
+                postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb,
+              ]}
+              onPress={() => {}}
+            >
+              <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false}>
+                {selectedPost && (
+                  <PostCard
+                    post={selectedPost}
+                    currentUserId={user?.id}
+                    scrollViewRef={postModalScrollRef}
+                    onCommentsOpenChange={setPostCommentsOpen}
+                    onDelete={async (postId, userId) => {
+                      const result = await postService.deletePost(postId);
+                      if (result?.error == null) { setSelectedPost(null); setPostCommentsOpen(false); }
+                      return result?.error == null ? { success: true } : { success: false };
+                    }}
+                    onNavigateToProfile={(userId) => {
+                      setSelectedPost(null);
+                      setPostCommentsOpen(false);
+                      navigation.navigate('UserProfile', { viewedUserId: userId });
+                    }}
+                    onNavigateToStylist={(stylistId) => {
+                      const st = selectedPost?.stylists;
+                      setSelectedPost(null);
+                      setPostCommentsOpen(false);
+                      navigation.navigate('StylistProfile', {
+                        stylist: {
+                          id: stylistId,
+                          name: st?.full_name || st?.username || 'Stylist',
+                        },
+                      });
+                    }}
+                  />
+                )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      )}
     </View>
   );
 }
@@ -320,5 +392,30 @@ const makeStyles = (c) => StyleSheet.create({
     fontSize: 14,
     fontFamily: 'Figtree_500Medium',
     color: c.textMuted,
+  },
+
+  // ── Web popup card ──
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  popupCard: {
+    width: '100%',
+    maxHeight: '78%',
+    backgroundColor: c.surface,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  popupCardWeb: {
+    maxWidth: 460,
+    maxHeight: '82%',
+  },
+  popupCardWebWide: {
+    maxWidth: 800,
+    width: '95vw',
+    maxHeight: '92%',
   },
 });

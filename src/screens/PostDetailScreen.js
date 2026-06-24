@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View, Text, Image, StyleSheet, TouchableOpacity,
   ScrollView, Modal, Alert, Share, Pressable,
@@ -12,6 +12,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
 import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
+import { supabase } from '../config/supabase';
 
 const CARD_H_MARGIN = 16; // card sits 16px from each screen edge
 
@@ -86,6 +87,8 @@ export default function PostDetailScreen({ route, navigation }) {
   const [commentLikeCounts, setCommentLikeCounts] = useState({});
   const [replyCounts,      setReplyCounts]      = useState({});
   const [commentsSheetVisible, setCommentsSheetVisible] = useState(false);
+  const [mentionResults,       setMentionResults]       = useState([]);
+  const mentionTimerRef = useRef(null);
 
   // ── Comments bottom sheet ────────────────────────────────────────────────────
   const openCommentsSheet = () => {
@@ -377,6 +380,48 @@ export default function PostDetailScreen({ route, navigation }) {
     }
   };
 
+  // ── @mention helpers ─────────────────────────────────────────────────────────
+  const handleCommentChange = useCallback((text) => {
+    setCommentText(text);
+    clearTimeout(mentionTimerRef.current);
+    const match = text.match(/@(\w+)$/);
+    if (match) {
+      mentionTimerRef.current = setTimeout(async () => {
+        const results = await postService.searchUsers(match[1]);
+        setMentionResults(results);
+      }, 200);
+    } else {
+      setMentionResults([]);
+    }
+  }, []);
+
+  const handleSelectMention = useCallback((username) => {
+    setCommentText(prev => prev.replace(/@(\w+)$/, `@${username} `));
+    setMentionResults([]);
+    commentInputRef.current?.focus();
+  }, []);
+
+  const handleMentionPress = useCallback(async (username) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, is_stylist')
+      .eq('username', username)
+      .maybeSingle();
+    if (!data) return;
+    navigation.navigate(data.is_stylist ? 'StylistProfile' : 'UserProfile',
+      data.is_stylist ? { stylist: { id: data.id } } : { viewedUserId: data.id });
+  }, [navigation]);
+
+  const parseMentions = (text, textStyle) => {
+    if (!text) return null;
+    const parts = text.split(/(@\w+)/g);
+    return parts.map((part, i) =>
+      /^@\w+$/.test(part)
+        ? <Text key={i} style={{ color: colors.primary, fontFamily: 'Figtree_600SemiBold' }} onPress={() => handleMentionPress(part.slice(1))}>{part}</Text>
+        : <Text key={i} style={textStyle}>{part}</Text>
+    );
+  };
+
   // ── Render a comment (or reply) card ─────────────────────────────────────────
   const renderComment = (item, isReply = false, parentId = null) => {
     const likeCount  = commentLikeCounts[item.id] || 0;
@@ -406,25 +451,31 @@ export default function PostDetailScreen({ route, navigation }) {
               )}
             </View>
 
-            <Text style={[styles.cmtText, { color: colors.text }]}>{item.content}</Text>
+            <Text style={[styles.cmtText, { color: colors.text }]}>{parseMentions(item.content, { color: colors.text })}</Text>
 
-            {/* Like · Reply */}
+            {/* Like · Reply · Timestamp */}
             <View style={styles.cmtActions}>
               <TouchableOpacity onPress={() => handleLikeComment(item.id)} style={styles.cmtActionBtn} activeOpacity={0.7}>
                 <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#F27C7C' : colors.textMuted} />
                 {likeCount > 0 && <Text style={[styles.cmtMeta, { color: isLiked ? '#F27C7C' : colors.textMuted }]}>{likeCount}</Text>}
               </TouchableOpacity>
-              {!isReply && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setReplyingTo({ parentId: item.id, username: item.profiles?.username || 'user' });
-                    setTimeout(() => commentInputRef.current?.focus(), 50);
-                  }}
-                  style={styles.cmtActionBtn}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.cmtMeta, { color: colors.textMuted }]}>Reply</Text>
-                </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const targetParentId = isReply ? parentId : item.id;
+                  const username = item.profiles?.username || 'user';
+                  setReplyingTo({ parentId: targetParentId, username });
+                  setCommentText(`@${username} `);
+                  setTimeout(() => commentInputRef.current?.focus(), 50);
+                }}
+                style={styles.cmtActionBtn}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.cmtMeta, { color: colors.textMuted }]}>Reply</Text>
+              </TouchableOpacity>
+              {item.created_at && (
+                <Text style={[styles.cmtTimestamp, { color: colors.textMuted }]}>
+                  {getTimeAgo(item.created_at)}
+                </Text>
               )}
             </View>
 
@@ -723,13 +774,39 @@ export default function PostDetailScreen({ route, navigation }) {
               </ScrollView>
 
               {/* Composer — pinned at bottom of sheet */}
+              {mentionResults.length > 0 && (
+                <View style={[styles.mentionList, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+                  {mentionResults.map(u => (
+                    <TouchableOpacity
+                      key={u.id}
+                      style={styles.mentionRow}
+                      onPress={() => handleSelectMention(u.username)}
+                      activeOpacity={0.7}
+                    >
+                      {u.avatar_url ? (
+                        <Image source={{ uri: u.avatar_url }} style={styles.mentionAvatar} />
+                      ) : (
+                        <View style={[styles.mentionAvatar, { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                          <Text style={{ color: '#fff', fontSize: 10, fontFamily: 'Figtree_700Bold' }}>
+                            {(u.username || '?')[0].toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View>
+                        <Text style={[styles.mentionUsername, { color: colors.text }]}>@{u.username}</Text>
+                        {u.full_name ? <Text style={[styles.mentionName, { color: colors.textMuted }]}>{u.full_name}</Text> : null}
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
               {replyingTo && (
                 <View style={[styles.replyBanner, { backgroundColor: colors.backgroundAlt, borderTopColor: colors.borderLight }]}>
                   <Text style={[styles.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>
                     Replying to{' '}
                     <Text style={{ color: MAROON, fontFamily: 'Figtree_600SemiBold' }}>@{replyingTo.username}</Text>
                   </Text>
-                  <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <TouchableOpacity onPress={() => { setReplyingTo(null); setCommentText(''); setMentionResults([]); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                   </TouchableOpacity>
                 </View>
@@ -750,7 +827,7 @@ export default function PostDetailScreen({ route, navigation }) {
                   placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : 'Add a comment…'}
                   placeholderTextColor={colors.placeholder}
                   value={commentText}
-                  onChangeText={setCommentText}
+                  onChangeText={handleCommentChange}
                   multiline
                 />
                 <TouchableOpacity
@@ -1038,11 +1115,36 @@ const makeStyles = (c) => StyleSheet.create({
   cmtActions: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 6 },
   cmtActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   cmtMeta: { fontSize: 12, fontFamily: 'Figtree_500Medium' },
+  cmtTimestamp: { fontSize: 11, fontFamily: 'Figtree_500Medium' },
   viewRepliesBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   viewRepliesText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.primary },
   repliesContainer: { marginTop: 10, paddingLeft: 4 },
   loadMoreBtn: { paddingVertical: 8 },
   loadMoreText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: c.primary },
+
+  // @mention suggestion list
+  mentionList: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    marginHorizontal: 10,
+    marginBottom: 4,
+    overflow: 'hidden',
+  },
+  mentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 10,
+  },
+  mentionAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  mentionUsername: { fontSize: 13, fontFamily: 'Figtree_600SemiBold' },
+  mentionName: { fontSize: 12, fontFamily: 'Figtree_500Medium' },
 
   // ── Comment input (pinned) ────────────────────────────────────────────────────
   replyBanner: {

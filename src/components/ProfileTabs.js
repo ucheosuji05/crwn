@@ -26,6 +26,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { bookingService } from '../services/bookingService';
 import { postService } from '../services/postService';
+import { profileService } from '../services/profileService';
 import { reviewService } from '../services/reviewService';
 import { supabase } from '../config/supabase';
 import { Crown, Scissors } from 'lucide-react-native';
@@ -355,6 +356,16 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
         setBookings([]);
       })
       .finally(() => setBookingsLoading(false));
+  }, [isOwnProfile, user?.id]);
+
+  // Check whether the user's hair profile is complete (own profile only)
+  const [hairProfileComplete, setHairProfileComplete] = useState(true);
+  useEffect(() => {
+    if (!isOwnProfile || !user?.id) return;
+    profileService.getProfile(user.id).then(({ data }) => {
+      const hp = data?.hair_profiles?.[0];
+      setHairProfileComplete(!!(hp?.hair_type));
+    });
   }, [isOwnProfile, user?.id]);
 
   // Mark booking notifications as read when client opens the Bookings tab
@@ -716,21 +727,48 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
 
   const renderContent = () => {
     switch (activeTab) {
-      case 'posts':
+      case 'posts': {
+        const incompleteBanner = isOwnProfile && !hairProfileComplete ? (
+          <TouchableOpacity
+            style={styles.hairBanner}
+            onPress={() => navigation.navigate('FinishHairProfile')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.hairBannerLabel}>HAIR PROFILE INCOMPLETE</Text>
+            <View style={styles.hairBannerBtn}>
+              <Text style={styles.hairBannerBtnText}>FINISH NOW</Text>
+            </View>
+          </TouchableOpacity>
+        ) : null;
+
         if (loading) {
-          return <ActivityIndicator style={{ paddingTop: 60 }} size="large" color={colors.primary} />;
+          return (
+            <>
+              {incompleteBanner}
+              <ActivityIndicator style={{ paddingTop: 60 }} size="large" color={colors.primary} />
+            </>
+          );
         }
         if (posts.length === 0) {
           return (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No posts yet</Text>
-              <Text style={styles.emptyText}>
-                {isOwnProfile ? 'Share your first hairstyle!' : "This user hasn't posted yet."}
-              </Text>
-            </View>
+            <>
+              {incompleteBanner}
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No posts yet</Text>
+                <Text style={styles.emptyText}>
+                  {isOwnProfile ? 'Share your first hairstyle!' : "This user hasn't posted yet."}
+                </Text>
+              </View>
+            </>
           );
         }
-        return renderMasonryGrid(posts);
+        return (
+          <>
+            {incompleteBanner}
+            {renderMasonryGrid(posts)}
+          </>
+        );
+      }
 
       case 'tagged':
         if (taggedLoading) {
@@ -827,7 +865,23 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
             </View>
           );
         }
-        return <HairProfile viewedUserId={viewedUserId} />;
+        return (
+          <>
+            {!hairProfileComplete && (
+              <TouchableOpacity
+                style={styles.hairBanner}
+                onPress={() => navigation.navigate('FinishHairProfile')}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.hairBannerLabel}>HAIR PROFILE INCOMPLETE</Text>
+                <View style={styles.hairBannerBtn}>
+                  <Text style={styles.hairBannerBtnText}>FINISH NOW</Text>
+                </View>
+              </TouchableOpacity>
+            )}
+            <HairProfile viewedUserId={viewedUserId} />
+          </>
+        );
 
       default:
         return null;
@@ -1456,6 +1510,42 @@ const makeStyles = (c) => StyleSheet.create({
     fontSize: 15,
     fontFamily: 'Figtree_600SemiBold',
     color: '#fff',
+  },
+
+  // Hair profile incomplete banner
+  hairBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(248,180,48,0.2)',
+    borderWidth: 1,
+    borderColor: '#F8B430',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  hairBannerLabel: {
+    fontSize: 11,
+    fontFamily: 'Figtree_700Bold',
+    color: '#8A6A3A',
+    letterSpacing: 0.5,
+    flex: 1,
+  },
+  hairBannerBtn: {
+    backgroundColor: '#F8B430',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginLeft: 10,
+  },
+  hairBannerBtnText: {
+    fontSize: 11,
+    fontFamily: 'Figtree_700Bold',
+    color: '#8A6A3A',
+    letterSpacing: 0.5,
   },
 
   // Empty state

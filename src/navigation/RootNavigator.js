@@ -8,6 +8,7 @@ import CreatePostScreen from '../screens/CreatePostScreen';
 import MessagingScreen from '../screens/MessagingScreen';
 import StylistProfileScreen from '../screens/StylistProfileScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
+import FinishHairProfileScreen from '../screens/FinishHairProfileScreen';
 
 const Stack = createStackNavigator();
 
@@ -57,6 +58,16 @@ export default function RootNavigator() {
           gestureEnabled: !isWeb,
           gestureDirection: 'horizontal',
           cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="FinishHairProfile"
+        component={FinishHairProfileScreen}
+        options={{
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+          cardStyle: { backgroundColor: 'transparent' },
         }}
       />
     </Stack.Navigator>

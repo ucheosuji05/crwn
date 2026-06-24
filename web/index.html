@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!--
+      viewport-fit=cover lets the app extend behind the notch / home indicator
+      on iOS Safari and Android Chrome. React Native's SafeAreaView then handles
+      the insets so content never gets clipped.
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
+    />
+
+    <!-- PWA / home-screen hints -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="CRWN" />
+
+    <title>CRWN</title>
+
+    <style id="expo-reset">
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        /* Prevent iOS Safari from bumping font sizes on rotation */
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+      }
+
+      html, body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        overflow: hidden;
+        /* Kill rubber-band / pull-to-refresh on the document body */
+        overscroll-behavior: none;
+        /* Prevent tap highlight flash on Android */
+        -webkit-tap-highlight-color: transparent;
+        /* Smooth momentum scrolling inside scroll views */
+        -webkit-overflow-scrolling: touch;
+      }
+
+      #root {
+        display: flex;
+        flex: 1;
+        /*
+          100dvh = dynamic viewport height — shrinks when the browser address
+          bar is visible on mobile, expands when it hides. This stops the
+          app from being taller than the visible area on phone browsers.
+        */
+        height: 100dvh;
+        /* Fallback for browsers that don't support dvh */
+        height: 100vh;
+      }
+
+      /* Override in browsers that do support dvh */
+      @supports (height: 100dvh) {
+        #root {
+          height: 100dvh;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>

@@ -27,6 +27,7 @@ const SOCIAL_TYPE_CONFIG = {
   crown:   { icon: 'star',                color: '#F8B430', iconSize: 11 },
   comment: { icon: 'chatbubble-ellipses', color: '#8E683B', iconSize: 11 },
   reply:   { icon: 'chatbubble-ellipses', color: '#8E683B', iconSize: 11 },
+  mention: { icon: 'at',                  color: '#8E683B', iconSize: 11 },
   follow:  { lucideIcon: UserPlus,        color: '#8E683B', iconSize: 11 },
 };
 
@@ -56,6 +57,7 @@ function socialActionText(type, actorName) {
     case 'crown':   return [actorName, 'crowned your post'];
     case 'comment': return [actorName, 'commented on your post'];
     case 'reply':   return [actorName, 'replied to your comment'];
+    case 'mention': return [actorName, 'mentioned you in a comment'];
     case 'follow':  return [actorName, 'started following you'];
     default:        return [actorName, 'interacted with you'];
   }
@@ -245,6 +247,15 @@ export default function NotificationsList({ panelMode = false }) {
           navigation.push('PostDetail', { postId: item.post_id, openComments: true });
         } else if (item.thread_id) {
           navigation.navigate('Community', { openThreadId: item.thread_id });
+        } else if (item.actor?.id) {
+          navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
+        }
+        break;
+
+      case 'mention':
+        // Someone mentioned you in a comment → open that post with comments expanded
+        if (item.post_id) {
+          navigation.push('PostDetail', { postId: item.post_id, openComments: true });
         } else if (item.actor?.id) {
           navigation.navigate('UserProfile', { viewedUserId: item.actor.id });
         }

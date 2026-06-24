@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
+import { supabase } from '../config/supabase';
 
 
 export default function PostCard({
@@ -74,6 +75,8 @@ export default function PostCard({
   const [pickerSaving, setPickerSaving] = useState(false);
   const [newCollectionMode, setNewCollectionMode] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState('');
+  const [mentionResults, setMentionResults] = useState([]);
+  const mentionTimerRef = useRef(null);
 
   const examplePost = {
     id: 'fallback-example-post',
@@ -510,6 +513,51 @@ export default function PostCard({
     Alert.alert('Report', 'This post has been reported for review.');
   };
 
+  // ── @mention helpers ─────────────────────────────────────────────────────────
+  const handleCommentChange = useCallback((text) => {
+    setCommentText(text);
+    clearTimeout(mentionTimerRef.current);
+    const match = text.match(/@(\w+)$/);
+    if (match) {
+      mentionTimerRef.current = setTimeout(async () => {
+        const results = await postService.searchUsers(match[1]);
+        setMentionResults(results);
+      }, 200);
+    } else {
+      setMentionResults([]);
+    }
+  }, []);
+
+  const handleSelectMention = useCallback((username) => {
+    setCommentText(prev => prev.replace(/@(\w+)$/, `@${username} `));
+    setMentionResults([]);
+    commentInputRef.current?.focus();
+  }, []);
+
+  const handleMentionPress = useCallback(async (username) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, is_stylist')
+      .eq('username', username)
+      .maybeSingle();
+    if (!data) return;
+    if (data.is_stylist) {
+      navigation.navigate('StylistProfile', { stylist: { id: data.id } });
+    } else {
+      navigation.navigate('UserProfile', { viewedUserId: data.id });
+    }
+  }, [navigation]);
+
+  const parseMentions = (text) => {
+    if (!text) return null;
+    const parts = text.split(/(@\w+)/g);
+    return parts.map((part, i) =>
+      /^@\w+$/.test(part)
+        ? <Text key={i} style={{ color: colors.primary, fontFamily: 'Figtree_600SemiBold' }} onPress={() => handleMentionPress(part.slice(1))}>{part}</Text>
+        : <Text key={i}>{part}</Text>
+    );
+  };
+
   // ── Comments panel — shared between mobile inline + web side column ─────────
   const renderCommentItem = (item, isReply = false, parentId = null) => {
     const likeCount = commentLikeCounts[item.id] || 0;
@@ -540,25 +588,31 @@ export default function PostCard({
             <Text style={[styles.commentUsername, { color: colors.primary }]}>
               @{item.profiles?.username || 'user'}
             </Text>
-            <Text style={[styles.commentText, { color: colors.text }]}>{item.content}</Text>
+            <Text style={[styles.commentText, { color: colors.text }]}>{parseMentions(item.content)}</Text>
           </View>
-          {/* Like + Reply + Delete row */}
+          {/* Like + Reply + Timestamp + Delete row */}
           <View style={styles.cmtActionsRow}>
             <TouchableOpacity onPress={() => handleLikeComment(item.id)} style={styles.cmtLikeBtn} activeOpacity={0.7}>
               <Ionicons name={isLiked ? 'heart' : 'heart-outline'} size={13} color={isLiked ? '#F27C7C' : colors.textMuted} />
               {likeCount > 0 && <Text style={[styles.cmtLikeCount, { color: colors.textMuted }]}>{likeCount}</Text>}
             </TouchableOpacity>
-            {!isReply && (
-              <TouchableOpacity
-                onPress={() => {
-                  setReplyingTo({ parentId: item.id, username: item.profiles?.username || 'user' });
-                  setTimeout(() => commentInputRef.current?.focus(), 50);
-                }}
-                style={styles.cmtReplyBtn}
-                activeOpacity={0.7}
-              >
-                <Text style={[styles.cmtReplyText, { color: colors.textMuted }]}>Reply</Text>
-              </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                const targetParentId = isReply ? parentId : item.id;
+                const username = item.profiles?.username || 'user';
+                setReplyingTo({ parentId: targetParentId, username });
+                setCommentText(`@${username} `);
+                setTimeout(() => commentInputRef.current?.focus(), 50);
+              }}
+              style={styles.cmtReplyBtn}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.cmtReplyText, { color: colors.textMuted }]}>Reply</Text>
+            </TouchableOpacity>
+            {item.created_at && (
+              <Text style={[styles.cmtTimestamp, { color: colors.textMuted }]}>
+                {getTimeAgo(item.created_at)}
+              </Text>
             )}
             {item.user_id === user?.id && (
               <TouchableOpacity
@@ -658,13 +712,39 @@ export default function PostCard({
 
   const commentsInputRow = (
     <View>
+      {mentionResults.length > 0 && (
+        <View style={[styles.mentionList, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
+          {mentionResults.map(u => (
+            <TouchableOpacity
+              key={u.id}
+              style={styles.mentionRow}
+              onPress={() => handleSelectMention(u.username)}
+              activeOpacity={0.7}
+            >
+              {u.avatar_url ? (
+                <Image source={{ uri: u.avatar_url }} style={styles.mentionAvatar} />
+              ) : (
+                <View style={[styles.mentionAvatar, { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ color: '#fff', fontSize: 10, fontFamily: 'Figtree_700Bold' }}>
+                    {(u.username || '?')[0].toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View>
+                <Text style={[styles.mentionUsername, { color: colors.text }]}>@{u.username}</Text>
+                {u.full_name ? <Text style={[styles.mentionName, { color: colors.textMuted }]}>{u.full_name}</Text> : null}
+              </View>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
       {replyingTo && (
         <View style={[styles.replyBanner, { backgroundColor: colors.surfaceAlt || colors.borderLight, borderTopColor: colors.borderLight }]}>
           <Text style={[styles.replyBannerText, { color: colors.textSecondary }]} numberOfLines={1}>
             Replying to{' '}
             <Text style={{ color: colors.primary, fontFamily: 'Figtree_600SemiBold' }}>@{replyingTo.username}</Text>
           </Text>
-          <TouchableOpacity onPress={() => setReplyingTo(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity onPress={() => { setReplyingTo(null); setCommentText(''); setMentionResults([]); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
@@ -686,7 +766,7 @@ export default function PostCard({
           placeholder={replyingTo ? `Reply to @${replyingTo.username}…` : 'Add a comment…'}
           placeholderTextColor={colors.placeholder}
           value={commentText}
-          onChangeText={setCommentText}
+          onChangeText={handleCommentChange}
           multiline
         />
         {/* Send button — always visible, primary colour when text is ready */}
@@ -1546,6 +1626,10 @@ const makeStyles = (c) => StyleSheet.create({
     fontSize: 12,
     fontFamily: 'Figtree_500Medium',
   },
+  cmtTimestamp: {
+    fontSize: 11,
+    fontFamily: 'Figtree_500Medium',
+  },
   cmtDeleteBtn: {
     marginLeft: 'auto',
     marginRight: 4,
@@ -1597,6 +1681,36 @@ const makeStyles = (c) => StyleSheet.create({
   loadMoreRepliesText: {
     fontSize: 12,
     fontFamily: 'Figtree_600SemiBold',
+  },
+
+  // @mention suggestion list
+  mentionList: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 12,
+    marginHorizontal: 10,
+    marginBottom: 4,
+    overflow: 'hidden',
+  },
+  mentionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 10,
+  },
+  mentionAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  mentionUsername: {
+    fontSize: 13,
+    fontFamily: 'Figtree_600SemiBold',
+  },
+  mentionName: {
+    fontSize: 12,
+    fontFamily: 'Figtree_500Medium',
   },
 
   // Add-to-collection banner
