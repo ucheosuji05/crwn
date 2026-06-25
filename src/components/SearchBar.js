@@ -12,7 +12,7 @@ export default function SearchBar({
 }) {
   const { colors } = useTheme();
   return (
-    <View style={[styles.container, { backgroundColor: colors.inputBackground }, containerStyle]}>
+    <View style={[styles.container, containerStyle]}>
       <Ionicons name="search" size={20} color={colors.textMuted} style={styles.icon} />
       <TextInput
         style={[styles.input, { color: colors.text }]}
@@ -41,6 +41,7 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     padding: 10,
     borderRadius: 10,
+    backgroundColor: 'rgba(232, 226, 217, 0.4)',
   },
   icon: { marginRight: 8 },
   input: { flex: 1, fontSize: 16 },

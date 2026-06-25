@@ -229,7 +229,28 @@ export default function StylistsScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Search icon + filter chips in one scrollable row */}
+      {/* Search bar on top when open, X to dismiss */}
+      {searchOpen && (
+        <View style={styles.searchRow}>
+          <TouchableOpacity
+            style={styles.searchIconBtn}
+            onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
+          >
+            <Ionicons name="close-outline" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <SearchBar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder="Search service providers..."
+              autoFocus
+              containerStyle={styles.searchBarOverride}
+            />
+          </View>
+        </View>
+      )}
+
+      {/* Filter chips — with search icon when collapsed */}
       <View style={styles.topBar}>
         <ScrollView
           horizontal
@@ -237,12 +258,11 @@ export default function StylistsScreen() {
           contentContainerStyle={styles.filterContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Search button */}
-          <TouchableOpacity style={styles.searchIconBtn} onPress={() => setSearchOpen((v) => !v)}>
-            <Ionicons name="search-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-
-          {/* Filter chips */}
+          {!searchOpen && (
+            <TouchableOpacity style={styles.searchIconBtn} onPress={() => setSearchOpen(true)}>
+              <Ionicons name="search-outline" size={22} color={colors.text} />
+            </TouchableOpacity>
+          )}
           {SPECIALTY_FILTERS.map((f) => (
             <TouchableOpacity
               key={f}
@@ -256,17 +276,6 @@ export default function StylistsScreen() {
           ))}
         </ScrollView>
       </View>
-
-      {/* Expandable search input */}
-      {searchOpen && (
-        <SearchBar
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          placeholder="Search service providers..."
-          autoFocus
-          containerStyle={styles.searchBarOverride}
-        />
-      )}
 
       {/* Loading */}
       {loading ? (
@@ -348,23 +357,17 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     height: HEADER_BAR_HEIGHT,
   },
-  searchIconBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  // ── Expandable search row ──
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 8, backgroundColor: '#FFFFFF' },
+  searchIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchBarOverride: {
-    marginHorizontal: 12,
+    marginHorizontal: 4,
     marginVertical: 8,
   },
   filterChip: {
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: '#E8E2D9',
+    backgroundColor: 'rgba(232, 226, 217, 0.4)',
   },
   filterChipActive: {
     backgroundColor: c.primary,

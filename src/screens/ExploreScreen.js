@@ -29,6 +29,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../config/supabase';
+import { postService } from '../services/postService';
 
 export const SIDE_PAD = 12;
 export const COLUMN_GAP = 10;
@@ -50,6 +51,7 @@ function bucketFor(hw, kind) {
   if (hw <= HW_PORTRAIT_MAX) return 'portrait';
   return 'tall';
 }
+
 
 // ── Topic filler cards ────────────────────────────────────────────────────────
 const TOPIC_TAGS = ['island twists', 'wash n go', 'silk press', 'locs', 'type 4', 'protective styles'];
@@ -284,6 +286,27 @@ export default function ExploreScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [userHairType, setUserHairType] = useState(null);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('hair_profiles')
+      .select('hair_type')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setUserHairType(data?.hair_type ?? null));
+  }, [user?.id]);
+
+  const exploreFilters = useMemo(
+    () => userHairType ? ['All', userHairType] : ['All', '4C', '4B', '4A', '3C', '3B', '3A'],
+    [userHairType],
+  );
+
+  useEffect(() => {
+    if (!exploreFilters.includes(activeFilter)) setActiveFilter('All');
+  }, [exploreFilters]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   // Web popup card
   const [selectedPost, setSelectedPost] = useState(null);
@@ -334,8 +357,10 @@ export default function ExploreScreen() {
   // Deduplicate posts by ID to prevent React key warnings during pagination or optimistic updates
   const uniquePosts = [...new Map(posts.map(p => [p.id, p])).values()];
 
-  const filteredPosts = isSearching
-    ? uniquePosts.filter((p) => {
+  const filteredPosts = useMemo(() => {
+    let list = uniquePosts;
+    if (isSearching) {
+      list = list.filter((p) => {
         const q = query.toLowerCase().replace(/^#/, '');
         const matchesUser =
           wordStartsWith(p.profiles?.username, q) ||
@@ -343,8 +368,16 @@ export default function ExploreScreen() {
         const matchesTag =
           Array.isArray(p.tags) && p.tags.some(t => wordStartsWith(t, q));
         return matchesUser || matchesTag;
-      })
-    : uniquePosts;
+      });
+    }
+    if (activeFilter !== 'All') {
+      list = list.filter((p) => {
+        const authorHairType = p.profiles?.hair_profiles?.[0]?.hair_type;
+        return authorHairType && authorHairType.toLowerCase() === activeFilter.toLowerCase();
+      });
+    }
+    return list;
+  }, [uniquePosts, isSearching, query, activeFilter]);
 
   // Batch dimension updates into a single setState per animation frame
   const flushDims = useCallback(() => {
@@ -570,11 +603,33 @@ export default function ExploreScreen() {
         </View>
       </SafeAreaView>
 
-      {/* ── Collapsible Search ── */}
+      {/* ── Collapsible Search + Filters ── */}
       <View style={styles.searchAreaWrapper}>
         {searchOpen && (
-          <View style={styles.searchBarRow}>
-            <SearchBar value={query} onChangeText={setQuery} />
+          <View style={styles.searchDropdown}>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              containerStyle={styles.searchBarInner}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {exploreFilters.map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+                  onPress={() => setActiveFilter(f)}
+                >
+                  <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>
+                    {f}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </View>
         )}
 
@@ -739,8 +794,8 @@ export default function ExploreScreen() {
                     currentUserId={user?.id}
                     scrollViewRef={postModalScrollRef}
                     onCommentsOpenChange={setPostCommentsOpen}
-                    onDelete={async (postId, userId) => {
-                      const result = await deletePost(postId, userId);
+                    onDelete={async (postId) => {
+                      const result = await postService.deletePost(postId);
                       if (result?.success) { setSelectedPost(null); setPostCommentsOpen(false); }
                       return result;
                     }}
@@ -773,7 +828,7 @@ export default function ExploreScreen() {
 
 const makeStyles = (c) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.surface },
-  safeHeader: { backgroundColor: c.surface },
+  safeHeader: { backgroundColor: '#FFFFFF' },
 
   // ── Header ──
   header: {
@@ -784,7 +839,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
-    backgroundColor: c.surface,
+    backgroundColor: '#FFFFFF',
   },
   headerLogo: {
     fontSize: 24,
@@ -827,9 +882,17 @@ const makeStyles = (c) => StyleSheet.create({
     elevation: 100,
     backgroundColor: c.surface,
   },
-  searchBarRow: {
-    borderBottomWidth: 1,
-    borderBottomColor: c.borderLight,
+  searchBarRow: {},
+  searchDropdown: {
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingLeft: 10,
+    paddingRight: 0,
+    gap: 10,
+  },
+  searchBarInner: {
+    marginHorizontal: 0,
+    marginVertical: 0,
   },
   dropdown: {
     position: 'absolute',
@@ -878,6 +941,34 @@ const makeStyles = (c) => StyleSheet.create({
   dropdownMeta: { fontSize: 12, fontFamily: 'Figtree_500Medium', color: c.textMuted, marginTop: 1 },
   dropdownEmpty: { paddingHorizontal: 16, paddingVertical: 20, alignItems: 'center' },
   dropdownEmptyText: { fontSize: 14, fontFamily: 'Figtree_500Medium', color: c.textMuted },
+
+  // ── Filter chips ──
+  filterContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 0,
+    gap: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  filterChip: {
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(232, 226, 217, 0.4)',
+  },
+  filterChipActive: {
+    backgroundColor: c.primary,
+  },
+  filterChipText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    color: '#5E5E5E',
+  },
+  filterChipTextActive: {
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    color: '#fff',
+  },
 
   // ── Masonry grid ──
   scroll: { flex: 1 },

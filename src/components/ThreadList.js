@@ -84,6 +84,7 @@ export default function ThreadList({
       <View style={styles.header}>
         {searchOpen ? (
           <>
+            {/* Search bar on top with X to close */}
             <View style={styles.searchRow}>
               <Pressable
                 style={styles.searchToggleBtn}
@@ -102,7 +103,7 @@ export default function ThreadList({
                 />
               </View>
             </View>
-
+            {/* Filter chips below */}
             <View style={styles.chipsRow}>
               <FlatList
                 horizontal
@@ -125,6 +126,7 @@ export default function ThreadList({
             </View>
           </>
         ) : (
+          /* Collapsed: search icon + filter chips in one row */
           <View style={styles.chipsRow}>
             <Pressable
               style={styles.searchToggleBtn}
@@ -228,12 +230,7 @@ const makeStyles = (c) => StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
   },
-  searchToggleBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  searchToggleBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16 },
   searchBarWrap: { flex: 1 },
   searchBarContainer: { marginLeft: 6, marginRight: 14, marginVertical: 8 },
@@ -249,7 +246,7 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: '#E8E2D9',
+    backgroundColor: 'rgba(232, 226, 217, 0.4)',
   },
   filterChipActive: { backgroundColor: c.primary },
   filterText: { fontSize: 13, fontWeight: '500', color: c.textSecondary },

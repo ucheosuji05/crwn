@@ -286,7 +286,7 @@ export default function FilteredExploreScreen() {
 
 const makeStyles = (c) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.surface },
-  safeHeader: { backgroundColor: c.surface },
+  safeHeader: { backgroundColor: '#FFFFFF' },
 
   header: {
     height: HEADER_BAR_HEIGHT,
@@ -296,7 +296,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 16,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
-    backgroundColor: c.surface,
+    backgroundColor: '#FFFFFF',
   },
   headerLogo: {
     fontSize: 17,
