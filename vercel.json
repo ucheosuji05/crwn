@@ -1,6 +1,5 @@
 {
-  "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!_expo|assets|favicon\\.ico).*)", "destination": "/index.html" }
   ]
 }
