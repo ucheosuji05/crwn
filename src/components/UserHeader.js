@@ -23,6 +23,7 @@ import { useIsWebLayout } from '../utils/webLayout';
 import { useTheme } from '../context/ThemeContext';
 import { profileService } from '../services/profileService';
 import EditProfileScreen from '../screens/EditProfileScreen';
+import SkeletonPulse from './SkeletonPulse';
 
 /**
  * UserHeader
@@ -211,10 +212,47 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
 
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
+  const AVATAR_SIZE = s(90);
+  const BANNER_HEIGHT = s(110);
+
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={styles.wrapper}>
+        <LinearGradient
+          colors={['#5D1F1F', '#C8835A']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
+          style={[styles.banner, { height: BANNER_HEIGHT }]}
+        >
+          <SafeAreaView edges={['top']} style={styles.bannerSafe} />
+        </LinearGradient>
+
+        <View style={[styles.avatarRow, { marginTop: -(AVATAR_SIZE / 2) }]}>
+          <View style={[styles.avatarRing, { width: AVATAR_SIZE + 4, height: AVATAR_SIZE + 4, borderRadius: (AVATAR_SIZE + 4) / 2 }]}>
+            <SkeletonPulse style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }} />
+          </View>
+        </View>
+
+        <View style={styles.info}>
+          <SkeletonPulse style={{ width: 150, height: 20, borderRadius: 6, marginBottom: 8 }} />
+          <SkeletonPulse style={{ width: 100, height: 14, borderRadius: 6, marginBottom: 14 }} />
+
+          <View style={styles.stats}>
+            <View style={styles.stat}>
+              <SkeletonPulse style={{ width: 28, height: 18, borderRadius: 4, marginBottom: 4 }} />
+              <SkeletonPulse style={{ width: 60, height: 12, borderRadius: 4 }} />
+            </View>
+            <View style={styles.stat}>
+              <SkeletonPulse style={{ width: 28, height: 18, borderRadius: 4, marginBottom: 4 }} />
+              <SkeletonPulse style={{ width: 60, height: 12, borderRadius: 4 }} />
+            </View>
+          </View>
+
+          <View style={styles.buttons}>
+            <SkeletonPulse style={[styles.btn, { borderWidth: 0 }]} />
+            <SkeletonPulse style={[styles.btn, { borderWidth: 0 }]} />
+          </View>
+        </View>
       </View>
     );
   }
@@ -222,9 +260,6 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
   const emailPrefix     = user?.email?.split('@')[0];
   const displayName     = profile?.full_name || profile?.username || emailPrefix || 'User';
   const displayUsername = profile?.username   || emailPrefix || 'user';
-
-  const AVATAR_SIZE = s(90);
-  const BANNER_HEIGHT = s(110);
 
   return (
     <View style={styles.wrapper}>
@@ -432,12 +467,6 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
 
 const makeStyles = (c) => StyleSheet.create({
   wrapper: {
-    backgroundColor: c.surface,
-  },
-  loadingContainer: {
-    height: 300,
-    justifyContent: 'center',
-    alignItems: 'center',
     backgroundColor: c.surface,
   },
 

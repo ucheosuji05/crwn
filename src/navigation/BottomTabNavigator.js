@@ -3,7 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { CardStyleInterpolators } from '@react-navigation/stack';
 import { Ionicons } from '@expo/vector-icons';
-import { Compass, Globe, Scissors, Bell, User } from 'lucide-react-native';
+import { Compass, Globe, Scissors, Bell, User, Calendar, Mail } from 'lucide-react-native';
 import {
   View, Text, StyleSheet, ActivityIndicator,
   TouchableOpacity, Platform, Image, Animated,
@@ -16,10 +16,10 @@ import CommunityScreen from '../screens/CommunityScreen';
 import FilteredCommunityScreen from '../screens/FilteredCommunityScreen';
 import StylistsScreen from '../screens/StylistsScreen';
 import StylistDashboardScreen from '../screens/StylistDashboardScreen';
-import ProviderAnalyticsScreen from '../screens/ProviderAnalyticsScreen';
 import ProviderNotificationsScreen from '../screens/ProviderNotificationsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import StylistProfileScreen from '../screens/StylistProfileScreen';
 import NotificationsList from '../components/NotificationsList';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import { useTheme } from '../context/ThemeContext';
@@ -72,9 +72,19 @@ const NAV_ICONS = {
   Profile: User,
 };
 
+// Lucide icon used for each provider-mode (stylist) tab — same icon set/size/
+// strokeWidth as client mode, swapped to the stylist-appropriate icon per slot
+const PROVIDER_NAV_ICONS = {
+  'Crwn.': Compass,
+  Community: Globe,
+  Stylists: Calendar,
+  Notifications: Mail,
+  Profile: User,
+};
+
 // ── Notification icon with badge ──────────────────────────────────────────────
-// `renderIcon(color, size)` returns the icon element so callers can mix
-// lucide icons (client mode) with Ionicons (provider "Inbox" mail icon).
+// `renderIcon(color, size)` returns the icon element — Bell (client mode) or
+// Mail (provider "Inbox"), both Lucide, swapped in by the caller.
 
 function NotifIcon({ color, size, unreadCount, primaryColor, renderIcon }) {
   return (
@@ -101,14 +111,13 @@ function WebSidebar({
   isProviderMode,
 }) {
   // Nav items change when a stylist switches to provider mode.
-  // Provider-only slots (Analytics/Calendar/Inbox) keep Ionicons since they
-  // have no lucide equivalent in the spec; client-mode slots use lucide icons.
+  // Both modes use the same Lucide icon set (see NAV_ICONS / PROVIDER_NAV_ICONS).
   const NAV_ITEMS = isProviderMode ? [
-    { name: 'Crwn.',         label: 'Explore',        icon: 'compass-outline'     },
-    { name: 'Community',     label: 'Analytics',      icon: 'stats-chart-outline' },
-    { name: 'Stylists',      label: 'Calendar',       icon: 'calendar-outline'    },
-    { name: 'Notifications', label: 'Inbox',          icon: 'mail-outline' },
-    { name: 'Profile',       label: 'Profile',        icon: 'person-outline'      },
+    { name: 'Crwn.',         label: 'Explore'   },
+    { name: 'Community',     label: 'Community' },
+    { name: 'Stylists',      label: 'Calendar'  },
+    { name: 'Notifications', label: 'Inbox'     },
+    { name: 'Profile',       label: 'Profile'   },
   ] : [
     { name: 'Crwn.',         label: 'Explore'   },
     { name: 'Community',     label: 'Community' },
@@ -141,7 +150,7 @@ function WebSidebar({
         const item = NAV_ITEMS.find((n) => n.name === route.name);
         if (!item) return null;
 
-        const LucideIcon = !isProviderMode && NAV_ICONS[route.name];
+        const LucideIcon = (isProviderMode ? PROVIDER_NAV_ICONS : NAV_ICONS)[route.name];
 
         // Badge count: provider uses booking notifs, client uses social notifs
         const badgeCount = isNotif
@@ -183,14 +192,12 @@ function WebSidebar({
                   unreadCount={badgeCount}
                   primaryColor={colors.primary}
                   renderIcon={(c, s) => isProviderMode
-                    ? <Ionicons name="mail-outline" size={s} color={c} />
+                    ? <Mail size={s} color={c} strokeWidth={NAV_ICON_STROKE} />
                     : <Bell size={s} color={c} strokeWidth={NAV_ICON_STROKE} />
                   }
                 />
-              ) : LucideIcon ? (
-                <LucideIcon size={NAV_ICON_SIZE} color={color} strokeWidth={NAV_ICON_STROKE} />
               ) : (
-                <Ionicons name={item.icon} size={NAV_ICON_SIZE} color={color} />
+                <LucideIcon size={NAV_ICON_SIZE} color={color} strokeWidth={NAV_ICON_STROKE} />
               )}
             </View>
             <Text style={[sidebar.label, {
@@ -450,43 +457,24 @@ export default function BottomTabNavigator() {
             borderTopColor: colors.border,
           },
           tabBarIcon: ({ focused, color }) => {
-            // Provider mode overrides icons for slots 2-4 — no lucide
-            // equivalents specified for these, so keep Ionicons.
-            if (isStylist && isProviderMode) {
-              if (route.name === 'Notifications') {
-                return (
-                  <NotifIcon
-                    color={color}
-                    size={NAV_ICON_SIZE}
-                    unreadCount={bookingNotifCount}
-                    primaryColor={colors.primary}
-                    renderIcon={(c, s) => <Ionicons name="mail-outline" size={s} color={c} />}
-                  />
-                );
-              }
-              let iconName;
-              switch (route.name) {
-                case 'Crwn.':     iconName = 'compass-outline';     break;
-                case 'Community': iconName = 'stats-chart-outline'; break;
-                case 'Stylists':  iconName = 'calendar-outline';    break;
-                case 'Profile':   iconName = 'person-outline';      break;
-              }
-              return <Ionicons name={iconName} size={NAV_ICON_SIZE} color={color} />;
-            }
+            // Both modes use the same Lucide icon set/size/strokeWidth —
+            // provider mode just swaps in stylist-appropriate icons per slot.
+            const providerMode = isStylist && isProviderMode;
+            const iconMap = providerMode ? PROVIDER_NAV_ICONS : NAV_ICONS;
 
-            // Default client-mode icons — lucide, per design spec
             if (route.name === 'Notifications') {
+              const NotifLucideIcon = iconMap.Notifications;
               return (
                 <NotifIcon
                   color={color}
                   size={NAV_ICON_SIZE}
-                  unreadCount={unreadNotifCount + bookingNotifCount}
+                  unreadCount={providerMode ? bookingNotifCount : unreadNotifCount + bookingNotifCount}
                   primaryColor={colors.primary}
-                  renderIcon={(c, s) => <Bell size={s} color={c} strokeWidth={NAV_ICON_STROKE} />}
+                  renderIcon={(c, s) => <NotifLucideIcon size={s} color={c} strokeWidth={NAV_ICON_STROKE} />}
                 />
               );
             }
-            const LucideIcon = NAV_ICONS[route.name];
+            const LucideIcon = iconMap[route.name];
             return <LucideIcon size={NAV_ICON_SIZE} color={color} strokeWidth={NAV_ICON_STROKE} />;
           },
           tabBarActiveTintColor: NAV_ACTIVE_COLOR,
@@ -499,9 +487,7 @@ export default function BottomTabNavigator() {
         </Tab.Screen>
 
         <Tab.Screen name="Community" options={{ headerShown: false }}>
-          {(props) => isStylist && isProviderMode
-            ? <ProviderAnalyticsScreen {...props} key={resetKeys.Community} />
-            : <CommunityStackNavigator {...props} key={resetKeys.Community} />}
+          {(props) => <CommunityStackNavigator {...props} key={resetKeys.Community} />}
         </Tab.Screen>
 
         <Tab.Screen name="Stylists" options={{ headerShown: false }}>
@@ -519,7 +505,13 @@ export default function BottomTabNavigator() {
         </Tab.Screen>
 
         <Tab.Screen name="Profile" options={{ headerShown: false }}>
-          {(props) => <ProfileScreen {...props} key={resetKeys.Profile} />}
+          {(props) => isStylist && isProviderMode
+            ? <StylistProfileScreen
+                {...props}
+                route={{ ...props.route, params: { stylist: { id: profile?.id } } }}
+                key={resetKeys.Profile}
+              />
+            : <ProfileScreen {...props} key={resetKeys.Profile} />}
         </Tab.Screen>
       </Tab.Navigator>
 

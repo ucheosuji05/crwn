@@ -24,7 +24,6 @@ import { collectionService } from '../services/collectionService';
 import { WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../config/supabase';
-import PostCard from './PostCard';
 
 const POST_GAP  = 3;
 const COLL_PAD  = 24;
@@ -105,7 +104,6 @@ export default function SavedLooks() {
   const [membershipMap, setMembershipMap] = useState({});
 
   // ── Modal state ─────────────────────────────────────────────────────────────
-  const [selectedPost,        setSelectedPost]        = useState(null);
   const [createGroupVisible,  setCreateGroupVisible]  = useState(false);
   const [newGroupName,        setNewGroupName]        = useState('');
   const [addPostsVisible,     setAddPostsVisible]     = useState(false);
@@ -152,6 +150,13 @@ export default function SavedLooks() {
     return () => { channelRef.current?.unsubscribe(); channelRef.current = null; };
   }, [user?.id]);
 
+  // Re-sync collection membership when returning from the full-screen post viewer
+  // (e.g. after removing a post from a collection there).
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', fetchAll);
+    return unsubscribe;
+  }, [navigation, user?.id]);
+
   // ── Derived ─────────────────────────────────────────────────────────────────
   const displayedPosts = openedCollection === null
     ? allPosts
@@ -163,6 +168,16 @@ export default function SavedLooks() {
       .slice(0, 3)
       .map(p => p.post_media?.[0]?.media_url)
       .filter(Boolean);
+
+  const openPostDetail = (item) => {
+    const initialIndex = displayedPosts.findIndex(p => p.id === item.id);
+    navigation.navigate('CollectionPosts', {
+      posts: displayedPosts,
+      initialIndex: initialIndex >= 0 ? initialIndex : 0,
+      collectionId: openedCollection?.id ?? null,
+      collectionName: openedCollection?.name ?? 'All Saved',
+    });
+  };
 
   // ── Actions ─────────────────────────────────────────────────────────────────
   const handleCreateGroup = async () => {
@@ -239,26 +254,6 @@ export default function SavedLooks() {
     });
     setAddPostsVisible(false);
     setSaving(false);
-  };
-
-  const handleRemoveFromGroup = async (postId) => {
-    if (!openedCollection) return;
-    await collectionService.removePostFromCollection(openedCollection.id, postId);
-    setMembershipMap(prev => {
-      const next = { ...prev };
-      if (next[openedCollection.id]) {
-        next[openedCollection.id] = new Set(
-          [...next[openedCollection.id]].filter(id => id !== postId)
-        );
-      }
-      return next;
-    });
-    setSelectedPost(null);
-  };
-
-  const handleUnbookmark = (postId) => {
-    setAllPosts(prev => prev.filter(p => p.id !== postId));
-    setSelectedPost(null);
   };
 
   // ── Collection card ─────────────────────────────────────────────────────────
@@ -357,7 +352,7 @@ export default function SavedLooks() {
       <TouchableOpacity
         key={item.id}
         style={styles.postTile}
-        onPress={() => selectable ? toggleAddPost(item.id) : setSelectedPost(item)}
+        onPress={() => selectable ? toggleAddPost(item.id) : openPostDetail(item)}
         activeOpacity={0.8}
       >
         {firstImage ? (
@@ -509,33 +504,6 @@ export default function SavedLooks() {
         </SafeAreaView>
       </Modal>
 
-      {/* Post detail */}
-      <Modal visible={!!selectedPost} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedPost(null)}>
-        <SafeAreaView style={styles.modalSafe} edges={['top']}>
-          <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setSelectedPost(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <Ionicons name="close" size={24} color={colors.text} />
-            </TouchableOpacity>
-            {openedCollection && (
-              <TouchableOpacity style={styles.removeFromGroupBtn}
-                onPress={() => selectedPost && handleRemoveFromGroup(selectedPost.id)}>
-                <Text style={styles.removeFromGroupText}>Remove from collection</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {selectedPost && (
-              <PostCard
-                post={selectedPost}
-                currentUserId={user?.id}
-                onBookmarkChange={(postId, isNowBookmarked) => { if (!isNowBookmarked) handleUnbookmark(postId); }}
-                onNavigateToProfile={(uid) => { setSelectedPost(null); navigation.navigate('UserProfile', { viewedUserId: uid }); }}
-                onNavigateToStylist={(uid) => { setSelectedPost(null); navigation.navigate('StylistProfile', { stylist: { id: uid } }); }}
-              />
-            )}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </>
   );
 
@@ -850,16 +818,5 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
     addPostsCancel: { fontSize: 15, color: c.textSecondary, fontFamily: 'Figtree_500Medium' },
     addPostsTitle:  { fontSize: 15, fontFamily: 'Figtree_700Bold', color: c.text },
     addPostsDone:   { fontSize: 15, color: c.primary, fontFamily: 'Figtree_700Bold' },
-    modalSafe: { flex: 1, backgroundColor: c.surface },
-    modalHeader: {
-      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-      paddingHorizontal: 16, paddingVertical: 12,
-      borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.borderLight,
-    },
-    removeFromGroupBtn: {
-      paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14,
-      backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fecaca',
-    },
-    removeFromGroupText: { fontSize: 13, color: '#ef4444', fontFamily: 'Figtree_600SemiBold' },
   });
 };

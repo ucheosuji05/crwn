@@ -39,7 +39,10 @@ function timeAgo(dateString) {
 
 function formatTimestamp(dateString) {
   if (!dateString) return '';
-  return new Date(dateString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const date = new Date(dateString);
+  const datePart = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  const timePart = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `${datePart}, ${timePart}`;
 }
 
 function Avatar({ uri, name, size = 48 }) {
@@ -286,15 +289,20 @@ export default function MessagingScreen() {
             <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
 
-          <Avatar
-            uri={activeConvo.otherUser?.avatar_url}
-            name={activeConvo.otherUser?.full_name || activeConvo.otherUser?.username}
-            size={36}
-          />
-
           <Text style={styles.chatHeaderName} numberOfLines={1}>
             {activeConvo.otherUser?.full_name || activeConvo.otherUser?.username || 'User'}
           </Text>
+
+          <TouchableOpacity
+            onPress={() => navigation.navigate('UserProfile', { viewedUserId: activeConvo.otherUser?.id })}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Avatar
+              uri={activeConvo.otherUser?.avatar_url}
+              name={activeConvo.otherUser?.full_name || activeConvo.otherUser?.username}
+              size={36}
+            />
+          </TouchableOpacity>
         </View>
 
         {/* Messages — flex: 1 + minHeight: 0 + overflow hidden pins list inside viewport on web */}
@@ -672,6 +680,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   chatHeaderName: {
     flex: 1,
+    textAlign: 'center',
     fontSize: 16,
     fontFamily: 'Figtree_700Bold',
     color: c.text,

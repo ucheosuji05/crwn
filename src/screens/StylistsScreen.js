@@ -257,6 +257,8 @@ export default function StylistsScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContent}
           keyboardShouldPersistTaps="handled"
+          directionalLockEnabled
+          alwaysBounceVertical={false}
         >
           {!searchOpen && (
             <TouchableOpacity style={styles.searchIconBtn} onPress={() => setSearchOpen(true)}>

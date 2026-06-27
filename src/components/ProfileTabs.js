@@ -20,6 +20,7 @@ import SavedLooks from './SavedLooks';
 import HairProfile from './HairProfile';
 import PostCard from './PostCard';
 import PostFeedViewerModal from './PostFeedViewerModal';
+import SkeletonPulse from './SkeletonPulse';
 import { usePosts } from '../hooks/usePosts';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
@@ -727,6 +728,19 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
     );
   };
 
+  const SKELETON_POST_HEIGHTS = [200, 240, 170];
+  const renderSkeletonMasonry = () => (
+    <View style={{ flexDirection: 'row', gap: MASONRY_GAP, marginHorizontal: MASONRY_PAD, marginTop: 12 }}>
+      <View style={{ flex: 1, gap: MASONRY_GAP }}>
+        <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[0], borderRadius: MASONRY_RADIUS }} />
+        <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[2], borderRadius: MASONRY_RADIUS }} />
+      </View>
+      <View style={{ flex: 1, gap: MASONRY_GAP }}>
+        <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[1], borderRadius: MASONRY_RADIUS }} />
+      </View>
+    </View>
+  );
+
   const renderContent = () => {
     switch (activeTab) {
       case 'posts': {
@@ -747,7 +761,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
           return (
             <>
               {incompleteBanner}
-              <ActivityIndicator style={{ paddingTop: 60 }} size="large" color={colors.primary} />
+              {renderSkeletonMasonry()}
             </>
           );
         }
@@ -774,7 +788,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
 
       case 'tagged':
         if (taggedLoading) {
-          return <ActivityIndicator style={{ paddingTop: 60 }} size="large" color={colors.primary} />;
+          return renderSkeletonMasonry();
         }
         if (taggedPosts.length === 0) {
           return (

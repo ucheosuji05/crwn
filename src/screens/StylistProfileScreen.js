@@ -21,6 +21,7 @@ import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
 import { useIsWebLayout } from '../utils/webLayout';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
+import SkeletonPulse from '../components/SkeletonPulse';
 
 const HONEY = '#D4930A';
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -975,6 +976,13 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [followLoading, setFollowLoading]     = useState(false);
   const [unfollowSheetVisible, setUnfollowSheetVisible] = useState(false);
   const [requirementsOpen, setRequirementsOpen] = useState(true);
+  const [requirementsList, setRequirementsList] = useState([]);
+  const [editingServiceId, setEditingServiceId] = useState(null);
+  const [serviceDraft, setServiceDraft]       = useState({ name: '', price: '', description: '', duration_min: '' });
+  const [savingService, setSavingService]     = useState(false);
+  const [editingRequirementIndex, setEditingRequirementIndex] = useState(null);
+  const [requirementDraft, setRequirementDraft] = useState('');
+  const [savingRequirement, setSavingRequirement] = useState(false);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -984,6 +992,9 @@ export default function StylistProfileScreen({ route, navigation }) {
   const stylist = fetchedProfile
     ? { ...routeStylist, ...fetchedProfile }
     : routeStylist;
+
+  // True until we have either a full profile passed via route params, or a fetch has resolved
+  const profileLoading = !fetchedProfile && (!routeStylist.name || routeStylist.name === 'Stylist');
 
   const {
     id: stylistId,
@@ -996,12 +1007,13 @@ export default function StylistProfileScreen({ route, navigation }) {
     specialties = [],
     photos = [],
     avatarUrl,
-    requirements: stylistRequirements = [],
   } = stylist;
 
   const displayLocation = (city || state)
     ? `${city || ''}${city && state ? ', ' : ''}${state || ''}`
     : location;
+
+  const isOwnProfile = user?.id === stylistId;
 
   // Fetch reviews + check for unreviewed bookings when Reviews tab is active
   useEffect(() => {
@@ -1096,6 +1108,36 @@ export default function StylistProfileScreen({ route, navigation }) {
       setServicesLoading(false);
     });
   }, [stylistId]);
+
+  // Fetch requirements directly — normalizeStylist() doesn't carry this field through
+  useEffect(() => {
+    if (!stylistId) return;
+    supabase
+      .from('profiles')
+      .select('requirements')
+      .eq('id', stylistId)
+      .single()
+      .then(({ data }) => {
+        setRequirementsList(Array.isArray(data?.requirements) ? data.requirements : []);
+      });
+  }, [stylistId]);
+
+  // Re-fetch services + requirements when returning from the Add Service/Requirement screens
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (!stylistId) return;
+      bookingService.getServices(stylistId).then(({ data }) => setServices(data || []));
+      supabase
+        .from('profiles')
+        .select('requirements')
+        .eq('id', stylistId)
+        .single()
+        .then(({ data }) => {
+          setRequirementsList(Array.isArray(data?.requirements) ? data.requirements : []);
+        });
+    });
+    return unsubscribe;
+  }, [navigation, stylistId]);
 
   // Fetch stylist's actual posts for the Posts tab
   useEffect(() => {
@@ -1230,8 +1272,58 @@ export default function StylistProfileScreen({ route, navigation }) {
     );
   };
 
+  // ── Skeleton placeholders (shown while data is loading) ─────────────────────
+  const SKELETON_POST_HEIGHTS = [180, 220, 150];
+  const renderSkeletonMasonry = () => (
+    <View style={styles.masonryOuter}>
+      <View style={{ flexDirection: 'row', gap: MASONRY_GAP }}>
+        <View style={{ flex: 1, gap: MASONRY_GAP }}>
+          <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[0], borderRadius: 12 }} />
+          <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[2], borderRadius: 12 }} />
+        </View>
+        <View style={{ flex: 1, gap: MASONRY_GAP }}>
+          <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[1], borderRadius: 12 }} />
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderSkeletonServices = () => (
+    <View style={styles.servicesList}>
+      {[0, 1].map((i) => (
+        <View key={i} style={[styles.serviceCard, { borderColor: '#E8E0D8', backgroundColor: colors.surface }]}>
+          <View style={styles.serviceCardTopRow}>
+            <SkeletonPulse style={{ width: '55%', height: 16, borderRadius: 4 }} />
+            <SkeletonPulse style={{ width: 50, height: 16, borderRadius: 4 }} />
+          </View>
+          <SkeletonPulse style={{ width: '80%', height: 13, borderRadius: 4, marginBottom: 8 }} />
+          <SkeletonPulse style={{ width: 60, height: 12, borderRadius: 4, marginBottom: 12 }} />
+          <SkeletonPulse style={{ height: 44, borderRadius: 10 }} />
+        </View>
+      ))}
+    </View>
+  );
+
+  const renderSkeletonReviews = () => (
+    <View style={styles.reviewsList}>
+      {[0, 1].map((i) => (
+        <View key={i} style={[styles.reviewCard, { backgroundColor: colors.surface }]}>
+          <View style={styles.reviewHeader}>
+            <SkeletonPulse style={{ width: 40, height: 40, borderRadius: 20 }} />
+            <View style={{ flex: 1, gap: 6 }}>
+              <SkeletonPulse style={{ width: '40%', height: 13, borderRadius: 4 }} />
+              <SkeletonPulse style={{ width: '25%', height: 11, borderRadius: 4 }} />
+            </View>
+          </View>
+          <SkeletonPulse style={{ width: '100%', height: 13, borderRadius: 4 }} />
+          <SkeletonPulse style={{ width: '70%', height: 13, borderRadius: 4 }} />
+        </View>
+      ))}
+    </View>
+  );
+
   const renderPosts = () => {
-    if (postsLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
+    if (postsLoading) return renderSkeletonMasonry();
     if (stylistPosts.length === 0) return (
       <View style={styles.emptyState}>
         <Text style={styles.emptyTitle}>No posts yet</Text>
@@ -1241,79 +1333,251 @@ export default function StylistProfileScreen({ route, navigation }) {
     return renderMasonryGrid(stylistPosts);
   };
 
+  // ── Inline edit: Services ──────────────────────────────────────────────────
+  const startEditService = (svc) => {
+    setEditingServiceId(svc.id);
+    setServiceDraft({
+      name: svc.name || '',
+      price: svc.price != null ? String(svc.price) : '',
+      description: svc.description || '',
+      duration_min: svc.duration_min != null ? String(svc.duration_min) : '',
+    });
+  };
+
+  const cancelEditService = () => setEditingServiceId(null);
+
+  const saveEditService = async () => {
+    if (!editingServiceId || savingService) return;
+    setSavingService(true);
+    const { data, error } = await bookingService.updateService(editingServiceId, {
+      name: serviceDraft.name.trim(),
+      price: parseFloat(serviceDraft.price) || 0,
+      description: serviceDraft.description.trim() || null,
+      duration_min: serviceDraft.duration_min ? parseInt(serviceDraft.duration_min, 10) : null,
+    });
+    setSavingService(false);
+    if (!error && data) {
+      setServices(prev => prev.map(s => (s.id === editingServiceId ? data : s)));
+      setEditingServiceId(null);
+    }
+  };
+
+  // ── Inline edit: Requirements ───────────────────────────────────────────────
+  const startEditRequirement = (index, text) => {
+    setEditingRequirementIndex(index);
+    setRequirementDraft(text);
+  };
+
+  const cancelEditRequirement = () => setEditingRequirementIndex(null);
+
+  const saveEditRequirement = async () => {
+    if (editingRequirementIndex == null || savingRequirement) return;
+    const trimmed = requirementDraft.trim();
+    if (!trimmed) return;
+    setSavingRequirement(true);
+    const next = requirementsList.map((r, i) => (i === editingRequirementIndex ? trimmed : r));
+    const { error } = await profileService.updateProfile(stylistId, { requirements: next });
+    setSavingRequirement(false);
+    if (!error) {
+      setRequirementsList(next);
+      setEditingRequirementIndex(null);
+    }
+  };
+
   const renderServices = () => {
-    if (servicesLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
-    if (services.length === 0) return (
+    if (servicesLoading) return renderSkeletonServices();
+    if (services.length === 0 && !isOwnProfile) return (
       <View style={styles.emptyState}>
         <Text style={styles.emptyTitle}>No services yet</Text>
         <Text style={styles.emptyText}>This stylist hasn't added services yet</Text>
       </View>
     );
 
-    const serviceRequirements = Array.isArray(stylistRequirements) ? stylistRequirements : [];
-
     return (
       <View style={styles.servicesList}>
-        <TouchableOpacity
-          style={styles.requirementsRow}
-          activeOpacity={0.7}
-          onPress={() => setRequirementsOpen(prev => !prev)}
-        >
-          <Text style={styles.sectionLabelText}>REQUIREMENTS</Text>
-          <Ionicons name={requirementsOpen ? 'chevron-down' : 'chevron-forward'} size={16} color="#9CA3AF" />
-        </TouchableOpacity>
+        <View style={styles.requirementsRow}>
+          <TouchableOpacity
+            style={styles.requirementsRowToggle}
+            activeOpacity={0.7}
+            onPress={() => setRequirementsOpen(prev => !prev)}
+          >
+            <Text style={styles.sectionLabelText}>REQUIREMENTS</Text>
+            <Ionicons name={requirementsOpen ? 'chevron-down' : 'chevron-forward'} size={16} color="#9CA3AF" style={{ marginLeft: 6 }} />
+          </TouchableOpacity>
+          {isOwnProfile && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('AddRequirement', { stylistId, existingRequirements: requirementsList })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {requirementsOpen && (
           <View style={[styles.requirementsExpandedCard, { borderColor: '#E8E0D8', backgroundColor: colors.surface }]}>
             <View style={styles.requirementsExpandedHeader}>
               <Text style={[styles.requirementsExpandedTitle, { color: colors.text }]}>Before Your Appointment</Text>
               <View style={styles.requirementsCountPill}>
-                <Text style={styles.requirementsCountPillText}>{serviceRequirements.length}</Text>
+                <Text style={styles.requirementsCountPillText}>{requirementsList.length}</Text>
               </View>
             </View>
             <View style={styles.requirementsBody}>
-              {serviceRequirements.length > 0 ? serviceRequirements.map((item, i) => (
-                <View key={`req-${i}`} style={styles.requirementRow}>
-                  <View style={[styles.requirementBullet, { backgroundColor: colors.primary }]} />
-                  <Text style={[styles.requirementText, { color: colors.text }]}>{item}</Text>
-                </View>
-              )) : (
+              {requirementsList.length > 0 ? requirementsList.map((item, i) => {
+                const isEditingReq = editingRequirementIndex === i;
+                return (
+                  <TouchableOpacity
+                    key={`req-${i}`}
+                    style={styles.requirementRow}
+                    activeOpacity={isOwnProfile && !isEditingReq ? 0.7 : 1}
+                    disabled={!isOwnProfile || isEditingReq}
+                    onPress={() => startEditRequirement(i, item)}
+                  >
+                    <View style={[styles.requirementBullet, { backgroundColor: colors.primary }]} />
+                    {isEditingReq ? (
+                      <View style={{ flex: 1 }}>
+                        <TextInput
+                          style={[styles.requirementEditInput, { color: colors.text, borderColor: colors.border }]}
+                          value={requirementDraft}
+                          onChangeText={setRequirementDraft}
+                          multiline
+                          autoFocus
+                        />
+                        <View style={styles.requirementEditActions}>
+                          <TouchableOpacity onPress={cancelEditRequirement} disabled={savingRequirement} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Ionicons name="close" size={18} color={colors.textSecondary} />
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={saveEditRequirement} disabled={savingRequirement} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            {savingRequirement
+                              ? <ActivityIndicator size="small" color={colors.primary} />
+                              : <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ) : (
+                      <Text style={[styles.requirementText, { color: colors.text }]}>{item}</Text>
+                    )}
+                  </TouchableOpacity>
+                );
+              }) : (
                 <Text style={[styles.requirementText, { color: colors.textSecondary }]}>No requirements listed yet.</Text>
               )}
             </View>
           </View>
         )}
 
-        <Text style={[styles.sectionLabelText, styles.servicesLabel]}>SERVICES</Text>
-
-        {services.map(svc => (
-          <View key={svc.id} style={[styles.serviceCard, { borderColor: '#E8E0D8', backgroundColor: colors.surface }]}>
-            <View style={styles.serviceCardTopRow}>
-              <Text style={[styles.serviceCardName, { color: colors.text }]} numberOfLines={1}>{svc.name}</Text>
-              <Text style={[styles.serviceCardPrice, { color: colors.text }]}>{`$${svc.price?.toFixed(2)}`}</Text>
-            </View>
-            {svc.description ? <Text style={[styles.serviceCardDesc, { color: colors.textSecondary }]}>{svc.description}</Text> : null}
-            {svc.duration_min ? (
-              <Text style={[styles.serviceCardMetaText, { color: colors.textSecondary }]}>{svc.duration_min} min</Text>
-            ) : null}
-            <TouchableOpacity style={styles.serviceBookNowBtn} onPress={() => openBooking(svc)} activeOpacity={0.85}>
-              <LinearGradient
-                colors={['#5D1F1F', '#7D3F1D', '#B35D2B']}
-                locations={[0, 0.34, 1]}
-                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                style={StyleSheet.absoluteFill}
-              />
-              <Text style={styles.serviceBookNowText}>Book Now</Text>
+        <View style={styles.servicesHeaderRow}>
+          <Text style={[styles.sectionLabelText, styles.servicesLabel]}>SERVICES</Text>
+          {isOwnProfile && (
+            <TouchableOpacity
+              onPress={() => navigation.navigate('AddService', { stylistId })}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
             </TouchableOpacity>
-          </View>
-        ))}
+          )}
+        </View>
+
+        {services.length === 0 && isOwnProfile && (
+          <Text style={[styles.requirementText, { color: colors.textSecondary, marginBottom: 12 }]}>
+            No services yet — tap + to add one.
+          </Text>
+        )}
+
+        {services.map(svc => {
+          const isEditing = editingServiceId === svc.id;
+          return (
+            <TouchableOpacity
+              key={svc.id}
+              style={[styles.serviceCard, { borderColor: '#E8E0D8', backgroundColor: colors.surface }]}
+              activeOpacity={isOwnProfile && !isEditing ? 0.85 : 1}
+              disabled={!isOwnProfile || isEditing}
+              onPress={() => startEditService(svc)}
+            >
+              {isEditing ? (
+                <>
+                  <TextInput
+                    style={[styles.serviceEditInput, { color: colors.text, borderColor: colors.border }]}
+                    value={serviceDraft.name}
+                    onChangeText={t => setServiceDraft(d => ({ ...d, name: t }))}
+                    placeholder="Service name"
+                    placeholderTextColor={colors.placeholder}
+                  />
+                  <View style={styles.serviceEditRow}>
+                    <View style={[styles.servicePriceEditWrap, { borderColor: colors.border }]}>
+                      <Text style={{ color: colors.textSecondary, marginRight: 4, fontFamily: 'Figtree_500Medium' }}>$</Text>
+                      <TextInput
+                        style={[styles.servicePriceEditInput, { color: colors.text }]}
+                        value={serviceDraft.price}
+                        onChangeText={t => setServiceDraft(d => ({ ...d, price: t.replace(/[^0-9.]/g, '') }))}
+                        placeholder="0"
+                        placeholderTextColor={colors.placeholder}
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <TextInput
+                      style={[styles.serviceDurationEditInput, { color: colors.text, borderColor: colors.border }]}
+                      value={serviceDraft.duration_min}
+                      onChangeText={t => setServiceDraft(d => ({ ...d, duration_min: t.replace(/[^0-9]/g, '') }))}
+                      placeholder="min"
+                      placeholderTextColor={colors.placeholder}
+                      keyboardType="numeric"
+                    />
+                  </View>
+                  <TextInput
+                    style={[styles.serviceEditInput, styles.serviceEditDescInput, { color: colors.text, borderColor: colors.border }]}
+                    value={serviceDraft.description}
+                    onChangeText={t => setServiceDraft(d => ({ ...d, description: t }))}
+                    placeholder="Description (optional)"
+                    placeholderTextColor={colors.placeholder}
+                    multiline
+                  />
+                  <View style={styles.serviceEditActions}>
+                    <TouchableOpacity style={styles.serviceCancelBtn} onPress={cancelEditService} disabled={savingService}>
+                      <Text style={[styles.serviceCancelBtnText, { color: colors.textSecondary }]}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.serviceSaveBtn, { backgroundColor: colors.primary }]} onPress={saveEditService} disabled={savingService}>
+                      {savingService ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.serviceSaveBtnText}>Save</Text>}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={styles.serviceCardTopRow}>
+                    <Text style={[styles.serviceCardName, { color: colors.text }]} numberOfLines={1}>{svc.name}</Text>
+                    <Text style={[styles.serviceCardPrice, { color: colors.text }]}>{`$${svc.price?.toFixed(2)}`}</Text>
+                  </View>
+                  {svc.description ? <Text style={[styles.serviceCardDesc, { color: colors.textSecondary }]}>{svc.description}</Text> : null}
+                  {svc.duration_min ? (
+                    <Text style={[styles.serviceCardMetaText, { color: colors.textSecondary }]}>{svc.duration_min} min</Text>
+                  ) : null}
+                  {isOwnProfile ? (
+                    <View style={styles.serviceOwnerHintRow}>
+                      <Ionicons name="create-outline" size={13} color={colors.textSecondary} />
+                      <Text style={[styles.serviceOwnerHintText, { color: colors.textSecondary }]}>Tap to edit</Text>
+                    </View>
+                  ) : (
+                    <TouchableOpacity style={styles.serviceBookNowBtn} onPress={() => openBooking(svc)} activeOpacity={0.85}>
+                      <LinearGradient
+                        colors={['#5D1F1F', '#7D3F1D', '#B35D2B']}
+                        locations={[0, 0.34, 1]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                        style={StyleSheet.absoluteFill}
+                      />
+                      <Text style={styles.serviceBookNowText}>Book Now</Text>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </TouchableOpacity>
+          );
+        })}
       </View>
     );
   };
 
   const renderReviews = () => {
-    if (reviewsLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
-    const isOwnProfile = user?.id === stylistId;
+    if (reviewsLoading) return renderSkeletonReviews();
     return (
       <View style={styles.reviewsList}>
         {/* Prompt the current user to leave reviews for completed unreviewed bookings */}
@@ -1359,7 +1623,7 @@ export default function StylistProfileScreen({ route, navigation }) {
       case 'Services': return renderServices();
       case 'Reviews':  return renderReviews();
             case 'Tagged': {
-        if (taggedLoading) return <ActivityIndicator color={colors.primary} style={{ paddingTop: 48 }} />;
+        if (taggedLoading) return renderSkeletonMasonry();
         if (taggedPosts.length === 0) return (
           <View style={styles.taggedEmptyState}>
             <Text style={styles.taggedEmptyText}>No tagged posts yet</Text>
@@ -1376,94 +1640,129 @@ export default function StylistProfileScreen({ route, navigation }) {
     <>
       <View style={{ height: BANNER_HEIGHT }}>
         <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-        <TouchableOpacity style={styles.instagramBadge} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => {/* open insta */}} activeOpacity={0.75}>
-          <Ionicons name="logo-instagram" size={20} color="#fff" />
-        </TouchableOpacity>
+        {isOwnProfile && (
+          <TouchableOpacity
+            style={styles.settingsBadge}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => navigation.navigate('StylistSettings')}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="settings-outline" size={20} color="#fff" />
+          </TouchableOpacity>
+        )}
       </View>
 
-        <View style={[styles.avatarRow, { marginTop: -(AVATAR_SIZE / 2) }]}>
+        <View style={[styles.avatarRow, { marginTop: -(AVATAR_SIZE / 2) }]} pointerEvents="box-none">
           <View style={[styles.avatarRing, { width: AVATAR_SIZE + 4, height: AVATAR_SIZE + 4, borderRadius: (AVATAR_SIZE + 4) / 2, backgroundColor: colors.surface, borderWidth: 2, borderColor: '#fff' }]}>
-            {avatarUri
-              ? <Image source={{ uri: avatarUri }} style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }} />
-              : <View style={[styles.avatarPlaceholder, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }]}><Ionicons name="person" size={44} color="#9ca3af" /></View>}
+            {profileLoading
+              ? <SkeletonPulse style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }} />
+              : avatarUri
+                ? <Image source={{ uri: avatarUri }} style={{ width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }} />
+                : <View style={[styles.avatarPlaceholder, { width: AVATAR_SIZE, height: AVATAR_SIZE, borderRadius: AVATAR_SIZE / 2 }]}><Ionicons name="person" size={44} color="#9ca3af" /></View>}
           </View>
         </View>
 
         <View style={styles.info}>
-          <View style={styles.nameRow}>
-            <View style={styles.nameBadge}>
-              <Scissors size={16} color={colors.primary} strokeWidth={2.5} />
-              <Text style={styles.name}>{name}</Text>
-            </View>
-            {following && (
-              <TouchableOpacity style={styles.unfollowBtn} onPress={() => setUnfollowSheetVisible(true)} activeOpacity={0.75}>
-                <Ionicons name="chevron-down" size={16} color={colors.primary} />
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Location row */}
-          {!!displayLocation && (
-            <View style={styles.metaRow}>
-              <Ionicons name="location-outline" size={14} color="#5E5E5E" />
-              <Text style={styles.metaText}>{displayLocation}</Text>
-            </View>
-          )}
-
-          {/* Specialty chips — all of them */}
-          {specialties.length > 0 && (
-            <View style={styles.specialtyChipsRow}>
-              {specialties.map((s, i) => (
-                <View key={i} style={styles.specialtyTag}>
-                  <Text style={styles.specialtyTagText}>{s}</Text>
+          {profileLoading ? (
+            <>
+              <SkeletonPulse style={{ width: 140, height: 20, borderRadius: 6, marginBottom: 10 }} />
+              <SkeletonPulse style={{ width: 100, height: 13, borderRadius: 6, marginBottom: 14 }} />
+              <View style={styles.specialtyChipsRow}>
+                <SkeletonPulse style={{ width: 70, height: 24, borderRadius: 999 }} />
+                <SkeletonPulse style={{ width: 90, height: 24, borderRadius: 999 }} />
+              </View>
+              <View style={styles.stats}>
+                <View style={styles.stat}>
+                  <SkeletonPulse style={{ width: 28, height: 18, borderRadius: 4, marginBottom: 4 }} />
+                  <SkeletonPulse style={{ width: 54, height: 11, borderRadius: 4 }} />
                 </View>
-              ))}
-            </View>
+                <View style={styles.statDivider} />
+                <View style={styles.stat}>
+                  <SkeletonPulse style={{ width: 28, height: 18, borderRadius: 4, marginBottom: 4 }} />
+                  <SkeletonPulse style={{ width: 54, height: 11, borderRadius: 4 }} />
+                </View>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={styles.nameRow}>
+                <View style={styles.nameBadge}>
+                  <Scissors size={16} color={colors.primary} strokeWidth={2.5} />
+                  <Text style={styles.name}>{name}</Text>
+                </View>
+                {following && (
+                  <TouchableOpacity style={styles.unfollowBtn} onPress={() => setUnfollowSheetVisible(true)} activeOpacity={0.75}>
+                    <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Location row */}
+              {!!displayLocation && (
+                <View style={styles.metaRow}>
+                  <Ionicons name="location-outline" size={14} color="#5E5E5E" />
+                  <Text style={styles.metaText}>{displayLocation}</Text>
+                </View>
+              )}
+
+              {/* Specialty chips — all of them */}
+              {specialties.length > 0 && (
+                <View style={styles.specialtyChipsRow}>
+                  {specialties.map((s, i) => (
+                    <View key={i} style={styles.specialtyTag}>
+                      <Text style={styles.specialtyTagText}>{s}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <View style={styles.stats}>
+                <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => {/* view followers */}}>
+                  <Text style={styles.statNumber}>{followersCount}</Text>
+                  <Text style={styles.statLabel}>Followers</Text>
+                </TouchableOpacity>
+                <View style={styles.statDivider} />
+                <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => setActiveTab('Reviews')}>
+                  <Text style={styles.statNumber}>{reviewCount ?? 0}</Text>
+                  <Text style={styles.statLabel}>Reviews</Text>
+                </TouchableOpacity>
+              </View>
+
+              {!isOwnProfile && (
+                <View style={styles.buttons}>
+                  {!following ? (
+                    <>
+                      <TouchableOpacity
+                        style={styles.followFullBtn}
+                        onPress={handleFollow}
+                        activeOpacity={0.8}
+                        disabled={followLoading}
+                      >
+                        <LinearGradient colors={['#B35D2B', '#7D3F1D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
+                        <Text style={styles.followFullBtnText}>Follow</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
+                        <Text style={styles.bookBtnText}>Book</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                        <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
+                          <Text style={styles.bookBtnText}>Book</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.messageActionBtn}
+                          onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
+                          activeOpacity={0.85}
+                        >
+                          <Text style={styles.messageActionText}>Message</Text>
+                        </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              )}
+            </>
           )}
-
-          <View style={styles.stats}>
-            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => {/* view followers */}}>
-              <Text style={styles.statNumber}>{followersCount}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </TouchableOpacity>
-            <View style={styles.statDivider} />
-            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={() => setActiveTab('Reviews')}>
-              <Text style={styles.statNumber}>{reviewCount ?? 0}</Text>
-              <Text style={styles.statLabel}>Reviews</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.buttons}>
-            {!following ? (
-              <>
-                <TouchableOpacity
-                  style={styles.followFullBtn}
-                  onPress={handleFollow}
-                  activeOpacity={0.8}
-                  disabled={followLoading}
-                >
-                  <LinearGradient colors={['#B35D2B', '#7D3F1D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
-                  <Text style={styles.followFullBtnText}>Follow</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
-                  <Text style={styles.bookBtnText}>Book</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                  <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
-                    <Text style={styles.bookBtnText}>Book</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.messageActionBtn}
-                    onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
-                    activeOpacity={0.85}
-                  >
-                    <Text style={styles.messageActionText}>Message</Text>
-                  </TouchableOpacity>
-              </>
-            )}
-          </View>
         </View>
 
         <View style={styles.tabs}>
@@ -1667,12 +1966,12 @@ const makeStyles = (c) => StyleSheet.create({
   specialtyTag: {
     paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: 'rgba(93,31,31,0.08)',
+    backgroundColor: 'rgba(179, 93, 43, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(93,31,31,0.18)',
+    borderColor: 'rgba(179, 93, 43, 0.18)',
   },
   specialtyTagText: {
-    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#5D1F1F',
+    fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: '#B35D2B',
   },
   stats: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 20, marginBottom: 24 },
   stat: { alignItems: 'center', paddingHorizontal: 4 },
@@ -1765,6 +2064,7 @@ const makeStyles = (c) => StyleSheet.create({
   sectionLabelText: { fontSize: 11, fontFamily: 'Figtree_700Bold', letterSpacing: 1, textTransform: 'uppercase', color: '#9CA3AF' },
   servicesLabel: { marginTop: 8, marginBottom: 12 },
   requirementsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
+  requirementsRowToggle: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   requirementsExpandedCard: { borderWidth: 1, borderRadius: 14, padding: 16, marginBottom: 8 },
   requirementsExpandedHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
   requirementsExpandedTitle: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', flex: 1, marginRight: 10 },
@@ -1774,6 +2074,9 @@ const makeStyles = (c) => StyleSheet.create({
   requirementRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   requirementBullet: { width: 6, height: 6, borderRadius: 3, marginTop: 7 },
   requirementText: { fontSize: 13, lineHeight: 20, flex: 1 },
+  requirementEditInput: { fontSize: 13, lineHeight: 20, borderWidth: 1, borderRadius: 8, padding: 8, minHeight: 36 },
+  requirementEditActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 6 },
+  servicesHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, marginBottom: 12 },
   serviceCard: { borderRadius: 12, borderWidth: 1, marginBottom: 12, padding: 16 },
   serviceCardTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 6 },
   serviceCardName: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', flex: 1 },
@@ -1782,8 +2085,21 @@ const makeStyles = (c) => StyleSheet.create({
   serviceCardPrice: { fontSize: 16, fontFamily: 'Figtree_700Bold' },
   serviceBookNowBtn: { height: 44, borderRadius: 10, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   serviceBookNowText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#ffffff' },
+  serviceOwnerHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingTop: 4 },
+  serviceOwnerHintText: { fontSize: 12, fontFamily: 'Figtree_500Medium' },
+  serviceEditInput: { fontSize: 14, fontFamily: 'Figtree_400Regular', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10 },
+  serviceEditDescInput: { minHeight: 60, textAlignVertical: 'top' },
+  serviceEditRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  servicePriceEditWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  servicePriceEditInput: { flex: 1, fontSize: 14, fontFamily: 'Figtree_400Regular', padding: 0 },
+  serviceDurationEditInput: { width: 80, fontSize: 14, fontFamily: 'Figtree_400Regular', borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8 },
+  serviceEditActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 },
+  serviceCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
+  serviceCancelBtnText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
+  serviceSaveBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 },
+  serviceSaveBtnText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
   backBtn: { position: 'absolute', left: 14, padding: 6, zIndex: 100 },
-  instagramBadge: {
+  settingsBadge: {
     position: 'absolute', top: 64, right: 16,
     backgroundColor: 'rgba(255,255,255,0.2)',
     borderRadius: 10, padding: 6,

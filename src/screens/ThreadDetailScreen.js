@@ -547,7 +547,7 @@ const makeStyles = (c) => StyleSheet.create({
     justifyContent: 'space-between', marginBottom: 10,
   },
   postAuthorRow: { flexDirection: 'row', alignItems: 'center' },
-  postAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.accent },
+  postAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.communityTag },
   categoryTag: { alignSelf: 'flex-start', backgroundColor: c.borderLight, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   categoryTagText: { fontSize: 12, color: c.textSecondary, fontFamily: 'Figtree_600SemiBold' },
   postTitle: { fontSize: 19, fontFamily: 'Figtree_700Bold', color: c.text, lineHeight: 26, marginBottom: 10 },
@@ -584,7 +584,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   replyHeaderRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   replyAuthorRow: { flexDirection: 'row', alignItems: 'center' },
-  replyAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.accent },
+  replyAuthor: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: c.communityTag },
   replyTime: { fontSize: 12, color: c.textMuted },
   deleteBtn: { padding: 2 },
   replyBody: { fontSize: 14, color: c.text, lineHeight: 20, marginTop: 4, marginBottom: 10 },
@@ -598,7 +598,7 @@ const makeStyles = (c) => StyleSheet.create({
   nestedBlock: {
     paddingLeft: 20,
     borderLeftWidth: 2,
-    borderLeftColor: c.border,
+    borderLeftColor: c.threadLine,
     marginTop: 6,
   },
 
