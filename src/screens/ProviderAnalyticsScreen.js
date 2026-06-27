@@ -10,7 +10,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
-import { useUnreadCount } from '../context/UnreadCountContext';
 import { useTheme } from '../context/ThemeContext';
 import { analyticsService } from '../services/analyticsService';
 import { bookingService } from '../services/bookingService';
@@ -96,7 +95,6 @@ const bc = StyleSheet.create({
 
 export default function ProviderAnalyticsScreen() {
   const { user }               = useAuth();
-  const { msgCount }           = useUnreadCount();
   const navigation             = useNavigation();
   const { colors }             = useTheme();
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -654,24 +652,13 @@ export default function ProviderAnalyticsScreen() {
   // ── Main render ────────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
-      {/* Header — crwn. brand logo + messages button */}
+      {/* Header — back button + title, consistent with the other Settings sub-pages */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.borderLight }]}>
-        {/* Spacer to balance the right button */}
-        <View style={{ width: 36 }} />
-        <Text style={[styles.headerLogo, { color: colors.text }]}>crwn.</Text>
-        {/* Messages button — top-right for providers */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate('Messaging')}
-          style={styles.headerMsgBtn}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="mail-outline" size={22} color={colors.text} />
-          {msgCount > 0 && (
-            <View style={[styles.headerMsgBadge, { backgroundColor: '#C8835A' }]}>
-              <Text style={styles.headerMsgBadgeText}>{msgCount > 9 ? '9+' : msgCount}</Text>
-            </View>
-          )}
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
+        <Text style={[styles.headerLogo, { color: colors.text }]}>Analytics</Text>
+        <View style={{ width: 40 }} />
       </View>
 
       {loading ? (
@@ -724,30 +711,17 @@ const makeStyles = (c) => StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerLogo: {
-    fontSize: 24,
-    fontFamily: 'LibreBaskerville_700Bold',
+    fontSize: 18,
+    fontFamily: 'Figtree_600SemiBold',
     textAlign: 'center',
     flex: 1,
   },
-  headerMsgBtn: {
-    position: 'relative',
-    width: 36,
-    height: 36,
+  headerBackBtn: {
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerMsgBadge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
-  },
-  headerMsgBadgeText: { fontSize: 9, fontFamily: 'Figtree_700Bold', color: '#fff' },
 
   // Section header row: label + filter chip side by side
   sectionHeaderRow: {

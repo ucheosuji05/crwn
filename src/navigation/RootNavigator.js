@@ -7,7 +7,12 @@ import ProfileScreen from '../screens/ProfileScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import MessagingScreen from '../screens/MessagingScreen';
 import StylistProfileScreen from '../screens/StylistProfileScreen';
+import StylistSettingsScreen from '../screens/StylistSettingsScreen';
+import ProviderAnalyticsScreen from '../screens/ProviderAnalyticsScreen';
+import AddServiceScreen from '../screens/AddServiceScreen';
+import AddRequirementScreen from '../screens/AddRequirementScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
+import CollectionPostsScreen from '../screens/CollectionPostsScreen';
 import FinishHairProfileScreen from '../screens/FinishHairProfileScreen';
 
 const Stack = createStackNavigator();
@@ -54,6 +59,51 @@ export default function RootNavigator() {
       <Stack.Screen
         name="PostDetail"
         component={PostDetailScreen}
+        options={{
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="CollectionPosts"
+        component={CollectionPostsScreen}
+        options={{
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="StylistSettings"
+        component={StylistSettingsScreen}
+        options={{
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="ProviderAnalytics"
+        component={ProviderAnalyticsScreen}
+        options={{
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="AddService"
+        component={AddServiceScreen}
+        options={{
+          gestureEnabled: !isWeb,
+          gestureDirection: 'horizontal',
+          cardStyleInterpolator: CardStyleInterpolators.forHorizontalIOS,
+        }}
+      />
+      <Stack.Screen
+        name="AddRequirement"
+        component={AddRequirementScreen}
         options={{
           gestureEnabled: !isWeb,
           gestureDirection: 'horizontal',

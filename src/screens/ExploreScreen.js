@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SearchBar from '../components/SearchBar';
 import CreatePostMenu from '../components/CreatePostMenu';
 import PostCard from '../components/PostCard';
+import SkeletonPulse from '../components/SkeletonPulse';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
 import { usePosts } from '../hooks/usePosts';
 import { useAuth } from '../hooks/useAuth';
@@ -208,25 +209,6 @@ const topicStyles = StyleSheet.create({
   },
 });
 
-// Pulsing placeholder block — same look as the onboarding "styles loading" skeleton
-export function SkeletonPulse({ style }) {
-  const { colors } = useTheme();
-  const pulse = useRef(new Animated.Value(0.4)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.8, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0.4, duration: 600, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
-  return <Animated.View style={[style, { backgroundColor: colors.border, opacity: pulse }]} />;
-}
-
 // Full-grid skeleton shown while the very first page of posts is loading
 const SKELETON_HEIGHTS = [220, 180, 200, 240, 190, 210, 230, 170];
 
@@ -288,26 +270,6 @@ export default function ExploreScreen() {
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
-  const [userHairType, setUserHairType] = useState(null);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    supabase
-      .from('hair_profiles')
-      .select('hair_type')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => setUserHairType(data?.hair_type ?? null));
-  }, [user?.id]);
-
-  const exploreFilters = useMemo(
-    () => userHairType ? ['All', userHairType] : ['All', '4C', '4B', '4A', '3C', '3B', '3A'],
-    [userHairType],
-  );
-
-  useEffect(() => {
-    if (!exploreFilters.includes(activeFilter)) setActiveFilter('All');
-  }, [exploreFilters]);
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   // Web popup card
   const [selectedPost, setSelectedPost] = useState(null);
@@ -372,10 +334,9 @@ export default function ExploreScreen() {
       });
     }
     if (activeFilter !== 'All') {
-      list = list.filter((p) => {
-        const authorHairType = p.profiles?.hair_profiles?.[0]?.hair_type;
-        return authorHairType && authorHairType.toLowerCase() === activeFilter.toLowerCase();
-      });
+      list = list.filter((p) =>
+        Array.isArray(p.tags) && p.tags.some(t => t.toLowerCase() === activeFilter.toLowerCase())
+      );
     }
     return list;
   }, [uniquePosts, isSearching, query, activeFilter]);
@@ -425,6 +386,13 @@ export default function ExploreScreen() {
       .map(([tag]) => tag);
     return sorted.length >= 2 ? sorted : TOPIC_TAGS;
   }, [uniquePosts]);
+
+  // Filter pills: "All" plus the real hashtags users have applied to Explore posts
+  const exploreFilters = useMemo(() => ['All', ...popularTags], [popularTags]);
+
+  useEffect(() => {
+    if (!exploreFilters.includes(activeFilter)) setActiveFilter('All');
+  }, [exploreFilters]);
 
   // Topic filler cards are only seeded into the main feed, not search results
   const feedItems = useMemo(
@@ -577,13 +545,17 @@ export default function ExploreScreen() {
       {/* ── Header ── */}
       <SafeAreaView edges={['top']} style={styles.safeHeader}>
         <View style={styles.header}>
-          <Pressable
-            style={styles.headerIcon}
-            onPress={toggleSearch}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.text} />
-          </Pressable>
+          {searchOpen ? (
+            <View style={styles.headerIcon} />
+          ) : (
+            <Pressable
+              style={styles.headerIcon}
+              onPress={toggleSearch}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="search-outline" size={22} color={colors.text} />
+            </Pressable>
+          )}
 
           {!isWebLayout && <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>}
 
@@ -608,11 +580,22 @@ export default function ExploreScreen() {
       <View style={styles.searchAreaWrapper}>
         {searchOpen && (
           <View style={styles.searchDropdown}>
-            <SearchBar
-              value={query}
-              onChangeText={setQuery}
-              containerStyle={styles.searchBarInner}
-            />
+            <View style={styles.searchRow}>
+              <Pressable
+                style={styles.searchToggleBtn}
+                onPress={toggleSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-outline" size={22} color={colors.text} />
+              </Pressable>
+              <View style={styles.searchBarWrap}>
+                <SearchBar
+                  value={query}
+                  onChangeText={setQuery}
+                  containerStyle={styles.searchBarInner}
+                />
+              </View>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -883,16 +866,26 @@ const makeStyles = (c) => StyleSheet.create({
     elevation: 100,
     backgroundColor: c.surface,
   },
-  searchBarRow: {},
   searchDropdown: {
     paddingTop: 8,
     paddingBottom: 8,
-    paddingLeft: 10,
-    paddingRight: 0,
     gap: 10,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+  },
+  searchToggleBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchBarWrap: { flex: 1 },
   searchBarInner: {
-    marginHorizontal: 0,
+    marginLeft: 6,
+    marginRight: 14,
     marginVertical: 0,
   },
   dropdown: {
@@ -945,7 +938,8 @@ const makeStyles = (c) => StyleSheet.create({
 
   // ── Filter chips ──
   filterContent: {
-    paddingHorizontal: 16,
+    paddingLeft: 10,
+    paddingRight: 16,
     paddingVertical: 0,
     gap: 8,
     flexDirection: 'row',

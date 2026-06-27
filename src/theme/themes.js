@@ -73,6 +73,8 @@ export const lightTheme = {
   overlay: 'rgba(0,0,0,0.5)',
   tabBar: '#FCFCFC',
   statusBar: 'dark-content',
+  communityTag: '#B35D2B',   // Community user-tag color — Burnt Ochre in light mode
+  threadLine: '#C2B093',     // Community sub-reply indent line — Champagne
 };
 
 // Dark theme — true black with WCAG AA accessible contrast
@@ -101,6 +103,8 @@ export const darkTheme = {
   overlay: 'rgba(0,0,0,0.85)',
   tabBar: '#000000',          // Black tab bar
   statusBar: 'light-content',
+  communityTag: '#F8B430',   // Community user-tag color — Honey in dark mode
+  threadLine: '#C2B093',     // Community sub-reply indent line — Champagne
 };
 
 // =============================================================================

@@ -423,6 +423,7 @@ export default function NotificationsList({ panelMode = false }) {
       data={filteredNotifications}
       keyExtractor={item => `${item._source ?? 'n'}-${item.id}`}
       renderItem={renderItem}
+      style={{ flex: 1 }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }
@@ -431,7 +432,7 @@ export default function NotificationsList({ panelMode = false }) {
           <Text style={styles.emptyText}>No notifications yet</Text>
         </View>
       }
-      contentContainerStyle={notifications.length === 0 && styles.emptyContainer}
+      contentContainerStyle={filteredNotifications.length === 0 && styles.emptyContainer}
     />
   );
 
@@ -452,13 +453,17 @@ export default function NotificationsList({ panelMode = false }) {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
         <View style={styles.header}>
-          <Pressable
-            style={styles.headerIcon}
-            onPress={toggleSearch}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.text} />
-          </Pressable>
+          {searchOpen ? (
+            <View style={styles.headerIcon} />
+          ) : (
+            <Pressable
+              style={styles.headerIcon}
+              onPress={toggleSearch}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="search-outline" size={22} color={colors.text} />
+            </Pressable>
+          )}
 
           <Text style={styles.headerTitle} pointerEvents="none">Notifications</Text>
 
@@ -480,7 +485,24 @@ export default function NotificationsList({ panelMode = false }) {
 
         {searchOpen && (
           <View style={styles.searchPanel}>
-            <SearchBar value={query} onChangeText={setQuery} placeholder="Search notifications" autoFocus />
+            <View style={styles.searchRow}>
+              <Pressable
+                style={styles.searchToggleBtn}
+                onPress={toggleSearch}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="close-outline" size={22} color={colors.text} />
+              </Pressable>
+              <View style={styles.searchBarWrap}>
+                <SearchBar
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search notifications"
+                  autoFocus
+                  containerStyle={styles.searchBarInner}
+                />
+              </View>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -557,37 +579,56 @@ const makeStyles = (c) => StyleSheet.create({
     lineHeight: 12,
   },
   searchPanel: {
+    paddingTop: 8,
+    paddingBottom: 8,
+    gap: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
     backgroundColor: c.surface,
   },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+  },
+  searchToggleBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchBarWrap: { flex: 1 },
+  searchBarInner: {
+    marginLeft: 6,
+    marginRight: 14,
+    marginVertical: 0,
+  },
   filterRow: {
-    paddingHorizontal: 12,
-    paddingBottom: 10,
+    paddingLeft: 10,
+    paddingRight: 16,
+    paddingVertical: 0,
     gap: 8,
     flexDirection: 'row',
     alignItems: 'center',
   },
   filterChip: {
+    borderRadius: 8,
     paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: c.surfaceAlt,
-    borderWidth: 1,
-    borderColor: c.border,
+    paddingVertical: 7,
+    backgroundColor: 'rgba(232, 226, 217, 0.4)',
   },
   filterChipActive: {
-    backgroundColor: c.selected,
-    borderColor: c.selected,
+    backgroundColor: c.primary,
   },
   filterChipText: {
-    fontSize: 13,
-    fontFamily: 'Figtree_500Medium',
-    color: c.textSecondary,
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    color: '#5E5E5E',
   },
   filterChipTextActive: {
-    color: c.isDark ? '#111' : '#fff',
-    fontFamily: 'Figtree_600SemiBold',
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    color: '#fff',
   },
 
   markAllRow: {

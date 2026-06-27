@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { profileService } from '../services/profileService';
 import { useTheme } from '../context/ThemeContext';
+
+const BURNT_OCHRE = '#B35D2B';
 
 const FIELDS = [
   { label: 'Hair Pattern',    key: 'hair_type' },
@@ -58,14 +59,9 @@ export default function HairProfile({ viewedUserId }) {
   })();
 
   const CardWrapper = ({ full, children }) => (
-    <LinearGradient
-      colors={['#C8900A', '#F0D4A0', '#C8900A']}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={[styles.cardBorder, full && styles.cardBorderFull]}
-    >
-      <View style={styles.cardInner}>{children}</View>
-    </LinearGradient>
+    <View style={[styles.card, full && styles.cardFull]}>
+      {children}
+    </View>
   );
 
   return (
@@ -105,30 +101,26 @@ const makeStyles = (c) => StyleSheet.create({
     gap: 10,
     marginBottom: 10,
   },
-  cardBorder: {
+  card: {
     width: '47.5%',
-    borderRadius: 16,
-    padding: 0.74,
-    shadowColor: '#C8900A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardBorderFull: {
-    width: '100%',
-  },
-  cardInner: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 15.26,
+    borderRadius: 16,
     paddingTop: 16,
     paddingHorizontal: 16,
     paddingBottom: 16,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  cardFull: {
+    width: '100%',
   },
   cardLabel: {
     fontSize: 14,
     fontFamily: 'Figtree_600SemiBold',
-    color: '#C8900A',
+    color: BURNT_OCHRE,
     marginBottom: 20,
   },
   cardValue: {
