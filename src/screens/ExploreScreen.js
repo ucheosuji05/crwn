@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { Platform, ActivityIndicator } from 'react-native';
-import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { ActivityIndicator } from 'react-native';
+import { webWrap, WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import {
   View,
@@ -283,6 +283,7 @@ export default function ExploreScreen() {
   const navigation = useNavigation();
   const { user } = useAuth();
   const { colors } = useTheme();
+  const isWebLayout = useIsWebLayout();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -441,12 +442,12 @@ export default function ExploreScreen() {
   );
 
   const openPost = useCallback((item) => {
-    if (Platform.OS !== 'web') {
+    if (!isWebLayout) {
       navigation.push('PostDetail', { postId: item.id });
     } else {
       setSelectedPost(item);
     }
-  }, [navigation]);
+  }, [navigation, isWebLayout]);
 
   // Search dropdown data — live DB results replace the old post-derived list
   const matchingUsers = isSearching ? userSearchResults : [];
@@ -584,7 +585,7 @@ export default function ExploreScreen() {
             <Ionicons name={searchOpen ? 'close-outline' : 'search-outline'} size={22} color={colors.text} />
           </Pressable>
 
-          {Platform.OS !== 'web' && <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>}
+          {!isWebLayout && <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>}
 
           <TouchableOpacity
             style={styles.headerIcon}
@@ -772,7 +773,7 @@ export default function ExploreScreen() {
       </TouchableOpacity>
 
       {/* ── Web: floating popup card ── */}
-      {Platform.OS === 'web' && (
+      {isWebLayout && (
         <Modal
           visible={!!selectedPost}
           transparent

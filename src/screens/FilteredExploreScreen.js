@@ -11,7 +11,6 @@ import {
   RefreshControl,
   Modal,
   useWindowDimensions,
-  Platform,
 } from 'react-native';
 
 const SIDEBAR_WIDTH = 210;
@@ -19,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Scissors } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { webWrap, WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
 import { postService } from '../services/postService';
 import { useNavigation, useRoute, useFocusEffect } from '@react-navigation/native';
@@ -43,7 +42,8 @@ export default function FilteredExploreScreen() {
   const tag = route.params?.tag || '';
 
   const { width: windowWidth } = useWindowDimensions();
-  const effectiveWidth = Platform.OS === 'web'
+  const isWebLayout = useIsWebLayout();
+  const effectiveWidth = isWebLayout
     ? Math.min(windowWidth - SIDEBAR_WIDTH, WEB_MAX_WIDTHS.grid)
     : windowWidth;
   const containerWidth = effectiveWidth - SIDE_PAD * 2;
@@ -120,7 +120,7 @@ export default function FilteredExploreScreen() {
   );
 
   const openPost = useCallback((item) => {
-    if (Platform.OS === 'web') {
+    if (isWebLayout) {
       setSelectedPost(item);
     } else {
       navigation.navigate('PostDetail', { postId: item.id });
@@ -227,7 +227,7 @@ export default function FilteredExploreScreen() {
       </ScrollView>
 
       {/* ── Web: floating popup card ── */}
-      {Platform.OS === 'web' && (
+      {isWebLayout && (
         <Modal
           visible={!!selectedPost}
           transparent

@@ -11,7 +11,6 @@ import {
   Modal,
   FlatList,
   Share,
-  Platform,
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,6 +19,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
+import { useIsWebLayout } from '../utils/webLayout';
 import { useTheme } from '../context/ThemeContext';
 import { profileService } from '../services/profileService';
 import EditProfileScreen from '../screens/EditProfileScreen';
@@ -35,6 +35,7 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
   const { user, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const navigation = useNavigation();
+  const isWebLayout = useIsWebLayout();
 
   const [profile, setProfile]         = useState(null);
   const [loading, setLoading]         = useState(true);
@@ -92,7 +93,7 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
   // ── Avatar upload (own profile only) ───────────────────────────────────────
 
   const pickImage = () => {
-    if (Platform.OS === 'web') {
+    if (isWebLayout) {
       chooseFromLibrary();
       return;
     }

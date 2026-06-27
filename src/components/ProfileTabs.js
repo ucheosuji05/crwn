@@ -30,6 +30,7 @@ import { profileService } from '../services/profileService';
 import { reviewService } from '../services/reviewService';
 import { supabase } from '../config/supabase';
 import { Crown, Scissors } from 'lucide-react-native';
+import { useIsWebLayout } from '../utils/webLayout';
 
 const HONEY = '#D4930A';
 
@@ -199,6 +200,7 @@ function ClientBookingCard({ booking, colors, styles, onPress }) {
 }
 
 export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
+  const isWebLayout = useIsWebLayout();
   const [activeTab, setActiveTab] = useState('posts');
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
@@ -240,7 +242,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
 
   // ── Masonry grid renderers (mirrors ExploreScreen's masonry feed) ───────────
   const openPost = (item) => {
-    if (Platform.OS !== 'web') {
+    if (!isWebLayout) {
       navigation.push('PostDetail', { postId: item.id });
     } else {
       setSelectedPost(item);
@@ -476,19 +478,19 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
       <Modal
         visible={!!bk}
         transparent
-        animationType={Platform.OS === 'web' ? 'fade' : 'slide'}
+        animationType={isWebLayout ? 'fade' : 'slide'}
         onRequestClose={closeBkModal}
       >
         <Pressable
-          style={[styles.backdrop, Platform.OS !== 'web' && styles.bkBackdrop]}
+          style={[styles.backdrop, !isWebLayout && styles.bkBackdrop]}
           onPress={closeBkModal}
         >
           <Pressable
-            style={[styles.bkDetailCard, Platform.OS === 'web' && styles.bkDetailCardWeb]}
+            style={[styles.bkDetailCard, isWebLayout && styles.bkDetailCardWeb]}
             onPress={() => {}}
           >
             {/* Drag handle on mobile */}
-            {Platform.OS !== 'web' && <View style={styles.bkDetailHandle} />}
+            {!isWebLayout && <View style={styles.bkDetailHandle} />}
 
             {/* Header */}
             <View style={[styles.bkDetailHeader, { borderBottomColor: colors.borderLight }]}>
@@ -1004,7 +1006,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
           <Pressable
             style={[
               styles.popupCard,
-              Platform.OS === 'web' && (postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb),
+              isWebLayout && (postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb),
             ]}
             onPress={() => {}}
           >

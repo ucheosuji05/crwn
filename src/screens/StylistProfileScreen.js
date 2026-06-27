@@ -18,6 +18,7 @@ import { postService } from '../services/postService';
 import { profileService } from '../services/profileService';
 import { reviewService } from '../services/reviewService';
 import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
+import { useIsWebLayout } from '../utils/webLayout';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
 
@@ -945,6 +946,7 @@ export default function StylistProfileScreen({ route, navigation }) {
   const routeStylist = route?.params?.stylist || {};
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const isWebLayout = useIsWebLayout();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [activeTab, setActiveTab]           = useState(route?.params?.initialTab || 'Posts');
   const [bookingVisible, setBookingVisible]   = useState(false);
@@ -1174,12 +1176,12 @@ export default function StylistProfileScreen({ route, navigation }) {
   // transitions) falls back to the in-app post popup — same pattern as
   // ExploreScreen and ProfileTabs use.
   const openPost = useCallback((post) => {
-    if (Platform.OS !== 'web') {
+    if (!isWebLayout) {
       navigation.push('PostDetail', { postId: post.id });
     } else {
       setSelectedPost(post);
     }
-  }, [navigation]);
+  }, [navigation, isWebLayout]);
 
   // ── Tab content ─────────────────────────────────────────────────────────────
 
@@ -1482,7 +1484,7 @@ export default function StylistProfileScreen({ route, navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
-      {Platform.OS === 'web' ? (
+      {isWebLayout ? (
         /* ── Web: native <div> with CSS 100vh so content can actually overflow ── */
         <div
           className="crwn-profile-scroll-div"

@@ -4,7 +4,6 @@ import {
   Image,
   StyleSheet,
   Text,
-  Platform,
   Animated,
   ActivityIndicator,
   TouchableOpacity,
@@ -22,7 +21,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useNavigation } from '@react-navigation/native';
 import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
-import { WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../config/supabase';
 import PostCard from './PostCard';
@@ -43,9 +42,10 @@ export default function SavedLooks() {
   const navigation  = useNavigation();
   const channelRef  = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
+  const isWebLayout = useIsWebLayout();
 
   // Measure the actual rendered container width (avoids web max-width mismatch)
-  const fallbackWidth = Platform.OS === 'web'
+  const fallbackWidth = isWebLayout
     ? Math.min(windowWidth, WEB_MAX_WIDTHS.profile)
     : windowWidth;
   const [cw, setCw] = useState(fallbackWidth);
@@ -199,7 +199,7 @@ export default function SavedLooks() {
       if (openedCollection?.id === collection.id) navigateBack();
     };
 
-    if (Platform.OS === 'web') {
+    if (isWebLayout) {
       if (window.confirm(`Delete "${collection.name}"? Posts will not be deleted — only this collection.`)) {
         doDelete();
       }

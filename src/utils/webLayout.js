@@ -1,4 +1,12 @@
-import { Platform } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
+
+const WEB_LAYOUT_BREAKPOINT = 768;
+
+/** True when the device should use the wide/desktop web layout (not phone web). */
+export function useIsWebLayout() {
+  const { width } = useWindowDimensions();
+  return Platform.OS === 'web' && width >= WEB_LAYOUT_BREAKPOINT;
+}
 
 export const WEB_MAX_WIDTHS = {
   grid:    1100,  // Explore photo grid
