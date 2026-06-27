@@ -60,8 +60,9 @@ export const auth = betterAuth({
     'crwn://auth/callback',
     // Production Railway URL
     'https://crwn-production.up.railway.app',
-    // Vercel web deployment (browser sends the real Origin, JS can't override it)
+    // Vercel web deployments
     'https://crwn-dev.vercel.app',
+    'https://crwn-five.vercel.app',
     // Local dev IPs — phone on same Wi-Fi network
     'http://10.107.11.194:3001',
     'http://172.24.192.1:3001',
