@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator } from 'react-native';
+import { ActivityIndicator, Platform } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import {
@@ -408,12 +408,12 @@ export default function ExploreScreen() {
   );
 
   const openPost = useCallback((item) => {
-    if (!isWebLayout) {
+    if (Platform.OS !== 'web') {
       navigation.push('PostDetail', { postId: item.id });
     } else {
       setSelectedPost(item);
     }
-  }, [navigation, isWebLayout]);
+  }, [navigation]);
 
   // Search dropdown data — live DB results replace the old post-derived list
   const matchingUsers = isSearching ? userSearchResults : [];
@@ -753,10 +753,10 @@ export default function ExploreScreen() {
         )}
       </TouchableOpacity>
 
-      {/* ── Web: floating popup card (iPad / laptop only) ── */}
+      {/* ── Web: floating popup card (all web sizes) ── */}
       {/* Rendered inside ExploreScreen's root View so it only covers the grid,
           leaving the header and bottom tab bar visible. */}
-      {isWebLayout && !!selectedPost && (
+      {Platform.OS === 'web' && !!selectedPost && (
         <Pressable
           style={styles.backdrop}
           onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}
@@ -764,7 +764,9 @@ export default function ExploreScreen() {
           <Pressable
             style={[
               styles.popupCard,
-              postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb,
+              isWebLayout
+                ? (postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb)
+                : styles.popupCardNarrow,
             ]}
             onPress={() => {}}
           >
@@ -1109,6 +1111,10 @@ const makeStyles = (c) => StyleSheet.create({
   popupCardWebWide: {
     maxWidth: 800,
     width: '95vw',
+    maxHeight: '92%',
+  },
+  popupCardNarrow: {
+    width: '100%',
     maxHeight: '92%',
   },
 });
