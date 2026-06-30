@@ -123,6 +123,11 @@ export const usePosts = (userId = null) => {
       .channel(`posts-counts-${userId || 'all'}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'likes' }, fetchPosts)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'comments' }, fetchPosts)
+      // New post created — silently refresh so the feed picks it up immediately
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(silentRefetch, 600);
+      })
       // post_media INSERT fires after images are uploaded — debounce handles multi-image posts
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'post_media' }, () => {
         clearTimeout(debounceTimer);
