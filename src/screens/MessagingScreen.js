@@ -138,6 +138,12 @@ export default function MessagingScreen() {
     const otherUser =
       convo.participant1_id === user.id ? convo.participant2 : convo.participant1;
 
+    // Mark as read before any async work so the subscription's computeUnreadIds
+    // sees the updated AsyncStorage timestamp if it fires during getMessages()
+    await messagingService.markConversationRead(convo.id);
+    setUnreadConvoIds(prev => { const next = new Set(prev); next.delete(convo.id); return next; });
+    refreshMessages();
+
     setActiveConvo({ id: convo.id, otherUser });
     setMessages([]);
     setLoadingMsgs(true);
@@ -145,11 +151,6 @@ export default function MessagingScreen() {
     const { data } = await messagingService.getMessages(convo.id);
     setMessages(data || []);
     setLoadingMsgs(false);
-
-    // Mark as read now that the user has opened it, then sync badge and dot
-    await messagingService.markConversationRead(convo.id);
-    setUnreadConvoIds(prev => { const next = new Set(prev); next.delete(convo.id); return next; });
-    refreshMessages();
 
     // Subscribe to new messages
     if (channelRef.current) channelRef.current.unsubscribe();
@@ -427,6 +428,7 @@ export default function MessagingScreen() {
         <FlatList
           data={conversations}
           keyExtractor={(item) => item.id}
+          extraData={unreadConvoIds}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
