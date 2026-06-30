@@ -52,6 +52,8 @@ export default function PostCard({
   const [imgErrors, setImgErrors] = useState({});   // index → true when load fails
   const [menuVisible, setMenuVisible] = useState(false);
   const [commentsExpanded, setCommentsExpanded] = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+  const [descTruncated, setDescTruncated] = useState(false);
   // Auto-open comments once on mount when navigated from a notification
   const didAutoOpenComments = useRef(false);
   const [comments, setComments] = useState([]);
@@ -996,7 +998,27 @@ export default function PostCard({
           )}
         </View>
 
-        {description && <Text style={styles.description}>{description}</Text>}
+        {description && (
+          <View>
+            <Text
+              style={styles.description}
+              numberOfLines={descExpanded ? undefined : 3}
+              onTextLayout={(e) => {
+                if (!descExpanded) setDescTruncated(e.nativeEvent.lines.length >= 3);
+              }}
+            >
+              {description}
+            </Text>
+            {(descTruncated || descExpanded) && (
+              <Text
+                style={styles.descriptionToggle}
+                onPress={() => setDescExpanded(v => !v)}
+              >
+                {descExpanded ? 'View less' : 'View more'}
+              </Text>
+            )}
+          </View>
+        )}
 
         {currentPost.tags?.length > 0 && (
           <Text style={styles.tagsRow}>
@@ -1341,6 +1363,12 @@ const makeStyles = (c) => StyleSheet.create({
     fontFamily: 'Figtree_500Medium',
     color: c.text,
     lineHeight: 20
+  },
+  descriptionToggle: {
+    fontSize: 14,
+    fontFamily: 'Figtree_600SemiBold',
+    color: c.textMuted,
+    marginTop: 4,
   },
   tagsRow: {
     fontSize: 13,
