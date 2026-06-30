@@ -555,7 +555,7 @@ export default function ExploreScreen() {
             </Pressable>
           )}
 
-          {!isWebLayout && <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>}
+          <Text style={styles.headerLogo} pointerEvents="none">crwn.</Text>
 
           <TouchableOpacity
             style={styles.headerIcon}
