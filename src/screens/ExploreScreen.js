@@ -12,9 +12,7 @@ import {
   ScrollView,
   Image,
   Keyboard,
-  Modal,
   RefreshControl,
-  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Scissors, Plus, X } from 'lucide-react-native';
@@ -755,56 +753,52 @@ export default function ExploreScreen() {
         )}
       </TouchableOpacity>
 
-      {/* ── Web: floating popup card ── */}
-      {isWebLayout && (
-        <Modal
-          visible={!!selectedPost}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setSelectedPost(null)}
+      {/* ── Web: floating popup card (iPad / laptop only) ── */}
+      {/* Rendered inside ExploreScreen's root View so it only covers the grid,
+          leaving the header and bottom tab bar visible. */}
+      {isWebLayout && !!selectedPost && (
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}
         >
-          <Pressable style={styles.backdrop} onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}>
-            <Pressable
-              style={[
-                styles.popupCard,
-                postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb,
-              ]}
-              onPress={() => {}}
-            >
-              <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false}>
-                {selectedPost && (
-                  <PostCard
-                    post={selectedPost}
-                    currentUserId={user?.id}
-                    scrollViewRef={postModalScrollRef}
-                    onCommentsOpenChange={setPostCommentsOpen}
-                    onDelete={async (postId) => {
-                      const result = await postService.deletePost(postId);
-                      if (result?.success) { setSelectedPost(null); setPostCommentsOpen(false); }
-                      return result;
-                    }}
-                    onNavigateToProfile={(userId) => {
-                      setSelectedPost(null);
-                      setPostCommentsOpen(false);
-                      navigation.navigate('UserProfile', { viewedUserId: userId });
-                    }}
-                    onNavigateToStylist={(stylistId) => {
-                      const st = selectedPost?.stylists;
-                      setSelectedPost(null);
-                      setPostCommentsOpen(false);
-                      navigation.navigate('StylistProfile', {
-                        stylist: {
-                          id: stylistId,
-                          name: st?.full_name || st?.username || 'Stylist',
-                        },
-                      });
-                    }}
-                  />
-                )}
-              </ScrollView>
-            </Pressable>
+          <Pressable
+            style={[
+              styles.popupCard,
+              postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb,
+            ]}
+            onPress={() => {}}
+          >
+            <ScrollView ref={postModalScrollRef} showsVerticalScrollIndicator={false} bounces={false}>
+              <PostCard
+                post={selectedPost}
+                currentUserId={user?.id}
+                scrollViewRef={postModalScrollRef}
+                onCommentsOpenChange={setPostCommentsOpen}
+                onDelete={async (postId) => {
+                  const result = await postService.deletePost(postId);
+                  if (result?.success) { setSelectedPost(null); setPostCommentsOpen(false); }
+                  return result;
+                }}
+                onNavigateToProfile={(userId) => {
+                  setSelectedPost(null);
+                  setPostCommentsOpen(false);
+                  navigation.navigate('UserProfile', { viewedUserId: userId });
+                }}
+                onNavigateToStylist={(stylistId) => {
+                  const st = selectedPost?.stylists;
+                  setSelectedPost(null);
+                  setPostCommentsOpen(false);
+                  navigation.navigate('StylistProfile', {
+                    stylist: {
+                      id: stylistId,
+                      name: st?.full_name || st?.username || 'Stylist',
+                    },
+                  });
+                }}
+              />
+            </ScrollView>
           </Pressable>
-        </Modal>
+        </Pressable>
       )}
     </View>
   );
@@ -1089,18 +1083,24 @@ const makeStyles = (c) => StyleSheet.create({
 
   // ── Web popup card ──
   backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    zIndex: 200,
   },
   popupCard: {
     width: '100%',
-    maxHeight: '78%',
+    maxHeight: '88%',
     backgroundColor: c.surface,
     borderRadius: 20,
     overflow: 'hidden',
+    zIndex: 201,
   },
   popupCardWeb: {
     maxWidth: 460,
