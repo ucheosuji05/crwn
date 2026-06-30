@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext, useCallback } from 'react';
-import { authClient, initAuth } from '../lib/auth-client';
+import { Platform } from 'react-native';
+import { authClient, initAuth, storeAuthToken } from '../lib/auth-client';
 import { authService } from '../services/authService';
 import { supabase } from '../config/supabase';
 
@@ -36,6 +37,18 @@ export const AuthProvider = ({ children }) => {
 
     const loadSession = async () => {
       try {
+        // After Google OAuth on web, the server redirects back with ?auth_token=<TOKEN>.
+        // Safari blocks cross-site cookies (ITP), so we must read and persist the token
+        // from the URL before getSession() fires — otherwise the Bearer header is missing
+        // and the server returns no session.
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          const params = new URLSearchParams(window.location.search);
+          const urlToken = params.get('auth_token');
+          if (urlToken) {
+            await storeAuthToken(urlToken);
+            window.history.replaceState(null, '', window.location.pathname);
+          }
+        }
         await initAuth(); // ensure stored token is loaded before first request
         const timeout = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Session check timed out')), 8000)
