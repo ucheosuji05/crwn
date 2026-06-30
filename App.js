@@ -155,7 +155,7 @@ function AppContent() {
 // =============================================================================
 
 export default function App() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     LibreBaskerville_400Regular,
     LibreBaskerville_400Regular_Italic,
     LibreBaskerville_700Bold,
@@ -165,7 +165,7 @@ export default function App() {
     Figtree_700Bold,
   });
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontError) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.honey} />
