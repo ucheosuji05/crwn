@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
-import { ActivityIndicator, Platform, useWindowDimensions } from 'react-native';
+import { ActivityIndicator, Platform } from 'react-native';
 import { webWrap, WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import {
@@ -264,7 +264,6 @@ export default function ExploreScreen() {
   const { user } = useAuth();
   const { colors } = useTheme();
   const isWebLayout = useIsWebLayout();
-  const { width: windowWidth } = useWindowDimensions();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -759,19 +758,15 @@ export default function ExploreScreen() {
           leaving the header and bottom tab bar visible. */}
       {Platform.OS === 'web' && !!selectedPost && (
         <Pressable
-          style={[styles.backdrop, !isWebLayout && { padding: 0 }]}
+          style={styles.backdrop}
           onPress={() => { setSelectedPost(null); setPostCommentsOpen(false); }}
         >
           <Pressable
             style={[
               styles.popupCard,
-              !isWebLayout
-                // < 768px: full-screen, no rounding — exactly like native
-                ? { width: '100%', flex: 1, borderRadius: 0 }
-                // >= 768px: scale card width with screen, cap at sensible max
-                : postCommentsOpen
-                  ? { width: Math.min(windowWidth * 0.82, 920), maxHeight: '88%' }
-                  : { width: Math.min(windowWidth * 0.55, 660), maxHeight: '78%' },
+              isWebLayout
+                ? (postCommentsOpen ? styles.popupCardWebWide : styles.popupCardWeb)
+                : styles.popupCardNarrow,
             ]}
             onPress={() => {}}
           >
@@ -1108,5 +1103,18 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
     zIndex: 201,
+  },
+  popupCardWeb: {
+    maxWidth: 460,
+    maxHeight: '82%',
+  },
+  popupCardWebWide: {
+    maxWidth: 800,
+    width: '95vw',
+    maxHeight: '92%',
+  },
+  popupCardNarrow: {
+    width: '100%',
+    maxHeight: '92%',
   },
 });
