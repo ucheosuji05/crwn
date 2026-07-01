@@ -38,14 +38,16 @@ export const AuthProvider = ({ children }) => {
     const loadSession = async () => {
       try {
         // After Google OAuth on web, the server redirects back with ?auth_token=<TOKEN>.
-        // Safari blocks cross-site cookies (ITP), so we must read and persist the token
-        // from the URL before getSession() fires — otherwise the Bearer header is missing
-        // and the server returns no session.
+        // On iOS, we open OAuth in a popup so the main window stays alive. The popup
+        // signals the main window via a localStorage storage event (immune to COOP).
+        // For the full-page redirect fallback, we read the token directly from the URL.
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           const params = new URLSearchParams(window.location.search);
           const urlToken = params.get('auth_token');
           if (urlToken) {
             await storeAuthToken(urlToken);
+            // Signal any parent window that opened this as an OAuth popup
+            try { localStorage.setItem('@crwn/oauth_pending', urlToken); } catch (_) {}
             window.history.replaceState(null, '', window.location.pathname);
           }
         }

@@ -50,12 +50,78 @@ export const authService = {
 
   // ─── Social OAuth helper ─────────────────────────────────────────────────
   async _socialSignIn(provider) {
-    // On web: redirect the whole page to the OAuth start URL; the server will
-    // redirect back to this origin with ?auth_token= after Google completes.
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const origin = encodeURIComponent(window.location.origin);
-      window.location.href = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}?platform=web&origin=${origin}&_t=${Date.now()}`;
-      return new Promise(() => {}); // page navigates away — never resolves
+      const authUrl = `${AUTH_URL}/api/auth/oauth-start/${encodeURIComponent(provider)}?platform=web&origin=${origin}&_t=${Date.now()}`;
+
+      // Open OAuth in a popup so this page stays alive (critical for iOS standalone mode
+      // and for avoiding iOS Link Tracking Protection stripping the callback URL params).
+      // On iOS Safari, window.open() creates a new tab rather than a floating popup —
+      // localStorage storage events still work correctly across tabs from the same origin.
+      localStorage.removeItem('@crwn/oauth_pending'); // clear any stale signal
+      const popup = window.open(authUrl, 'crwn_oauth', 'popup,width=500,height=700');
+
+      if (!popup || popup.closed) {
+        // Popup was blocked — fall back to full-page redirect
+        window.location.href = authUrl;
+        return new Promise(() => {}); // page navigates away — never resolves
+      }
+
+      // The popup's loadSession writes the token to localStorage when OAuth completes.
+      // We listen for that storage event here in the main window.
+      let token;
+      try {
+        token = await new Promise((resolve, reject) => {
+          const TIMEOUT_MS = 10 * 60 * 1000;
+          let settled = false;
+
+          const finish = (tok, err) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            clearInterval(pollClosed);
+            window.removeEventListener('storage', onStorage);
+            localStorage.removeItem('@crwn/oauth_pending');
+            try { if (!popup.closed) popup.close(); } catch (_) {}
+            if (err) reject(err);
+            else resolve(tok);
+          };
+
+          const timer = setTimeout(
+            () => finish(null, new Error('Sign-in timed out. Please try again.')),
+            TIMEOUT_MS
+          );
+
+          // Detect if the user manually closes the popup without completing OAuth
+          const pollClosed = setInterval(() => {
+            if (!popup.closed) return;
+            clearInterval(pollClosed);
+            // Brief delay in case a storage event is about to arrive
+            setTimeout(() => {
+              const pending = localStorage.getItem('@crwn/oauth_pending');
+              if (pending) finish(pending, null);
+              else finish(null, new Error('Sign-in was cancelled.'));
+            }, 500);
+          }, 500);
+
+          const onStorage = (e) => {
+            if (e.key === '@crwn/oauth_pending' && e.newValue) {
+              finish(e.newValue, null);
+            }
+          };
+          window.addEventListener('storage', onStorage);
+
+          // Race: popup may have completed before the listener was attached
+          const pendingNow = localStorage.getItem('@crwn/oauth_pending');
+          if (pendingNow) finish(pendingNow, null);
+        });
+      } catch (err) {
+        return { data: null, error: err };
+      }
+
+      await storeAuthToken(token);
+      const { data, error } = await authClient.getSession();
+      return { data, error };
     }
 
     try {
