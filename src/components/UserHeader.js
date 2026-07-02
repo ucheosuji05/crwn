@@ -12,8 +12,9 @@ import {
   FlatList,
   Share,
   Pressable,
+  Animated,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +25,11 @@ import { useTheme } from '../context/ThemeContext';
 import { profileService } from '../services/profileService';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import SkeletonPulse from './SkeletonPulse';
+import { HEADER_BAR_HEIGHT } from './ScreenHeader';
+
+// Distance (px) of scroll over which the full header collapses into the
+// condensed pinned bar — see UserHeader's scrollY prop.
+const COLLAPSE_DISTANCE = 130;
 
 /**
  * UserHeader
@@ -31,18 +37,26 @@ import SkeletonPulse from './SkeletonPulse';
  * Props:
  *   viewedUserId  — ID of the profile being displayed
  *   isOwnProfile  — boolean; true when the signed-in user is viewing their own profile
+ *   scrollY       — optional Animated.Value tracking the parent scroll offset;
+ *                   when provided, the header collapses into a small pinned
+ *                   bar as the user scrolls down (see COLLAPSE_DISTANCE)
  */
-export default function UserHeader({ viewedUserId, isOwnProfile }) {
+export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
   const { user, refreshProfile } = useAuth();
   const { colors } = useTheme();
   const navigation = useNavigation();
   const isWebLayout = useIsWebLayout();
+  const insets = useSafeAreaInsets();
 
   const [profile, setProfile]         = useState(null);
   const [loading, setLoading]         = useState(true);
   const [uploading, setUploading]     = useState(false);
   const [following, setFollowing]     = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  // Measured natural height of the full (expanded) header content — captured
+  // once via onLayout so the collapse animation has a real pixel range to
+  // interpolate from, rather than a hardcoded guess.
+  const [fullHeight, setFullHeight] = useState(null);
   const [editVisible, setEditVisible] = useState(false);
   const [followList, setFollowList]   = useState(null); // { title, data }
   const [followListLoading, setFollowListLoading] = useState(false);
@@ -214,6 +228,27 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
 
   const AVATAR_SIZE = s(90);
   const BANNER_HEIGHT = s(110);
+  // Condensed bar must clear the status bar / Dynamic Island, so its height
+  // (and the collapsed wrapper height) include the top safe-area inset.
+  const COLLAPSED_HEIGHT = HEADER_BAR_HEIGHT + insets.top;
+
+  // ── Collapse interpolations (no-ops when scrollY isn't provided) ──────────
+  const fullContentOpacity = scrollY
+    ? scrollY.interpolate({ inputRange: [0, COLLAPSE_DISTANCE], outputRange: [1, 0], extrapolate: 'clamp' })
+    : 1;
+  const fullContentScale = scrollY
+    ? scrollY.interpolate({ inputRange: [0, COLLAPSE_DISTANCE], outputRange: [1, 0.92], extrapolate: 'clamp' })
+    : 1;
+  const condensedOpacity = scrollY
+    ? scrollY.interpolate({ inputRange: [COLLAPSE_DISTANCE * 0.6, COLLAPSE_DISTANCE], outputRange: [0, 1], extrapolate: 'clamp' })
+    : 0;
+  const wrapperHeight = scrollY && fullHeight
+    ? scrollY.interpolate({ inputRange: [0, COLLAPSE_DISTANCE], outputRange: [fullHeight, COLLAPSED_HEIGHT], extrapolate: 'clamp' })
+    : undefined;
+
+  const handleFullContentLayout = (e) => {
+    if (fullHeight == null) setFullHeight(e.nativeEvent.layout.height);
+  };
 
   if (loading) {
     return (
@@ -262,7 +297,17 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
   const displayUsername = profile?.username   || emailPrefix || 'user';
 
   return (
-    <View style={styles.wrapper}>
+    <Animated.View
+      style={[
+        styles.wrapper,
+        wrapperHeight != null && { height: wrapperHeight, overflow: 'hidden' },
+        isWebLayout && scrollY && styles.stickyWeb,
+      ]}
+    >
+      <Animated.View
+        onLayout={handleFullContentLayout}
+        style={{ opacity: fullContentOpacity, transform: [{ scale: fullContentScale }] }}
+      >
       {/* ── Gradient Banner ── */}
       <LinearGradient
         colors={['#5D1F1F', '#C8835A']}
@@ -366,6 +411,22 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
           )}
         </View>
       </View>
+      </Animated.View>
+
+      {/* ── Condensed pinned bar — fades in as the full header collapses ── */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.condensedBar, { height: COLLAPSED_HEIGHT, paddingTop: insets.top, opacity: condensedOpacity }]}
+      >
+        {profile?.avatar_url ? (
+          <Image source={{ uri: profile.avatar_url }} style={styles.condensedAvatar} />
+        ) : (
+          <View style={[styles.condensedAvatar, styles.avatarPlaceholder]}>
+            <Ionicons name="person" size={14} color="#9ca3af" />
+          </View>
+        )}
+        <Text style={styles.condensedName} numberOfLines={1}>{displayName}</Text>
+      </Animated.View>
 
       {/* ── Edit Profile Modal ── */}
       <Modal visible={editVisible} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setEditVisible(false)}>
@@ -461,13 +522,45 @@ export default function UserHeader({ viewedUserId, isOwnProfile }) {
           </View>
         </Pressable>
       </Modal>
-    </View>
+    </Animated.View>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
   wrapper: {
     backgroundColor: c.surface,
+  },
+  // Web only: native CSS sticky keeps the (collapsing) header pinned to the
+  // top of the scroll container. Native uses ScrollView's stickyHeaderIndices
+  // instead (see ProfileScreen.js), so this is a no-op there.
+  stickyWeb: {
+    position: 'sticky',
+    top: 0,
+    zIndex: 10,
+  },
+  // Small pinned bar shown once the full header has collapsed
+  condensedBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    backgroundColor: c.surface,
+  },
+  condensedAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  condensedName: {
+    fontSize: 18,
+    fontFamily: 'Figtree_700Bold',
+    color: c.text,
+    flexShrink: 1,
   },
 
   // ── Banner ──

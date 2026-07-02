@@ -6,7 +6,7 @@ import {
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Scissors, UserPlus } from 'lucide-react-native';
+import { UserPlus } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
@@ -18,26 +18,26 @@ import { HEADER_BAR_HEIGHT } from './ScreenHeader';
 import SearchBar from './SearchBar';
 
 // ── Type configs ──────────────────────────────────────────────────────────────
-
-// Shared cream badge background for social notification-type icons
-const SOCIAL_BADGE_BG = '#E8DDD0';
+// `bg` is a light tint of `color`, used behind the type icon on the right of
+// each notification row — e.g. light pink for likes, light Burnt Ochre for
+// follows/bookings.
 
 const SOCIAL_TYPE_CONFIG = {
-  like:    { icon: 'heart',               color: '#F27C7C', iconSize: 9  },
-  crown:   { icon: 'star',                color: '#F8B430', iconSize: 11 },
-  comment: { icon: 'chatbubble-ellipses', color: '#8E683B', iconSize: 11 },
-  reply:   { icon: 'chatbubble-ellipses', color: '#8E683B', iconSize: 11 },
-  mention: { icon: 'at',                  color: '#8E683B', iconSize: 11 },
-  follow:  { lucideIcon: UserPlus,        color: '#8E683B', iconSize: 11 },
+  like:    { icon: 'heart',               color: '#F27C7C', bg: '#FDEDED', title: 'New Like'     },
+  crown:   { icon: 'star',                color: '#F8B430', bg: '#FFF7E3', title: 'New Crown'    },
+  comment: { icon: 'chatbubble-ellipses', color: '#8E683B', bg: '#F3EDE3', title: 'New Comment'  },
+  reply:   { icon: 'chatbubble-ellipses', color: '#8E683B', bg: '#F3EDE3', title: 'New Reply'    },
+  mention: { icon: 'at',                  color: '#8E683B', bg: '#F3EDE3', title: 'New Mention'  },
+  follow:  { lucideIcon: UserPlus,        color: '#C8835A', bg: '#FDF1EE', title: 'New Follower' },
 };
 
 const BOOKING_TYPE_CONFIG = {
-  booking_confirmed:   { icon: 'checkmark-circle', bg: '#3F523F', title: 'Booking Confirmed' },
-  booking_declined:    { icon: 'close-circle',     bg: '#C0392B', title: 'Booking Update' },
-  booking_cancelled:   { icon: 'close-circle',     bg: '#C0392B', title: 'Booking Update' },
-  booking_rescheduled: { icon: 'calendar',         bg: '#f59e0b', title: 'Booking Update' },
-  booking_request:     { icon: 'calendar-outline', bg: '#C8835A', title: 'Booking Update' },
-  booking_completed:   { icon: 'ribbon-outline',   bg: '#F8B430', title: 'Booking Update' },
+  booking_confirmed:   { icon: 'checkmark-circle', color: '#10B981', bg: '#ECFDF5', title: 'Booking Confirmed' },
+  booking_declined:    { icon: 'close-circle',     color: '#EF4444', bg: '#FEF2F2', title: 'Booking Update'    },
+  booking_cancelled:   { icon: 'close-circle',     color: '#EF4444', bg: '#FEF2F2', title: 'Booking Update'    },
+  booking_rescheduled: { icon: 'calendar',         color: '#F59E0B', bg: '#FEF9EC', title: 'Booking Update'    },
+  booking_request:     { icon: 'calendar-outline', color: '#C8835A', bg: '#FDF1EE', title: 'Booking Update'    },
+  booking_completed:   { icon: 'ribbon-outline',   color: '#F8B430', bg: '#FFF7E3', title: 'Booking Update'    },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -328,51 +328,24 @@ export default function NotificationsList({ panelMode = false }) {
   const renderItem = ({ item }) => {
     const isBooking = item._source === 'booking';
 
+    // Shared consistent layout: avatar (left) — title/subtitle/time (center)
+    // — type icon in a tinted circle (right). See "Booking Withdrawn" in the
+    // stylist Notifications screen for the reference pattern.
+    let cfg, title, subtitle;
     if (isBooking) {
-      const cfg = BOOKING_TYPE_CONFIG[item.type] ?? BOOKING_TYPE_CONFIG.booking_confirmed;
+      cfg = BOOKING_TYPE_CONFIG[item.type] ?? BOOKING_TYPE_CONFIG.booking_confirmed;
       const actorHandle = item.actor?.username ? `@${item.actor.username}` : item.actor?.full_name;
-
-      return (
-        <TouchableOpacity
-          style={[styles.row, !item.is_read && styles.rowUnread]}
-          onPress={() => handlePress(item)}
-          activeOpacity={0.7}
-        >
-          {/* Icon area — booking notifications always show the scissors icon, not a profile photo */}
-          <View style={styles.avatarWrap}>
-            <View style={[styles.avatarPlaceholder, { backgroundColor: SOCIAL_BADGE_BG }]}>
-              <Scissors size={22} color="#5D1F1F" strokeWidth={1.5} />
-            </View>
-            <View style={[styles.badge, { backgroundColor: cfg.bg, borderColor: '#fff' }]}>
-              <Ionicons name={cfg.icon} size={12} color="#fff" />
-            </View>
-          </View>
-
-          {/* Text */}
-          <View style={styles.textBlock}>
-            <Text style={styles.message} numberOfLines={3}>
-              <Text style={styles.bookingTitle}>{cfg.title}</Text>
-              {actorHandle ? <Text style={styles.bookingWith}>{` with ${actorHandle}`}</Text> : null}
-              {item.body ? `\n${item.body}` : ''}
-            </Text>
-            <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
-          </View>
-
-          {/* Right spacer */}
-          <View style={styles.thumbnailSpacer} />
-
-          {!item.is_read && <View style={styles.unreadDot} />}
-        </TouchableOpacity>
-      );
+      title = cfg.title;
+      subtitle = item.body || (actorHandle ? `With ${actorHandle}` : 'Tap to view details');
+    } else {
+      cfg = SOCIAL_TYPE_CONFIG[item.type] || SOCIAL_TYPE_CONFIG.like;
+      const actorName = item.actor?.username
+        ? `@${item.actor.username}`
+        : item.actor?.full_name || 'Someone';
+      const [actor, action] = socialActionText(item.type, actorName);
+      title = cfg.title;
+      subtitle = `${actor} ${action}`;
     }
-
-    // ── Social notification ────────────────────────────────────────────────────
-    const cfg = SOCIAL_TYPE_CONFIG[item.type] || SOCIAL_TYPE_CONFIG.like;
-    const actorName = item.actor?.username
-      ? `@${item.actor.username}`
-      : item.actor?.full_name || 'Someone';
-    const [actor, action] = socialActionText(item.type, actorName);
-    const showThumbnail = item.type !== 'follow' && item.post_thumbnail;
 
     return (
       <TouchableOpacity
@@ -380,38 +353,33 @@ export default function NotificationsList({ panelMode = false }) {
         onPress={() => handlePress(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.avatarWrap}>
-          {item.actor?.avatar_url ? (
-            <Image source={{ uri: item.actor.avatar_url }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatarPlaceholder, { backgroundColor: colors.border }]}>
-              <Ionicons name="person" size={22} color={colors.textMuted} />
-            </View>
-          )}
-          <View style={[styles.badge, { backgroundColor: SOCIAL_BADGE_BG, borderColor: '#fff' }]}>
-            {cfg.lucideIcon ? (
-              <cfg.lucideIcon size={cfg.iconSize} color={cfg.color} strokeWidth={2} />
-            ) : (
-              <Ionicons name={cfg.icon} size={cfg.iconSize} color={cfg.color} />
-            )}
+        {/* Left: profile picture of the user who triggered the notification */}
+        {item.actor?.avatar_url ? (
+          <Image source={{ uri: item.actor.avatar_url }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarPlaceholder, { backgroundColor: colors.border }]}>
+            <Ionicons name="person" size={22} color={colors.textMuted} />
           </View>
-        </View>
+        )}
 
+        {/* Center: title, subtitle/detail, relative timestamp */}
         <View style={styles.textBlock}>
-          <Text style={styles.message} numberOfLines={2}>
-            <Text style={styles.actor}>{actor}</Text>
-            {'  '}{action}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            {!item.is_read && <View style={styles.unreadDot} />}
+          </View>
+          <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
           <Text style={styles.time}>{timeAgo(item.created_at)}</Text>
         </View>
 
-        {showThumbnail ? (
-          <Image source={{ uri: item.post_thumbnail }} style={styles.thumbnail} />
-        ) : (
-          <View style={styles.thumbnailSpacer} />
-        )}
-
-        {!item.is_read && <View style={styles.unreadDot} />}
+        {/* Right: category icon in a light tint of its semantic color */}
+        <View style={[styles.typeIconCircle, { backgroundColor: cfg.bg }]}>
+          {cfg.lucideIcon ? (
+            <cfg.lucideIcon size={16} color={cfg.color} strokeWidth={2} />
+          ) : (
+            <Ionicons name={cfg.icon} size={16} color={cfg.color} />
+          )}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -653,35 +621,26 @@ const makeStyles = (c) => StyleSheet.create({
   },
   rowUnread: { backgroundColor: c.unread },
 
-  avatarWrap:        { position: 'relative', width: 52, height: 52 },
-  avatar:            { width: 52, height: 52, borderRadius: 26, backgroundColor: c.border },
-  avatarPlaceholder: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  badge: {
-    position: 'absolute', bottom: 0, left: 0,
-    width: 20, height: 20, borderRadius: 10,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2,
+  avatar:            { width: 52, height: 52, borderRadius: 26, backgroundColor: c.border, flexShrink: 0 },
+  avatarPlaceholder: { width: 52, height: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+
+  textBlock: { flex: 1 },
+  titleRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 },
+  title:     { fontSize: 14, fontFamily: 'Figtree_700Bold', color: c.text, flexShrink: 1 },
+  subtitle:  { fontSize: 13, color: c.textMuted, lineHeight: 18, marginBottom: 3 },
+  time:      { fontSize: 12, color: c.textMuted },
+
+  typeIconCircle: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
 
-  textBlock:    { flex: 1 },
-  message:      { fontSize: 14, color: c.text, lineHeight: 19, marginBottom: 3 },
-  actor:        { fontFamily: 'Figtree_700Bold', color: c.primary },
-  bookingTitle: { fontFamily: 'Figtree_700Bold', color: '#5D1F1F' },
-  bookingWith:  { color: '#5D1F1F' },
-  time:         { fontSize: 12, color: c.textMuted },
-
-  thumbnail:       { width: 48, height: 48, borderRadius: 8, backgroundColor: c.border },
-  thumbnailSpacer: { width: 48 },
-
   unreadDot: {
-    position: 'absolute',
-    right: 12,
-    top: '50%',
-    marginTop: -4,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: c.primary,
+    flexShrink: 0,
   },
 
   center:         { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },

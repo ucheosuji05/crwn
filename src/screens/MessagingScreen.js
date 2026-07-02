@@ -356,7 +356,7 @@ export default function MessagingScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-          <View style={[styles.inputRow, { paddingBottom: insets.bottom > 0 ? insets.bottom - 16 : 10 }]}>
+          <View style={[styles.inputRow, { paddingBottom: 10 + insets.bottom }]}>
             <TextInput
               style={styles.chatInput}
               placeholder="Message..."
@@ -743,7 +743,7 @@ const makeStyles = (c) => StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 12,
+    paddingHorizontal: 20,
     paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: c.borderLight,

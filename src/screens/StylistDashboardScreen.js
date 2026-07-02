@@ -12,7 +12,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
-import { useProviderMode } from '../context/ProviderModeContext';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import { bookingService } from '../services/bookingService';
 import { analyticsService } from '../services/analyticsService';
@@ -417,7 +416,7 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
   const [allDay,       setAllDay]       = useState(true);
   const [startHour,    setStartHour]    = useState(9);
   const [endHour,      setEndHour]      = useState(17);
-  const [breakHours,   setBreakHours]   = useState(new Set()); // individual toggled break hours
+  const [availableHours, setAvailableHours] = useState(new Set()); // hours individually tapped as available
   const [saving,       setSaving]       = useState(false);
   const [justSaved,    setJustSaved]    = useState(false);
 
@@ -429,21 +428,30 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
     }
   }, [visible, defaultDate]);
 
+  // Every hour within a given work window — used to compute available/excluded hours
+  const computeSlotHours = (allDayVal, startH, endH) => allDayVal
+    ? TIME_OPTIONS
+    : Array.from({ length: Math.max(0, endH - startH) }, (_, i) => startH + i);
+
   // Load saved settings for a given day (if any), else reset to defaults
   const loadExisting = (day) => {
     const dateStr = toDateStr(day);
     const existing = existingSchedules.find(s => s.work_date === dateStr);
     if (existing) {
-      setAllDay(existing.all_day ?? true);
-      setStartHour(existing.start_time ? parseInt(existing.start_time.split(':')[0], 10) : 9);
-      setEndHour(existing.end_time   ? parseInt(existing.end_time.split(':')[0],   10) : 17);
-      const bh = Array.isArray(existing.break_hours) ? existing.break_hours : [];
-      setBreakHours(new Set(bh));
+      const nextAllDay = existing.all_day ?? true;
+      const nextStart  = existing.start_time ? parseInt(existing.start_time.split(':')[0], 10) : 9;
+      const nextEnd    = existing.end_time   ? parseInt(existing.end_time.split(':')[0],   10) : 17;
+      setAllDay(nextAllDay);
+      setStartHour(nextStart);
+      setEndHour(nextEnd);
+      // break_hours stores excluded hours — every other hour in the window is available
+      const excluded = new Set(Array.isArray(existing.break_hours) ? existing.break_hours : []);
+      setAvailableHours(new Set(computeSlotHours(nextAllDay, nextStart, nextEnd).filter(h => !excluded.has(h))));
     } else {
       setAllDay(true);
       setStartHour(9);
       setEndHour(17);
-      setBreakHours(new Set());
+      setAvailableHours(new Set());
     }
     setJustSaved(false);
   };
@@ -457,7 +465,7 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
     setAllDay(true);
     setStartHour(9);
     setEndHour(17);
-    setBreakHours(new Set());
+    setAvailableHours(new Set());
     setJustSaved(false);
   };
 
@@ -467,8 +475,9 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
     onClose();
   };
 
-  const toggleBreakHour = (h) => {
-    setBreakHours(prev => {
+  // Tapping a slot marks it available (selected); tapping again deselects it
+  const toggleAvailableHour = (h) => {
+    setAvailableHours(prev => {
       const next = new Set(prev);
       if (next.has(h)) next.delete(h); else next.add(h);
       return next;
@@ -484,13 +493,16 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
     const dateStr = toDateStr(selectedDate);
     const existing = existingSchedules.find(s => s.work_date === dateStr);
 
+    // Persist as break_hours (excluded hours) = every slot hour that wasn't selected as available
+    const breakHoursArr = workingHoursForBreak.filter(h => !availableHours.has(h));
+
     const result = await onSave({
       existingId:     existing?.id ?? null,
       date:           dateStr,
       allDay,
       startTime:      allDay ? null : `${String(startHour).padStart(2, '0')}:00:00`,
       endTime:        allDay ? null : `${String(endHour).padStart(2, '0')}:00:00`,
-      breakHoursArr:  Array.from(breakHours).sort((a, b) => a - b),
+      breakHoursArr,
     });
     setSaving(false);
     if (result?.success) {
@@ -500,10 +512,8 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
     }
   };
 
-  // All hours shown in the break section = every hour within the work window
-  const workingHoursForBreak = allDay
-    ? TIME_OPTIONS
-    : Array.from({ length: Math.max(0, endHour - startHour) }, (_, i) => startHour + i);
+  // All hours shown as tappable slots = every hour within the work window
+  const workingHoursForBreak = computeSlotHours(allDay, startHour, endHour);
 
   const scheduledDateStrs = existingSchedules.map(s => s.work_date).filter(Boolean);
   const displayDate = selectedDate
@@ -524,7 +534,7 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
             <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Ionicons name="close" size={22} color={colors.text} />
             </TouchableOpacity>
-            <Text style={styles.addServiceModalTitle}>Schedule Work Time</Text>
+            <Text style={styles.addServiceModalTitle}>Set Your Availability</Text>
             <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
               <Text style={{ fontSize: 15, fontFamily: 'Figtree_700Bold', color: colors.primary }}>Done</Text>
             </TouchableOpacity>
@@ -537,7 +547,7 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
               <View style={[styles.scheduleSuccessBanner, { backgroundColor: '#f0fdf4', borderColor: '#bbf7d0' }]}>
                 <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
                 <Text style={[styles.scheduleSuccessText, { color: '#15803d' }]}>
-                  {isUpdate ? 'Updated!' : 'Added!'} Pick another date or tap Done.
+                  {isUpdate ? 'Updated!' : 'Saved!'} Add another day, or tap Done when you're finished.
                 </Text>
               </View>
             )}
@@ -568,10 +578,10 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
             {/* ── HOURS section ── */}
             {selectedDate && (<>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <Text style={[styles.blockSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>HOURS</Text>
+                <Text style={[styles.blockSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>Your Work Window</Text>
                 <TouchableOpacity onPress={clearAll} style={styles.clearAllBtn}>
                   <Ionicons name="refresh-outline" size={13} color={colors.primary} />
-                  <Text style={[styles.clearAllBtnText, { color: colors.primary }]}>Clear All</Text>
+                  <Text style={[styles.clearAllBtnText, { color: colors.primary }]}>Reset</Text>
                 </TouchableOpacity>
               </View>
 
@@ -599,8 +609,8 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
                           onPress={() => {
                             setStartHour(h);
                             if (endHour <= h) setEndHour(h + 1);
-                            // Remove any break hours that fall outside new range
-                            setBreakHours(prev => { const n = new Set(prev); n.forEach(bh => { if (bh <= h) n.delete(bh); }); return n; });
+                            // Remove any available-hour selections that fall outside the new range
+                            setAvailableHours(prev => { const n = new Set(prev); n.forEach(ah => { if (ah <= h) n.delete(ah); }); return n; });
                           }}
                         >
                           <Text style={[styles.blockTimeChipText, { color: h === startHour ? '#fff' : colors.text }]}>{fmtHour(h)}</Text>
@@ -617,7 +627,7 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
                           style={[styles.blockTimeChip, { borderColor: colors.border }, h === endHour && { backgroundColor: '#5D1F1F', borderColor: '#5D1F1F' }]}
                           onPress={() => {
                             setEndHour(h);
-                            setBreakHours(prev => { const n = new Set(prev); n.forEach(bh => { if (bh >= h) n.delete(bh); }); return n; });
+                            setAvailableHours(prev => { const n = new Set(prev); n.forEach(ah => { if (ah >= h) n.delete(ah); }); return n; });
                           }}
                         >
                           <Text style={[styles.blockTimeChipText, { color: h === endHour ? '#fff' : colors.text }]}>{fmtHour(h)}</Text>
@@ -632,44 +642,44 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
                 </View>
               )}
 
-              {/* ── Break / Downtime — tap individual hours to toggle ── */}
+              {/* ── Available Hours — tap individual hours to toggle ── */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 20, marginBottom: 8 }}>
-                <Text style={[styles.blockSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>BREAK / DOWNTIME</Text>
-                {breakHours.size > 0 && (
-                  <TouchableOpacity onPress={() => setBreakHours(new Set())} style={styles.clearAllBtn}>
+                <Text style={[styles.blockSectionLabel, { color: colors.textMuted, marginBottom: 0 }]}>Bookable Hours</Text>
+                {availableHours.size > 0 && (
+                  <TouchableOpacity onPress={() => setAvailableHours(new Set())} style={styles.clearAllBtn}>
                     <Ionicons name="close-circle-outline" size={13} color="#C8835A" />
-                    <Text style={[styles.clearAllBtnText, { color: '#C8835A' }]}>Clear</Text>
+                    <Text style={[styles.clearAllBtnText, { color: '#C8835A' }]}>Clear Hours</Text>
                   </TouchableOpacity>
                 )}
               </View>
               <Text style={{ fontSize: 12, color: colors.textMuted, fontFamily: 'Figtree_500Medium', marginBottom: 10 }}>
-                Tap any hour to mark it as break time
+                Tap the hours clients can book with you
               </Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {workingHoursForBreak.map(h => {
-                  const isBreak = breakHours.has(h);
+                  const isAvailable = availableHours.has(h);
                   return (
                     <TouchableOpacity
                       key={`br-${h}`}
                       style={[styles.blockTimeChip,
-                        { borderColor: isBreak ? '#C8835A' : colors.border },
-                        isBreak && { backgroundColor: '#C8835A' },
+                        { borderColor: isAvailable ? '#C8835A' : colors.border },
+                        isAvailable && { backgroundColor: '#C8835A' },
                       ]}
-                      onPress={() => toggleBreakHour(h)}
+                      onPress={() => toggleAvailableHour(h)}
                     >
-                      {isBreak && <Ionicons name="cafe-outline" size={11} color="#fff" style={{ marginRight: 2 }} />}
-                      <Text style={[styles.blockTimeChipText, { color: isBreak ? '#fff' : colors.text }]}>
+                      {isAvailable && <Ionicons name="checkmark" size={11} color="#fff" style={{ marginRight: 2 }} />}
+                      <Text style={[styles.blockTimeChipText, { color: isAvailable ? '#fff' : colors.text }]}>
                         {fmtHour(h)}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              {breakHours.size > 0 && (
+              {availableHours.size > 0 && (
                 <View style={[styles.blockTimeSummary, { backgroundColor: '#FDF1EE', marginTop: 10 }]}>
-                  <Ionicons name="cafe-outline" size={14} color="#C8835A" />
+                  <Ionicons name="checkmark-circle-outline" size={14} color="#C8835A" />
                   <Text style={[styles.blockTimeSummaryText, { color: '#C8835A', flexShrink: 1 }]}>
-                    {`Break: ${Array.from(breakHours).sort((a,b)=>a-b).map(h=>fmtHour(h)).join(', ')}`}
+                    {`Available: ${Array.from(availableHours).sort((a,b)=>a-b).map(h=>fmtHour(h)).join(', ')}`}
                   </Text>
                 </View>
               )}
@@ -696,7 +706,7 @@ function BlockTimeModal({ visible, onClose, onSave, defaultDate, colors, styles,
               }
             </TouchableOpacity>
             <Text style={{ textAlign: 'center', marginTop: 10, fontSize: 12, color: colors.textMuted, fontFamily: 'Figtree_500Medium' }}>
-              Tap Done in the top right when finished
+              You can add more days before you're done.
             </Text>
           </View>
 
@@ -750,7 +760,6 @@ const barStyles = StyleSheet.create({
 export default function StylistDashboardScreen() {
   const { user, profileLoaded } = useAuth();
   const { colors }              = useTheme();
-  const { toggleMode }          = useProviderMode();
   const { msgCount }            = useUnreadCount();
   const navigation              = useNavigation();
   const { width: windowWidth }  = useWindowDimensions();
@@ -1219,9 +1228,19 @@ export default function StylistDashboardScreen() {
     return { success: false };
   };
 
-  const handleDeleteSchedule = async (scheduleId) => {
-    const { error } = await supabase.from('work_schedules').delete().eq('id', scheduleId);
-    if (!error) setWorkSchedules(prev => prev.filter(s => s.id !== scheduleId));
+  const handleDeleteSchedule = (scheduleId) => {
+    const doDelete = async () => {
+      const { error } = await supabase.from('work_schedules').delete().eq('id', scheduleId);
+      if (!error) setWorkSchedules(prev => prev.filter(s => s.id !== scheduleId));
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this day?')) doDelete();
+    } else {
+      Alert.alert('Delete this day?', undefined, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
   };
 
   // ── Calendar helpers ─────────────────────────────────────────────────────────
@@ -2621,11 +2640,9 @@ export default function StylistDashboardScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* ── Header ── */}
       <View style={[styles.header, { backgroundColor: colors.surface, borderBottomColor: colors.hairline }]}>
-        {/* Left: Client mode toggle */}
-        <TouchableOpacity style={styles.modeToggle} onPress={toggleMode} activeOpacity={0.7}>
-          <Ionicons name="swap-horizontal-outline" size={16} color={colors.primary} />
-          <Text style={[styles.modeToggleText, { color: colors.primary }]}>Client</Text>
-        </TouchableOpacity>
+        {/* Left: spacer — keeps the right-side toggle pinned right now that the
+            mode-switch button has moved to a long-press on the Profile tab */}
+        <View />
 
         {/* Center: Logo — hidden on web (already in sidebar) */}
         {Platform.OS !== 'web' && (
@@ -2713,16 +2730,6 @@ const makeStyles = (c) => StyleSheet.create({
     left: 0,
     right: 0,
     textAlign: 'center',
-  },
-  modeToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    zIndex: 1,
-  },
-  modeToggleText: {
-    fontSize: 12,
-    fontFamily: 'Figtree_600SemiBold',
   },
   viewToggle: {
     flexDirection: 'row',

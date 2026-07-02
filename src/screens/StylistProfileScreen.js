@@ -5,14 +5,13 @@ import {
   ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
   Animated, FlatList,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Crown, Scissors } from 'lucide-react-native';
+import { Crown, Scissors, Mail } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../hooks/useAuth';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { bookingService } from '../services/bookingService';
 import { postService } from '../services/postService';
 import { profileService } from '../services/profileService';
@@ -22,6 +21,11 @@ import { useIsWebLayout } from '../utils/webLayout';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
 import SkeletonPulse from '../components/SkeletonPulse';
+import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
+
+// Distance (px) of scroll over which the full header collapses into the
+// condensed pinned bar.
+const HEADER_COLLAPSE_DISTANCE = 130;
 
 const HONEY = '#D4930A';
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -370,10 +374,14 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
   const availableHours = useMemo(() => {
     const newServiceH = Math.ceil((selected?.duration_min || 60) / 60);
 
+    // "Any time" — the stylist has no schedule at all, or has marked the day all-day.
+    // Clients should see the full day's hourly breakdown to pick from in this case.
+    const isAnyTime = !hasAnyScheduleAtAll || workForDay.some(s => s.all_day);
+
     // Build the set of hours the stylist has scheduled for this day.
     // If no schedule exists at all, treat every standard hour as scheduled.
     let scheduledHourSet;
-    if (!hasAnyScheduleAtAll || workForDay.some(s => s.all_day)) {
+    if (isAnyTime) {
       scheduledHourSet = new Set(BK_TIME_OPTS);
     } else {
       scheduledHourSet = new Set();
@@ -384,7 +392,8 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
       });
     }
 
-    // Build the set of break hours (hidden from clients)
+    // Build the set of break hours (hidden from clients) — only meaningful for
+    // stylists with specific scheduled hours, not "any time" availability.
     const breakHourSet = new Set();
     workForDay.forEach(s => {
       const bh = Array.isArray(s.break_hours) ? s.break_hours : [];
@@ -396,7 +405,7 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
       if (!scheduledHourSet.has(h)) return false;
 
       // 2. Must not fall within a break/downtime window
-      if (breakHourSet.has(h)) return false;
+      if (!isAnyTime && breakHourSet.has(h)) return false;
 
       // 3. The new booking [h, h+newServiceH) must not overlap any confirmed booking
       if (confirmedForDate.some(b => {
@@ -946,9 +955,23 @@ const makeBookingStyles = (c) => StyleSheet.create({
 export default function StylistProfileScreen({ route, navigation }) {
   const routeStylist = route?.params?.stylist || {};
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const isWebLayout = useIsWebLayout();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Drives the collapsing header animation — see headerContent below.
+  // useNativeDriver: false because the collapse interpolates height.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [headerFullHeight, setHeaderFullHeight] = useState(null);
+  const handleHeaderScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: false },
+  );
+  const handleWebHeaderScroll = (e) => scrollY.setValue(e.target.scrollTop);
+  const handleHeaderLayout = (e) => {
+    if (headerFullHeight == null) setHeaderFullHeight(e.nativeEvent.layout.height);
+  };
+
   const [activeTab, setActiveTab]           = useState(route?.params?.initialTab || 'Posts');
   const [bookingVisible, setBookingVisible]   = useState(false);
   const [bookingService_, setBookingService]  = useState(null);
@@ -974,7 +997,9 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [following, setFollowing]             = useState(false);
   const [followLoading, setFollowLoading]     = useState(false);
-  const [unfollowSheetVisible, setUnfollowSheetVisible] = useState(false);
+  // "More options" sheet — report stylist only; following is now a direct
+  // toggle on the Follow button itself (see followFullBtn/followingBtn below).
+  const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
   const [requirementsOpen, setRequirementsOpen] = useState(true);
   const [requirementsList, setRequirementsList] = useState([]);
   const [editingServiceId, setEditingServiceId] = useState(null);
@@ -1099,6 +1124,17 @@ export default function StylistProfileScreen({ route, navigation }) {
   const avatarUri = avatarUrl || photos[0];
   const AVATAR_SIZE = 100;
   const BANNER_HEIGHT = 120;
+  // Condensed bar must clear the status bar / Dynamic Island, so its height
+  // (and the collapsed wrapper height) include the top safe-area inset.
+  const HEADER_COLLAPSED_HEIGHT = HEADER_BAR_HEIGHT + insets.top;
+
+  // ── Collapse interpolations ──────────────────────────────────────────────
+  const headerFullOpacity = scrollY.interpolate({ inputRange: [0, HEADER_COLLAPSE_DISTANCE], outputRange: [1, 0], extrapolate: 'clamp' });
+  const headerFullScale = scrollY.interpolate({ inputRange: [0, HEADER_COLLAPSE_DISTANCE], outputRange: [1, 0.92], extrapolate: 'clamp' });
+  const headerCondensedOpacity = scrollY.interpolate({ inputRange: [HEADER_COLLAPSE_DISTANCE * 0.6, HEADER_COLLAPSE_DISTANCE], outputRange: [0, 1], extrapolate: 'clamp' });
+  const headerWrapperHeight = headerFullHeight
+    ? scrollY.interpolate({ inputRange: [0, HEADER_COLLAPSE_DISTANCE], outputRange: [headerFullHeight, HEADER_COLLAPSED_HEIGHT], extrapolate: 'clamp' })
+    : undefined;
 
   // Fetch services
   useEffect(() => {
@@ -1205,7 +1241,7 @@ export default function StylistProfileScreen({ route, navigation }) {
   };
 
   const handleReportStylist = () => {
-    setUnfollowSheetVisible(false);
+    setMoreOptionsVisible(false);
     Alert.alert('Report', 'This stylist has been reported for review.');
   };
 
@@ -1635,9 +1671,20 @@ export default function StylistProfileScreen({ route, navigation }) {
     }
   };
 
-  // ── Shared inner content (used in both web <div> and native <ScrollView>) ──
-  const profileContent = (
-    <>
+  // ── Header content — collapses as the user scrolls; kept separate from
+  // tabsContent below so native ScrollView can pin it via stickyHeaderIndices
+  // once it has collapsed to its condensed height. ──
+  const headerContent = (
+    <Animated.View
+      style={[
+        headerWrapperHeight != null && { height: headerWrapperHeight, overflow: 'hidden' },
+        isWebLayout && styles.headerSticky,
+      ]}
+    >
+    <Animated.View
+      onLayout={handleHeaderLayout}
+      style={{ opacity: headerFullOpacity, transform: [{ scale: headerFullScale }] }}
+    >
       <View style={{ height: BANNER_HEIGHT }}>
         <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
         {isOwnProfile && (
@@ -1690,9 +1737,9 @@ export default function StylistProfileScreen({ route, navigation }) {
                   <Scissors size={16} color={colors.primary} strokeWidth={2.5} />
                   <Text style={styles.name}>{name}</Text>
                 </View>
-                {following && (
-                  <TouchableOpacity style={styles.unfollowBtn} onPress={() => setUnfollowSheetVisible(true)} activeOpacity={0.75}>
-                    <Ionicons name="chevron-down" size={16} color={colors.primary} />
+                {!isOwnProfile && (
+                  <TouchableOpacity style={styles.moreOptionsBtn} onPress={() => setMoreOptionsVisible(true)} activeOpacity={0.75}>
+                    <Ionicons name="ellipsis-horizontal" size={16} color={colors.primary} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -1730,41 +1777,59 @@ export default function StylistProfileScreen({ route, navigation }) {
 
               {!isOwnProfile && (
                 <View style={styles.buttons}>
-                  {!following ? (
-                    <>
-                      <TouchableOpacity
-                        style={styles.followFullBtn}
-                        onPress={handleFollow}
-                        activeOpacity={0.8}
-                        disabled={followLoading}
-                      >
-                        <LinearGradient colors={['#B35D2B', '#7D3F1D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
-                        <Text style={styles.followFullBtnText}>Follow</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
-                        <Text style={styles.bookBtnText}>Book</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                        <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
-                          <Text style={styles.bookBtnText}>Book</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.messageActionBtn}
-                          onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
-                          activeOpacity={0.85}
-                        >
-                          <Text style={styles.messageActionText}>Message</Text>
-                        </TouchableOpacity>
-                    </>
-                  )}
+                  {/* Follow — direct toggle, no confirmation menu */}
+                  <TouchableOpacity
+                    style={following ? styles.followingBtn : styles.followFullBtn}
+                    onPress={handleFollow}
+                    activeOpacity={0.8}
+                    disabled={followLoading}
+                  >
+                    {!following && (
+                      <LinearGradient colors={['#B35D2B', '#7D3F1D']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={10} />
+                    )}
+                    <Text style={following ? styles.followingBtnText : styles.followFullBtnText}>
+                      {following ? 'Following' : 'Follow'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.bookActionBtn} onPress={() => openBooking()} activeOpacity={0.85}>
+                    <Text style={styles.bookBtnText}>Book</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.messageActionBtn}
+                    onPress={() => navigation.navigate('Messaging', { recipientId: stylistId, recipientName: name })}
+                    activeOpacity={0.85}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Mail size={16} color="#4F4032" strokeWidth={2} />
+                  </TouchableOpacity>
                 </View>
               )}
             </>
           )}
         </View>
+    </Animated.View>
 
+      {/* ── Condensed pinned bar — fades in as the full header collapses ── */}
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.headerCondensedBar, { height: HEADER_COLLAPSED_HEIGHT, paddingTop: insets.top, opacity: headerCondensedOpacity }]}
+      >
+        {avatarUri ? (
+          <Image source={{ uri: avatarUri }} style={styles.headerCondensedAvatar} />
+        ) : (
+          <View style={[styles.headerCondensedAvatar, styles.avatarPlaceholder]}>
+            <Ionicons name="person" size={14} color="#9ca3af" />
+          </View>
+        )}
+        <Text style={styles.headerCondensedName} numberOfLines={1}>{name}</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+
+  const tabsContent = (
+    <>
         <View style={styles.tabs}>
           {TABS.map((tab) => {
             const active = activeTab === tab;
@@ -1787,6 +1852,7 @@ export default function StylistProfileScreen({ route, navigation }) {
         /* ── Web: native <div> with CSS 100vh so content can actually overflow ── */
         <div
           className="crwn-profile-scroll-div"
+          onScroll={handleWebHeaderScroll}
           style={{
             height: '100vh',
             overflowY: 'scroll',
@@ -1794,18 +1860,23 @@ export default function StylistProfileScreen({ route, navigation }) {
             scrollbarColor: 'rgba(0,0,0,0.25) transparent',
           }}
         >
-          {profileContent}
+          {headerContent}
+          {tabsContent}
         </div>
       ) : (
-        /* ── Native: plain ScrollView ── */
-        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          {profileContent}
+        /* ── Native: plain ScrollView. stickyHeaderIndices pins index 0
+           (headerContent) once it has collapsed/scrolled past. ── */
+        <ScrollView
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[0]}
+          onScroll={handleHeaderScroll}
+          scrollEventThrottle={16}
+        >
+          {headerContent}
+          {tabsContent}
         </ScrollView>
       )}
-
-      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 24 }]} onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} activeOpacity={0.7}>
-        <Ionicons name="chevron-back" size={26} color="rgba(255,255,255,0.9)" />
-      </TouchableOpacity>
 
       <BookingModal
         visible={bookingVisible}
@@ -1913,24 +1984,17 @@ export default function StylistProfileScreen({ route, navigation }) {
         </SafeAreaView>
       </Modal>
 
-      {/* Unfollow / report stylist sheet */}
+      {/* More options sheet — report stylist (follow/unfollow is now a
+          direct toggle on the Follow button, no menu involved) */}
       <Modal
-        visible={unfollowSheetVisible}
+        visible={moreOptionsVisible}
         transparent
         animationType="fade"
-        onRequestClose={() => setUnfollowSheetVisible(false)}
+        onRequestClose={() => setMoreOptionsVisible(false)}
       >
-        <Pressable style={styles.sheetOverlay} onPress={() => setUnfollowSheetVisible(false)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => setMoreOptionsVisible(false)}>
           <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
             <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
-
-            <TouchableOpacity
-              style={[styles.sheetItem, { borderBottomColor: colors.borderLight }]}
-              onPress={() => { setUnfollowSheetVisible(false); handleFollow(); }}
-            >
-              <Ionicons name="person-remove-outline" size={22} color={colors.text} />
-              <Text style={[styles.sheetItemText, { color: colors.text }]}>Unfollow</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity style={[styles.sheetItem, styles.sheetItemDanger]} onPress={handleReportStylist}>
               <Ionicons name="flag-outline" size={22} color="#ef4444" />
@@ -1939,7 +2003,7 @@ export default function StylistProfileScreen({ route, navigation }) {
 
             <TouchableOpacity
               style={[styles.sheetItem, styles.sheetCancel, { borderTopColor: colors.borderLight }]}
-              onPress={() => setUnfollowSheetVisible(false)}
+              onPress={() => setMoreOptionsVisible(false)}
             >
               <Text style={[styles.sheetCancelText, { color: colors.text }]}>Cancel</Text>
             </TouchableOpacity>
@@ -1951,6 +2015,26 @@ export default function StylistProfileScreen({ route, navigation }) {
 }
 
 const makeStyles = (c) => StyleSheet.create({
+  // Web only: native CSS sticky keeps the (collapsing) header pinned to the
+  // top of the scroll container. Native uses ScrollView's stickyHeaderIndices
+  // instead (see the render method), so this is a no-op there.
+  headerSticky: { position: 'sticky', top: 0, zIndex: 10 },
+  // Small pinned bar shown once the full header has collapsed
+  headerCondensedBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingHorizontal: 16,
+    backgroundColor: c.surface,
+  },
+  headerCondensedAvatar: { width: 28, height: 28, borderRadius: 14 },
+  headerCondensedName: { fontSize: 18, fontFamily: 'Figtree_700Bold', color: c.text, flexShrink: 1 },
+
   avatarRow: { alignItems: 'center', zIndex: 1 },
   avatarRing: { alignItems: 'center', justifyContent: 'center' },
   avatarPlaceholder: { backgroundColor: c.border, alignItems: 'center', justifyContent: 'center' },
@@ -1979,17 +2063,22 @@ const makeStyles = (c) => StyleSheet.create({
   statNumber: { fontSize: 18, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 2 },
   statLabel: { fontSize: 12, color: '#5E5E5E' },
   buttons: { flexDirection: 'row', gap: 10, marginBottom: 16, width: '100%', alignItems: 'center' },
-  followFullBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  // Follow — default: ombre gradient fill, white text
+  followFullBtn: { flex: 1, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   followFullBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
-  bookActionBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', backgroundColor: '#E2DACB' },
-  bookBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#77674B' },
-  messageActionBtn: { flex: 1, height: 44, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E2DACB', backgroundColor: 'transparent' },
-  messageActionText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#77674B' },
+  // Follow — toggled to "Following": white/transparent fill, Burnt Ochre border + text
+  followingBtn: { flex: 1, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF', borderWidth: 1.5, borderColor: '#B35D2B' },
+  followingBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#B35D2B' },
+  // Book — light fill, no border
+  bookActionBtn: { flex: 1, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', backgroundColor: '#F2EBE2' },
+  bookBtnText: { fontSize: 15, fontFamily: 'Figtree_600SemiBold', color: '#4F4032' },
+  // Message — icon-only, same light fill as Book, sized to fit alongside the other two
+  messageActionBtn: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F2EBE2' },
   /* Header name row */
   nameRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 0, marginBottom: 8 },
   nameBadge: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { fontSize: 22, fontFamily: 'Figtree_700Bold', color: c.text, marginBottom: 0 },
-  unfollowBtn: { marginLeft: 2, padding: 6 },
+  moreOptionsBtn: { marginLeft: 2, padding: 6 },
   tabs: { flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: c.border, backgroundColor: c.surface },
   tab: { flex: 1, paddingVertical: 14, alignItems: 'center' },
   tabText: { fontSize: 15, color: c.textSecondary, fontFamily: 'Figtree_500Medium' },
@@ -2098,7 +2187,6 @@ const makeStyles = (c) => StyleSheet.create({
   serviceCancelBtnText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
   serviceSaveBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 8 },
   serviceSaveBtnText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
-  backBtn: { position: 'absolute', left: 14, padding: 6, zIndex: 100 },
   settingsBadge: {
     position: 'absolute', top: 64, right: 16,
     backgroundColor: 'rgba(255,255,255,0.2)',

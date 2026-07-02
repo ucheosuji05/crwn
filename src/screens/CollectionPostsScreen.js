@@ -62,10 +62,12 @@ export default function CollectionPostsScreen({ route, navigation }) {
           onScrollToIndexFailed={onScrollToIndexFailed}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={[styles.divider, { backgroundColor: colors.borderLight }]} />}
           renderItem={({ item }) => (
             <PostDetailCard
               post={item}
               navigation={navigation}
+              flush
               onRemoveFromCollection={collectionId ? handleRemoveFromCollection : undefined}
               onBookmarkChange={handleBookmarkChange}
               onDeleted={handleDeleted}
@@ -90,4 +92,5 @@ const makeStyles = (c) => StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   emptyText: { fontSize: 15, fontFamily: 'Figtree_500Medium' },
   listContent: { paddingBottom: 24 },
+  divider: { height: StyleSheet.hairlineWidth },
 });

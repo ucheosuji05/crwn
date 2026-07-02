@@ -2,8 +2,9 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { CardStyleInterpolators } from '@react-navigation/stack';
+import { PlatformPressable } from '@react-navigation/elements';
 import { Ionicons } from '@expo/vector-icons';
-import { Compass, Globe, Scissors, Bell, User, Calendar, Mail } from 'lucide-react-native';
+import { Compass, Globe, Scissors, Bell, User, Calendar } from 'lucide-react-native';
 import {
   View, Text, StyleSheet, ActivityIndicator,
   TouchableOpacity, Platform, Image, Animated,
@@ -16,7 +17,7 @@ import CommunityScreen from '../screens/CommunityScreen';
 import FilteredCommunityScreen from '../screens/FilteredCommunityScreen';
 import StylistsScreen from '../screens/StylistsScreen';
 import StylistDashboardScreen from '../screens/StylistDashboardScreen';
-import ProviderNotificationsScreen from '../screens/ProviderNotificationsScreen';
+import StylistNotificationsScreen from '../screens/StylistNotificationsScreen';
 import NotificationsScreen from '../screens/NotificationsScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import StylistProfileScreen from '../screens/StylistProfileScreen';
@@ -78,13 +79,13 @@ const PROVIDER_NAV_ICONS = {
   'Crwn.': Compass,
   Community: Globe,
   Stylists: Calendar,
-  Notifications: Mail,
+  Notifications: Bell,
   Profile: User,
 };
 
 // ── Notification icon with badge ──────────────────────────────────────────────
-// `renderIcon(color, size)` returns the icon element — Bell (client mode) or
-// Mail (provider "Inbox"), both Lucide, swapped in by the caller.
+// `renderIcon(color, size)` returns the icon element — Bell, same for both
+// client and provider mode, swapped in by the caller.
 
 function NotifIcon({ color, size, unreadCount, primaryColor, renderIcon }) {
   return (
@@ -109,6 +110,7 @@ function WebSidebar({
   lastTap, setResetKeys,
   notifOpen, onNotifToggle,
   isProviderMode,
+  isStylist, onProfileLongPress,
 }) {
   // Nav items change when a stylist switches to provider mode.
   // Both modes use the same Lucide icon set (see NAV_ICONS / PROVIDER_NAV_ICONS).
@@ -116,13 +118,13 @@ function WebSidebar({
     { name: 'Crwn.',         label: 'Explore'   },
     { name: 'Community',     label: 'Community' },
     { name: 'Stylists',      label: 'Calendar'  },
-    { name: 'Notifications', label: 'Inbox'     },
+    { name: 'Notifications', label: 'Notifications' },
     { name: 'Profile',       label: 'Profile'   },
   ] : [
     { name: 'Crwn.',         label: 'Explore'   },
     { name: 'Community',     label: 'Community' },
     { name: 'Stylists',      label: 'Service Providers'  },
-    { name: 'Notifications', label: 'Inbox'     },
+    { name: 'Notifications', label: 'Notifications' },
     { name: 'Profile',       label: 'Profile'   },
   ];
 
@@ -182,6 +184,7 @@ function WebSidebar({
             key={route.key}
             style={[sidebar.item, focused && { backgroundColor: colors.backgroundAlt }]}
             onPress={onPress}
+            onLongPress={route.name === 'Profile' && isStylist ? onProfileLongPress : undefined}
             activeOpacity={0.75}
           >
             <View style={sidebar.iconWrap}>
@@ -191,10 +194,7 @@ function WebSidebar({
                   size={NAV_ICON_SIZE}
                   unreadCount={badgeCount}
                   primaryColor={colors.primary}
-                  renderIcon={(c, s) => isProviderMode
-                    ? <Mail size={s} color={c} strokeWidth={NAV_ICON_STROKE} />
-                    : <Bell size={s} color={c} strokeWidth={NAV_ICON_STROKE} />
-                  }
+                  renderIcon={(c, s) => <Bell size={s} color={c} strokeWidth={NAV_ICON_STROKE} />}
                 />
               ) : (
                 <LucideIcon size={NAV_ICON_SIZE} color={color} strokeWidth={NAV_ICON_STROKE} />
@@ -291,7 +291,7 @@ export default function BottomTabNavigator() {
   const { notifCount: unreadNotifCount, bookingNotifCount, clearNotifs, clearBookingNotifs } = useUnreadCount();
   const { colors } = useTheme();
   const { profile, profileLoaded } = useAuth();
-  const { isProviderMode } = useProviderMode();
+  const { isProviderMode, toggleMode } = useProviderMode();
   const isStylist = !!profile?.is_stylist;
   const isWeb = Platform.OS === 'web';
   const { width: windowWidth } = useWindowDimensions();
@@ -368,6 +368,20 @@ export default function BottomTabNavigator() {
       useNativeDriver: true,
     }).start(() => setToast(null));
   }, [toastAnim]);
+
+  // Long-press on the Profile tab (stylists only) — reuses the existing
+  // provider/client mode toggle, same as the header swap button and the
+  // "Switch to Provider Mode" banner.
+  const handleProfileLongPress = useCallback(() => {
+    if (!isStylist) return;
+    const switchingTo = isProviderMode ? 'Client' : 'Stylist';
+    toggleMode();
+    showToast({
+      icon: 'swap-horizontal',
+      color: NAV_ACTIVE_COLOR,
+      title: `Switched to ${switchingTo} mode`,
+    });
+  }, [isStylist, isProviderMode, toggleMode, showToast]);
 
   // Subscribe to both notification tables for in-app toasts
   useEffect(() => {
@@ -448,6 +462,8 @@ export default function BottomTabNavigator() {
             notifOpen={notifOpen}
             onNotifToggle={toggleNotif}
             isProviderMode={isStylist && isProviderMode}
+            isStylist={isStylist}
+            onProfileLongPress={handleProfileLongPress}
           />
         ) : undefined}
         sceneContainerStyle={useSidebar ? { marginLeft: SIDEBAR_WIDTH } : undefined}
@@ -500,11 +516,23 @@ export default function BottomTabNavigator() {
 
         <Tab.Screen name="Notifications" options={{ headerShown: false }}>
           {(props) => isStylist && isProviderMode
-            ? <ProviderNotificationsScreen {...props} key={resetKeys.Notifications} />
+            ? <StylistNotificationsScreen {...props} key={resetKeys.Notifications} />
             : <NotificationsScreen {...props} key={resetKeys.Notifications} />}
         </Tab.Screen>
 
-        <Tab.Screen name="Profile" options={{ headerShown: false }}>
+        <Tab.Screen
+          name="Profile"
+          options={{
+            headerShown: false,
+            tabBarButton: (props) => (
+              <PlatformPressable
+                {...props}
+                onLongPress={isStylist ? handleProfileLongPress : undefined}
+                delayLongPress={500}
+              />
+            ),
+          }}
+        >
           {(props) => isStylist && isProviderMode
             ? <StylistProfileScreen
                 {...props}

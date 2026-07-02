@@ -39,6 +39,9 @@ export default function PostDetailCard({
   post: initialPost,
   navigation,
   openComments = false,
+  flush = false,          // true = no card margin/shadow/border-radius — for
+                           // scrollable multi-post lists that use a divider
+                           // between items instead (see CollectionPostsScreen)
   onRemoveFromCollection, // (postId) => void — shows a "Remove from Collection" menu item when provided
   onBookmarkChange,       // (postId, isNowBookmarked) => void
   onDeleted,              // (postId) => void — called after the post is successfully deleted
@@ -535,7 +538,7 @@ export default function PostDetailCard({
   return (
     <>
       {/* ────────── POST CARD ────────── */}
-      <View style={[styles.postCard, { backgroundColor: colors.surface }]}>
+      <View style={[styles.postCard, flush && styles.postCardFlush, { backgroundColor: colors.surface }]}>
 
         {/* Header: avatar · name · @handle · time · three-dot */}
         <View style={styles.postHeader}>
@@ -989,6 +992,17 @@ const makeStyles = (c) => StyleSheet.create({
     marginTop: 4,
     marginBottom: 20,
   },
+  // No-card variant for scrollable multi-post lists (see `flush` prop) — keeps
+  // the same left/right inset as the card, just drops the rounded corners,
+  // border, shadow and vertical gap (a divider goes between items instead)
+  postCardFlush: {
+    marginTop: 0,
+    marginBottom: 0,
+    borderRadius: 0,
+    borderWidth: 0,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
 
   // Post header
   postHeader: {
@@ -1035,7 +1049,7 @@ const makeStyles = (c) => StyleSheet.create({
   engRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 0,
     paddingVertical: 12,
   },
   engRowTight: { paddingTop: 10, paddingBottom: 14 },
@@ -1049,7 +1063,7 @@ const makeStyles = (c) => StyleSheet.create({
   bookmarkBtn: { marginLeft: 'auto', marginRight: 0 },
 
   // Content area
-  contentArea: { paddingHorizontal: 14, paddingBottom: 18 },
+  contentArea: { paddingHorizontal: 0, paddingBottom: 18 },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',

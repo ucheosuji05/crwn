@@ -11,7 +11,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import { bookingService } from '../services/bookingService';
-import { messagingService } from '../services/messagingService';
 import { supabase } from '../config/supabase';
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -23,13 +22,6 @@ function timeAgo(dateStr) {
   if (diff < 3600)  return `${Math.floor(diff / 60)}m ago`;
   if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
   return `${Math.floor(diff / 86400)}d ago`;
-}
-
-function fmtDate(dateStr) {
-  if (!dateStr) return '';
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-    weekday: 'long', month: 'long', day: 'numeric',
-  });
 }
 
 function fmtTime(timeStr) {
@@ -52,71 +44,6 @@ const TYPE_CFG = {
 
 function getTypeCfg(type) {
   return TYPE_CFG[type] || { icon: 'notifications-outline', color: '#C8835A', bg: '#FDF1EE', label: 'Notification' };
-}
-
-// ── Notification row ───────────────────────────────────────────────────────────
-
-function NotifRow({ item, styles, colors, onAccept, onDecline, onPress }) {
-  const cfg       = getTypeCfg(item.type);
-  const isPending = item.type === 'booking_request';
-  const actor     = item.actor;
-
-  return (
-    <TouchableOpacity
-      style={[styles.row, !item.is_read && styles.rowUnread]}
-      onPress={() => onPress(item)}
-      activeOpacity={0.75}
-    >
-      {/* Icon */}
-      <View style={[styles.iconCircle, { backgroundColor: cfg.bg }]}>
-        <Ionicons name={cfg.icon} size={22} color={cfg.color} />
-      </View>
-
-      {/* Content */}
-      <View style={{ flex: 1, gap: 2 }}>
-        <View style={styles.titleRow}>
-          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
-          {!item.is_read && <View style={[styles.unreadDot, { backgroundColor: cfg.color }]} />}
-        </View>
-        {item.body ? (
-          <Text style={[styles.body, { color: colors.textSecondary }]} numberOfLines={2}>{item.body}</Text>
-        ) : null}
-        <Text style={[styles.time, { color: colors.textMuted }]}>{timeAgo(item.created_at)}</Text>
-
-        {/* Inline quick Accept / Decline */}
-        {isPending && (
-          <View style={styles.actionRow}>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.declineBtn]}
-              onPress={(e) => { e.stopPropagation?.(); onDecline(item); }}
-              activeOpacity={0.75}
-            >
-              <Ionicons name="close" size={13} color="#ef4444" />
-              <Text style={[styles.actionBtnText, { color: '#ef4444' }]}>Decline</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.actionBtn, styles.acceptBtn]}
-              onPress={(e) => { e.stopPropagation?.(); onAccept(item); }}
-              activeOpacity={0.75}
-            >
-              <LinearGradient colors={['#5D1F1F', '#C8835A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} borderRadius={8} />
-              <Ionicons name="checkmark" size={13} color="#fff" />
-              <Text style={[styles.actionBtnText, { color: '#fff' }]}>Accept</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-
-      {/* Actor avatar */}
-      {actor?.avatar_url ? (
-        <Image source={{ uri: actor.avatar_url }} style={styles.avatar} />
-      ) : (
-        <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.borderLight }]}>
-          <Ionicons name="person" size={16} color={colors.border} />
-        </View>
-      )}
-    </TouchableOpacity>
-  );
 }
 
 // ── Booking detail bottom sheet ───────────────────────────────────────────────
@@ -310,8 +237,12 @@ function BookingDetailModal({ visible, notif, booking, hairProfile, loading, col
 }
 
 // ── Main screen ────────────────────────────────────────────────────────────────
+// Stylist-side notifications: pending booking requests + booking status updates.
+// Messages/conversations live in the separate Messaging screen (see header button
+// below) — this screen used to combine both, split apart so the bottom-nav bell
+// tab shows notifications only.
 
-export default function ProviderNotificationsScreen() {
+export default function StylistNotificationsScreen() {
   const { user }               = useAuth();
   const { colors }             = useTheme();
   const { clearBookingNotifs, msgCount } = useUnreadCount();
@@ -320,7 +251,6 @@ export default function ProviderNotificationsScreen() {
 
   // ── State ─────────────────────────────────────────────────────────────────
   const [requests,      setRequests]      = useState([]);  // pending bookings
-  const [conversations, setConversations] = useState([]);  // message threads
   const [notifications, setNotifications] = useState([]);  // booking update notifs
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
@@ -352,17 +282,6 @@ export default function ProviderNotificationsScreen() {
     }
   }, [user?.id]);
 
-  // ── Fetch recent conversations ────────────────────────────────────────────
-  const fetchConversations = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const { data } = await messagingService.getConversations(user.id);
-      setConversations((data || []).slice(0, 5));
-    } catch (err) {
-      console.error('[fetchConversations]', err);
-    }
-  }, [user?.id]);
-
   // ── Fetch booking notifications (updates, confirmations, etc.) ────────────
   const fetchNotifs = useCallback(async () => {
     if (!user?.id) return;
@@ -382,8 +301,8 @@ export default function ProviderNotificationsScreen() {
   }, [user?.id]);
 
   const fetchAll = useCallback(async () => {
-    await Promise.all([fetchRequests(), fetchConversations(), fetchNotifs()]);
-  }, [fetchRequests, fetchConversations, fetchNotifs]);
+    await Promise.all([fetchRequests(), fetchNotifs()]);
+  }, [fetchRequests, fetchNotifs]);
 
   useEffect(() => {
     fetchAll().finally(() => setLoading(false));
@@ -391,7 +310,7 @@ export default function ProviderNotificationsScreen() {
 
     // Realtime: new booking → refresh requests; new notif → refresh notifs
     const ch = supabase
-      .channel(`inbox:${user?.id}`)
+      .channel(`stylist_notifs:${user?.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bookings',
           filter: `stylist_id=eq.${user?.id}` }, fetchRequests)
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bookings',
@@ -503,20 +422,20 @@ export default function ProviderNotificationsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
-        <View style={styles.header}><Text style={[styles.headerTitle, { color: colors.text }]}>Inbox</Text></View>
+        <View style={styles.header}><Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text></View>
         <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>
       </SafeAreaView>
     );
   }
 
-  const isEmpty = requests.length === 0 && conversations.length === 0 && notifications.length === 0;
+  const isEmpty = requests.length === 0 && notifications.length === 0;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={['top']}>
 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: colors.borderLight }]}>
-        <Text style={[styles.headerTitle, { color: colors.text }]}>Inbox</Text>
+        <Text style={[styles.headerTitle, { color: colors.text }]}>Notifications</Text>
         <TouchableOpacity
           style={styles.headerChatBtn}
           onPress={() => navigation.navigate('Messaging')}
@@ -550,10 +469,10 @@ export default function ProviderNotificationsScreen() {
       >
         {isEmpty ? (
           <View style={styles.center}>
-            <Ionicons name="mail-outline" size={52} color={colors.border} />
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Your inbox is empty</Text>
+            <Ionicons name="notifications-outline" size={52} color={colors.border} />
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No notifications yet</Text>
             <Text style={[styles.emptySub, { color: colors.textMuted }]}>
-              Booking requests and messages will appear here
+              Booking requests and updates will appear here
             </Text>
           </View>
         ) : (
@@ -630,44 +549,6 @@ export default function ProviderNotificationsScreen() {
               </View>
             )}
 
-            {/* ── MESSAGES ── */}
-            {conversations.length > 0 && (
-              <View style={styles.section}>
-                <Text style={[styles.sectionLabel, { color: colors.textMuted }]}>MESSAGES</Text>
-                <View style={[styles.listCard, { backgroundColor: colors.surface, borderColor: colors.borderLight }]}>
-                  {conversations.map((convo, i) => {
-                    const other = convo.participant1_id === user.id ? convo.participant2 : convo.participant1;
-                    const name  = other?.full_name || other?.username || 'User';
-                    const isLast = i === conversations.length - 1;
-                    return (
-                      <TouchableOpacity
-                        key={convo.id}
-                        style={[styles.msgRow, !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.borderLight }]}
-                        onPress={() => navigation.navigate('Messaging', { recipientId: other?.id, recipientName: name })}
-                        activeOpacity={0.75}
-                      >
-                        {other?.avatar_url
-                          ? <Image source={{ uri: other.avatar_url }} style={styles.msgAvatar} />
-                          : <View style={[styles.msgAvatar, { backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' }]}>
-                              <Text style={styles.msgInitial}>{name.charAt(0).toUpperCase()}</Text>
-                            </View>
-                        }
-                        <View style={{ flex: 1 }}>
-                          <View style={styles.msgTopRow}>
-                            <Text style={[styles.msgName, { color: colors.text }]}>{name}</Text>
-                            <Text style={[styles.msgTime, { color: colors.textMuted }]}>{timeAgo(convo.last_message_at)}</Text>
-                          </View>
-                          {convo.last_message
-                            ? <Text style={[styles.msgPreview, { color: colors.textMuted }]} numberOfLines={1}>{convo.last_message}</Text>
-                            : null}
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
             {/* ── NOTIFICATIONS ── */}
             {notifications.length > 0 && (
               <View style={styles.section}>
@@ -684,9 +565,12 @@ export default function ProviderNotificationsScreen() {
                         onPress={() => handleNotifPress(notif)}
                         activeOpacity={0.75}
                       >
-                        <View style={[styles.notifIcon, { backgroundColor: cfg.bg }]}>
-                          <Ionicons name={cfg.icon} size={18} color={cfg.color} />
-                        </View>
+                        {actor?.avatar_url
+                          ? <Image source={{ uri: actor.avatar_url }} style={styles.notifAvatar} />
+                          : <View style={[styles.notifAvatar, { backgroundColor: colors.borderLight, alignItems: 'center', justifyContent: 'center' }]}>
+                              <Ionicons name="person" size={18} color={colors.border} />
+                            </View>
+                        }
                         <View style={{ flex: 1 }}>
                           <View style={styles.msgTopRow}>
                             <Text style={[styles.notifTitle, { color: colors.text }]} numberOfLines={1}>{notif.title}</Text>
@@ -697,12 +581,9 @@ export default function ProviderNotificationsScreen() {
                             : null}
                           <Text style={[styles.notifTime, { color: colors.textMuted }]}>{timeAgo(notif.created_at)}</Text>
                         </View>
-                        {actor?.avatar_url
-                          ? <Image source={{ uri: actor.avatar_url }} style={styles.notifAvatar} />
-                          : <View style={[styles.notifAvatar, { backgroundColor: colors.borderLight, alignItems: 'center', justifyContent: 'center' }]}>
-                              <Ionicons name="person" size={14} color={colors.border} />
-                            </View>
-                        }
+                        <View style={[styles.notifIcon, { backgroundColor: cfg.bg }]}>
+                          <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
@@ -748,7 +629,6 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 3,
   },
   headerChatBadgeText: { fontSize: 9, fontFamily: 'Figtree_700Bold', color: '#fff' },
-  markAll:     { fontSize: 13, fontFamily: 'Figtree_600SemiBold' },
 
   // ScrollView container
   scroll:      { paddingBottom: 28 },
@@ -761,7 +641,7 @@ const makeStyles = (c) => StyleSheet.create({
     marginBottom: 10, paddingHorizontal: 20,
   },
 
-  // Grouped card container (messages + notifications share this)
+  // Grouped card container (notifications)
   listCard: {
     marginHorizontal: 16,
     borderRadius: 16, borderWidth: 1,
@@ -806,52 +686,21 @@ const makeStyles = (c) => StyleSheet.create({
   },
   reqAcceptText: { fontSize: 13, fontFamily: 'Figtree_600SemiBold', color: '#fff' },
 
-  // Message row (inside listCard)
-  msgRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-  },
-  msgAvatar:  { width: 44, height: 44, borderRadius: 22, flexShrink: 0 },
-  msgInitial: { fontSize: 17, fontFamily: 'Figtree_700Bold', color: '#fff' },
-  msgTopRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
-  msgName:    { fontSize: 14, fontFamily: 'Figtree_700Bold' },
-  msgTime:    { fontSize: 11, fontFamily: 'Figtree_400Regular' },
-  msgPreview: { fontSize: 13, fontFamily: 'Figtree_400Regular', lineHeight: 17 },
-
   // Notification row (inside listCard)
+  msgTopRow:  { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 },
+  msgPreview: { fontSize: 13, fontFamily: 'Figtree_400Regular', lineHeight: 17 },
   notifRow: {
     flexDirection: 'row', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingVertical: 14,
   },
   notifIcon: {
-    width: 38, height: 38, borderRadius: 19,
+    width: 34, height: 34, borderRadius: 17,
     alignItems: 'center', justifyContent: 'center', flexShrink: 0,
   },
   notifTitle:  { fontSize: 14, fontFamily: 'Figtree_600SemiBold', flex: 1 },
   notifTime:   { fontSize: 11, fontFamily: 'Figtree_400Regular', marginTop: 3 },
-  notifAvatar: { width: 32, height: 32, borderRadius: 16, flexShrink: 0 },
+  notifAvatar: { width: 44, height: 44, borderRadius: 22, flexShrink: 0 },
   unreadDot:   { width: 7, height: 7, borderRadius: 3.5 },
-
-  // Legacy NotifRow styles (kept for reference — component not currently rendered)
-  row: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 14,
-    paddingHorizontal: 16, paddingVertical: 14,
-    borderBottomWidth: 1, borderBottomColor: c.borderLight,
-    backgroundColor: c.surface,
-  },
-  rowUnread:   { backgroundColor: c.unread || '#FFFDF9' },
-  iconCircle:  { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  titleRow:    { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title:       { fontSize: 14, fontFamily: 'Figtree_700Bold', flex: 1 },
-  body:        { fontSize: 13, fontFamily: 'Figtree_400Regular', lineHeight: 18 },
-  time:        { fontSize: 11, fontFamily: 'Figtree_400Regular', marginTop: 2 },
-  avatar:      { width: 38, height: 38, borderRadius: 19, flexShrink: 0 },
-  avatarPlaceholder: { alignItems: 'center', justifyContent: 'center' },
-  actionRow:   { flexDirection: 'row', gap: 8, marginTop: 10 },
-  actionBtn:   { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 7, borderRadius: 8, overflow: 'hidden' },
-  declineBtn:  { borderWidth: 1, borderColor: '#ef4444' },
-  acceptBtn:   {},
-  actionBtnText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold' },
 
   // Empty state
   center:         { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10, padding: 40 },

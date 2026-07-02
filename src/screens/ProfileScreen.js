@@ -22,6 +22,16 @@ export default function ProfileScreen({ route, navigation }) {
   const [profileVersion, setProfileVersion] = useState(0);
   const slideAnim = useRef(new Animated.Value(SCREEN_WIDTH)).current;
 
+  // Drives UserHeader's collapse animation — see onScroll (native) /
+  // handleWebScroll (web) below. useNativeDriver: false because the header
+  // interpolates height, which the native driver can't animate.
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const handleScroll = Animated.event(
+    [{ nativeEvent: { contentOffset: { y: scrollY } } }],
+    { useNativeDriver: false },
+  );
+  const handleWebScroll = (e) => scrollY.setValue(e.target.scrollTop);
+
   useEffect(() => {
     if (settingsVisible) {
       Animated.timing(slideAnim, {
@@ -94,6 +104,7 @@ export default function ProfileScreen({ route, navigation }) {
            so scrollHeight > clientHeight and the scrollbar thumb appears.      */
         <div
           className="crwn-profile-scroll-div"
+          onScroll={handleWebScroll}
           style={{
             height: '100vh',
             overflowY: 'scroll',
@@ -105,14 +116,18 @@ export default function ProfileScreen({ route, navigation }) {
             scrollbarColor: 'rgba(0,0,0,0.25) transparent',
           }}
         >
-          <UserHeader key={`header-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <UserHeader key={`header-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} scrollY={scrollY} />
           <ProfileTabs key={`tabs-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
         </div>
       ) : (
-        /* ── Native: keep ScrollView with pull-to-refresh */
+        /* ── Native: keep ScrollView with pull-to-refresh. stickyHeaderIndices
+           pins index 0 (UserHeader) once it has collapsed/scrolled past. */
         <ScrollView
           style={styles.scroll}
           showsVerticalScrollIndicator={false}
+          stickyHeaderIndices={[0]}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -122,7 +137,7 @@ export default function ProfileScreen({ route, navigation }) {
             />
           }
         >
-          <UserHeader key={`header-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
+          <UserHeader key={`header-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} scrollY={scrollY} />
           <ProfileTabs key={`tabs-${profileVersion}`} viewedUserId={viewedUserId} isOwnProfile={isOwnProfile} />
         </ScrollView>
       )}

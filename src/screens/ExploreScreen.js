@@ -13,6 +13,7 @@ import {
   Image,
   Keyboard,
   RefreshControl,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Scissors, Plus, X } from 'lucide-react-native';
@@ -266,13 +267,25 @@ export default function ExploreScreen() {
   const isWebLayout = useIsWebLayout();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [query, setQuery] = useState('');
+  // Natural state: search icon + tag row, no text input. Tapping the icon
+  // reveals the search bar; the tag chip row stays visible either way.
   const [searchOpen, setSearchOpen] = useState(false);
+  // Controls the TAGS/People suggestion dropdown independently of whether
+  // there's query text — lets us keep the query (and its filter) after
+  // selecting a suggestion while still dismissing the dropdown.
+  const [showDropdown, setShowDropdown] = useState(false);
   const [activeFilter, setActiveFilter] = useState('All');
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   // Web popup card
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
   const postModalScrollRef = useRef(null);
+
+  // Sticky header: the CRWN title row collapses on scroll down and reappears
+  // once the user scrolls back to the top. Search bar + tag chips stay pinned.
+  const titleAnim = useRef(new Animated.Value(1)).current; // 1 = expanded, 0 = collapsed
+  const titleVisibleRef = useRef(true);
+  const lastScrollYRef = useRef(0);
 
   // Close the post modal when navigating away (e.g. tapping a hashtag on web)
   useFocusEffect(useCallback(() => () => setSelectedPost(null), []));
@@ -439,21 +452,63 @@ export default function ExploreScreen() {
       })()
     : [];
 
-  const toggleSearch = useCallback(() => {
-    if (searchOpen) {
-      setSearchOpen(false);
-      setQuery('');
-      requestAnimationFrame(() => Keyboard.dismiss());
-    } else {
-      setSearchOpen(true);
-    }
-  }, [searchOpen]);
-
+  // Hides the search input and returns to the natural state (search icon +
+  // tag row), clearing the query and dismissing the keyboard.
   const closeSearch = useCallback(() => {
     setSearchOpen(false);
     setQuery('');
+    setShowDropdown(false);
     requestAnimationFrame(() => Keyboard.dismiss());
   }, []);
+
+  const openSearch = useCallback(() => {
+    setSearchOpen(true);
+  }, []);
+
+  // Show the suggestion dropdown again whenever the user types; selecting a
+  // suggestion hides it explicitly (see matchingTags/matchingUsers handlers).
+  const handleQueryChange = useCallback((text) => {
+    setQuery(text);
+    setShowDropdown(text.trim().length > 0);
+  }, []);
+
+  // Applies a tag as the search query and dismisses the suggestion dropdown
+  // (but keeps the query itself so the filter it just applied still shows).
+  const handleSelectTag = useCallback((tag) => {
+    setQuery(`#${tag}`);
+    setActiveFilter(tag);
+    setShowDropdown(false);
+    requestAnimationFrame(() => Keyboard.dismiss());
+  }, []);
+
+  // Collapse the CRWN title row on scroll down, restore it once back at the
+  // top. Height isn't supported by the native driver, so this animation runs
+  // on the JS thread (the underlying onScroll listener itself still fires
+  // natively — useNativeDriver is only unavailable for the height/opacity
+  // animation this listener drives).
+  const animateTitle = useCallback((toValue) => {
+    Animated.timing(titleAnim, { toValue, duration: 220, useNativeDriver: false }).start();
+  }, [titleAnim]);
+
+  const handleGridScroll = useCallback(({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
+    const y = contentOffset.y;
+    const goingDown = y > lastScrollYRef.current;
+
+    if (y <= 0 && !titleVisibleRef.current) {
+      titleVisibleRef.current = true;
+      animateTitle(1);
+    } else if (goingDown && y > 8 && titleVisibleRef.current) {
+      titleVisibleRef.current = false;
+      animateTitle(0);
+    }
+    lastScrollYRef.current = y;
+
+    const nearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 300;
+    if (nearBottom && hasMore && !loadingMore && !isLoadingMoreRef.current) {
+      isLoadingMoreRef.current = true;
+      loadMore().finally(() => { isLoadingMoreRef.current = false; });
+    }
+  }, [animateTitle, hasMore, loadingMore, loadMore]);
 
   const handleSelectResult = (userId, isStylist) => {
     closeSearch();
@@ -540,15 +595,23 @@ export default function ExploreScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ── Header ── */}
+      {/* ── Header — collapses on scroll down, reappears at the top ── */}
       <SafeAreaView edges={['top']} style={styles.safeHeader}>
-        <View style={styles.header}>
+        <Animated.View
+          style={[
+            styles.header,
+            {
+              height: titleAnim.interpolate({ inputRange: [0, 1], outputRange: [0, HEADER_BAR_HEIGHT] }),
+              opacity: titleAnim,
+            },
+          ]}
+        >
           {searchOpen ? (
             <View style={styles.headerIcon} />
           ) : (
             <Pressable
               style={styles.headerIcon}
-              onPress={toggleSearch}
+              onPress={openSearch}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="search-outline" size={22} color={colors.text} />
@@ -571,17 +634,17 @@ export default function ExploreScreen() {
               </View>
             )}
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       </SafeAreaView>
 
-      {/* ── Collapsible Search + Filters ── */}
+      {/* ── Tag row always pinned; search input only shown when opened ── */}
       <View style={styles.searchAreaWrapper}>
-        {searchOpen && (
-          <View style={styles.searchDropdown}>
+        <View style={styles.searchDropdown}>
+          {searchOpen && (
             <View style={styles.searchRow}>
               <Pressable
                 style={styles.searchToggleBtn}
-                onPress={toggleSearch}
+                onPress={closeSearch}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons name="close-outline" size={22} color={colors.text} />
@@ -589,33 +652,33 @@ export default function ExploreScreen() {
               <View style={styles.searchBarWrap}>
                 <SearchBar
                   value={query}
-                  onChangeText={setQuery}
+                  onChangeText={handleQueryChange}
                   containerStyle={styles.searchBarInner}
                 />
               </View>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterContent}
-              keyboardShouldPersistTaps="handled"
-            >
-              {exploreFilters.map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
-                  onPress={() => setActiveFilter(f)}
-                >
-                  <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>
-                    {f}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+          )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {exploreFilters.map((f) => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+                onPress={() => setActiveFilter(prev => (f !== 'All' && prev === f) ? 'All' : f)}
+              >
+                <Text style={[styles.filterChipText, activeFilter === f && styles.filterChipTextActive]}>
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
 
-        {searchOpen && isSearching && (
+        {isSearching && showDropdown && (
           <View style={styles.dropdown}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
@@ -658,7 +721,7 @@ export default function ExploreScreen() {
                     <TouchableOpacity
                       key={tag}
                       style={styles.dropdownRow}
-                      onPress={() => setQuery(`#${tag}`)}
+                      onPress={() => handleSelectTag(tag)}
                     >
                       <Ionicons name="pricetag-outline" size={18} color="#9ca3af" style={{ marginRight: 12 }} />
                       <View style={styles.dropdownRowText}>
@@ -685,16 +748,10 @@ export default function ExploreScreen() {
         style={[styles.scroll, webWrap(WEB_MAX_WIDTHS.grid)]}
         contentContainerStyle={styles.gridContent}
         showsVerticalScrollIndicator={false}
-        scrollEventThrottle={400}
+        scrollEventThrottle={16}
         onLayout={e => setContainerWidth(e.nativeEvent.layout.width)}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.primary} />}
-        onScroll={({ nativeEvent: { layoutMeasurement, contentOffset, contentSize } }) => {
-          const nearBottom = contentOffset.y + layoutMeasurement.height >= contentSize.height - 300;
-          if (nearBottom && hasMore && !loadingMore && !isLoadingMoreRef.current) {
-            isLoadingMoreRef.current = true;
-            loadMore().finally(() => { isLoadingMoreRef.current = false; });
-          }
-        }}
+        onScroll={handleGridScroll}
       >
         {/* Absolutely-positioned masonry canvas */}
         {loading && uniquePosts.length === 0 ? (
@@ -817,9 +874,8 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.hairline,
     backgroundColor: '#FFFFFF',
+    overflow: 'hidden',
   },
   headerLogo: {
     fontSize: 24,

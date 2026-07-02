@@ -104,42 +104,46 @@ function StylistCard({ item, styles, colors }) {
 
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => navigation.navigate('StylistProfile', { stylist: item })}>
-      {/* Photo collage */}
-      <View style={styles.photoGrid}>
-        <PhotoSlot uri={p0} style={styles.photoMain} colors={colors} />
-        <View style={styles.photoStack}>
-          <PhotoSlot uri={p1} style={styles.photoSmall} colors={colors} />
-          <PhotoSlot uri={p2} style={[styles.photoSmall, styles.photoSmallBottom]} colors={colors} />
-        </View>
-      </View>
-
-      {/* Info */}
-      <View style={styles.cardBody}>
-        {/* Name + rating */}
-        <View style={styles.nameRow}>
-          <Text style={styles.stylistName} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.ratingBadge}>
-            <Crown size={13} color="#D4930A" />
-            <Text style={styles.ratingText}>{item.rating}</Text>
+      {/* Rounded/clipped inner wrapper — kept separate from styles.card so the
+          shadow on the outer layer isn't clipped by this overflow:hidden */}
+      <View style={styles.cardInner}>
+        {/* Photo collage */}
+        <View style={styles.photoGrid}>
+          <PhotoSlot uri={p0} style={styles.photoMain} colors={colors} />
+          <View style={styles.photoStack}>
+            <PhotoSlot uri={p1} style={styles.photoSmall} colors={colors} />
+            <PhotoSlot uri={p2} style={[styles.photoSmall, styles.photoSmallBottom]} colors={colors} />
           </View>
         </View>
 
-        {/* Location + reviews */}
-        <View style={styles.locationRow}>
-          <View style={styles.locationLeft}>
-            <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.locationText}>{item.location}</Text>
-          </View>
-          <Text style={styles.reviewCount}>{item.reviewCount} reviews</Text>
-        </View>
-
-        {/* Specialty chips */}
-        <View style={styles.chips}>
-          {item.specialties.map((s) => (
-            <View key={s} style={styles.chip}>
-              <Text style={styles.chipText}>{s}</Text>
+        {/* Info */}
+        <View style={styles.cardBody}>
+          {/* Name + rating */}
+          <View style={styles.nameRow}>
+            <Text style={styles.stylistName} numberOfLines={1}>{item.name}</Text>
+            <View style={styles.ratingBadge}>
+              <Crown size={13} color="#D4930A" />
+              <Text style={styles.ratingText}>{item.rating}</Text>
             </View>
-          ))}
+          </View>
+
+          {/* Location + reviews */}
+          <View style={styles.locationRow}>
+            <View style={styles.locationLeft}>
+              <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+              <Text style={styles.locationText}>{item.location}</Text>
+            </View>
+            <Text style={styles.reviewCount}>{item.reviewCount} reviews</Text>
+          </View>
+
+          {/* Specialty chips */}
+          <View style={styles.chips}>
+            {item.specialties.map((s) => (
+              <View key={s} style={styles.chip}>
+                <Text style={styles.chipText}>{s}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -328,7 +332,7 @@ export default function StylistsScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FCFCFC' },
+  safe: { flex: 1, backgroundColor: '#FFFFFF' },
   providerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -343,12 +347,11 @@ const makeStyles = (c) => StyleSheet.create({
     fontFamily: 'Figtree_600SemiBold',
   },
 
-  // ── Top bar (chips + search icon row) ──
+  // ── Top bar (chips + search icon row) ── flat #FFFFFF, matching the
+  // Explore feed header (no bottom border)
   topBar: {
     height: HEADER_BAR_HEIGHT,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: c.hairline,
     overflow: 'hidden',
   },
   filterContent: {
@@ -388,7 +391,7 @@ const makeStyles = (c) => StyleSheet.create({
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // ── List ──
-  list: { flex: 1, backgroundColor: '#FCFCFC' },
+  list: { flex: 1, backgroundColor: '#FFFFFF' },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -396,18 +399,23 @@ const makeStyles = (c) => StyleSheet.create({
     gap: 16,
   },
 
-  // ── Stylist card ──
+  // ── Stylist card ── shadow values match the card shadow used in the Hair
+  // Profile section (src/components/HairProfile.js) for a consistent, subtle lift.
+  // No overflow:hidden here — that would clip the shadow on iOS; the rounded
+  // clipping instead happens on cardInner below.
   card: {
+    borderRadius: 16,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: c.isDark ? 0 : 0.08,
+    shadowRadius: 6,
+    elevation: c.isDark ? 0 : 2,
+  },
+  cardInner: {
     backgroundColor: '#FFFFFF',
     borderRadius: 16,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E8DDD3',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: c.isDark ? 0 : 0.10,
-    shadowRadius: 12,
-    elevation: c.isDark ? 0 : 4,
   },
 
   // ── Photo grid ──

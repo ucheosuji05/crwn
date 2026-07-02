@@ -13,6 +13,8 @@ import {
   Pressable,
   ScrollView,
   useWindowDimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -24,6 +26,13 @@ import { collectionService } from '../services/collectionService';
 import { WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../config/supabase';
+import {
+  computeMasonryLayout,
+  ImageWithFallback,
+  SIDE_PAD,
+  COLUMN_GAP,
+  CARD_RADIUS,
+} from '../screens/ExploreScreen';
 
 const POST_GAP  = 3;
 const COLL_PAD  = 24;
@@ -56,7 +65,7 @@ export default function SavedLooks() {
   const nCollCols   = 2;
   const nPostCols   = postCols(cw);
   const collCardW   = (cw - COLL_PAD * 2 - COLL_GAP * (nCollCols - 1)) / nCollCols;
-  const collCardH   = collCardW * 0.9;
+  const collCardH   = collCardW * 1.15;
   const postTileW   = (cw - POST_GAP * (nPostCols - 1)) / nPostCols;
 
   const styles = useMemo(
@@ -134,6 +143,63 @@ export default function SavedLooks() {
       setMembershipMap(map);
     }
     setLoading(false);
+  };
+
+  // ── "All Saved" masonry grid — same layout algorithm as the Explore feed ──
+  const [imageDimensions, setImageDimensions] = useState({});
+  const fetchedDimsRef = useRef(new Set());
+
+  useEffect(() => {
+    allPosts.forEach(post => {
+      const uri = post.post_media?.[0]?.media_url;
+      if (!uri || fetchedDimsRef.current.has(post.id)) return;
+      fetchedDimsRef.current.add(post.id);
+      Image.getSize(
+        uri,
+        (w, h) => setImageDimensions(prev => ({ ...prev, [post.id]: { width: w, height: h } })),
+        () => setImageDimensions(prev => ({ ...prev, [post.id]: { width: 1, height: 1 } })),
+      );
+    });
+  }, [allPosts]);
+
+  const savedFeedItems = useMemo(
+    () => allPosts.map(post => ({ kind: 'post', key: post.id, post })),
+    [allPosts],
+  );
+  const savedColumnWidth = cw > 0 ? (cw - SIDE_PAD * 2 - COLUMN_GAP) / 2 : 0;
+  const savedMasonryLayout = useMemo(
+    () => savedColumnWidth > 0
+      ? computeMasonryLayout(savedFeedItems, savedColumnWidth, imageDimensions)
+      : { items: [], totalHeight: 0 },
+    [savedFeedItems, savedColumnWidth, imageDimensions],
+  );
+
+  const renderSavedMasonryItem = (item) => {
+    const { entry, column, top, height } = item;
+    const { post } = entry;
+    const uri = post.post_media?.[0]?.media_url;
+    let left, width;
+    if (column === 'full') { left = 0; width = savedColumnWidth * 2 + COLUMN_GAP; }
+    else if (column === 'left') { left = 0; width = savedColumnWidth; }
+    else { left = savedColumnWidth + COLUMN_GAP; width = savedColumnWidth; }
+
+    return (
+      <TouchableOpacity
+        key={post.id}
+        style={[styles.masonryCard, { position: 'absolute', left, top, width, height }]}
+        onPress={() => openPostDetail(post)}
+        activeOpacity={0.88}
+      >
+        {uri ? <ImageWithFallback uri={uri} /> : <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.borderLight }]} />}
+        {(post.post_media?.length ?? 0) > 1 && (
+          <View style={styles.photoDots}>
+            {Array.from({ length: Math.min(post.post_media.length, 5) }).map((_, i) => (
+              <View key={`${post.id}-dot-${i}`} style={[styles.photoDot, i === 0 && styles.photoDotActive]} />
+            ))}
+          </View>
+        )}
+      </TouchableOpacity>
+    );
   };
 
   useEffect(() => {
@@ -307,32 +373,27 @@ export default function SavedLooks() {
     );
   };
 
+  // Full-width button — sits above the grid, not counted as a grid cell
   const renderNewCollectionCard = () => (
     <TouchableOpacity
       key="__new__"
-      style={styles.collCard}
+      style={styles.newCollButton}
       onPress={() => { setNewGroupName(''); setCreateGroupVisible(true); }}
       activeOpacity={0.85}
     >
-      <View style={styles.newCollContainer}>
-        <Ionicons name="add" size={30} color={colors.primary} />
-      </View>
-      <Text style={[styles.collName, { color: colors.primary }]}>New Collection</Text>
+      <Ionicons name="add" size={22} color={colors.primary} />
+      <Text style={styles.newCollButtonText}>New Collection</Text>
     </TouchableOpacity>
   );
 
   const buildCollectionsGrid = () => {
-    const items = ['all', ...collections, 'new'];
+    const items = ['all', ...collections];
     const rows = [];
     for (let i = 0; i < items.length; i += nCollCols) {
       const row = items.slice(i, i + nCollCols);
       rows.push(
         <View key={`coll-row-${i}`} style={styles.collRow}>
-          {row.map(item => {
-            if (item === 'all') return renderCollectionCard('all');
-            if (item === 'new') return renderNewCollectionCard();
-            return renderCollectionCard(item);
-          })}
+          {row.map(item => item === 'all' ? renderCollectionCard('all') : renderCollectionCard(item))}
           {row.length < nCollCols && Array(nCollCols - row.length).fill(null).map((_, j) => (
             <View key={`ph-${j}`} style={{ flex: 1 }} />
           ))}
@@ -363,8 +424,10 @@ export default function SavedLooks() {
           </View>
         )}
         {(item.post_media?.length ?? 0) > 1 && (
-          <View style={styles.multiDot}>
-            <Ionicons name="copy-outline" size={13} color="#fff" />
+          <View style={styles.photoDots}>
+            {Array.from({ length: Math.min(item.post_media.length, 5) }).map((_, i) => (
+              <View key={`${item.id}-dot-${i}`} style={[styles.photoDot, i === 0 && styles.photoDotActive]} />
+            ))}
           </View>
         )}
         {inGroup && !isSelected && (
@@ -389,7 +452,7 @@ export default function SavedLooks() {
         <View key={`post-row-${i}`} style={styles.postRow}>
           {slice.map(p => renderPostTile(p, selectable))}
           {slice.length < nPostCols && Array(nPostCols - slice.length).fill(null).map((_, j) => (
-            <View key={`ep-${j}`} style={[styles.postTile, { backgroundColor: 'transparent' }]} />
+            <View key={`ep-${j}`} style={[styles.postTile, { backgroundColor: 'transparent', borderColor: 'transparent' }]} />
           ))}
         </View>
       );
@@ -438,52 +501,56 @@ export default function SavedLooks() {
 
       {/* Rename */}
       <Modal visible={renameVisible} transparent animationType="fade" onRequestClose={() => setRenameVisible(false)}>
-        <Pressable style={styles.menuBackdrop} onPress={() => setRenameVisible(false)}>
-          <Pressable style={styles.inputSheet} onPress={() => {}}>
-            <Text style={styles.inputSheetTitle}>Rename Collection</Text>
-            <TextInput
-              style={styles.nameInput} value={renameText} onChangeText={setRenameText}
-              placeholder="Collection name" placeholderTextColor={colors.placeholder}
-              autoFocus maxLength={40}
-            />
-            <View style={styles.inputSheetActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setRenameVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmBtn, !renameText.trim() && styles.confirmBtnDisabled]}
-                onPress={handleRenameGroup} disabled={!renameText.trim() || saving}
-              >
-                <Text style={styles.confirmBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.menuBackdrop} onPress={() => setRenameVisible(false)}>
+            <Pressable style={styles.inputSheet} onPress={() => {}}>
+              <Text style={styles.inputSheetTitle}>Rename Collection</Text>
+              <TextInput
+                style={styles.nameInput} value={renameText} onChangeText={setRenameText}
+                placeholder="Collection name" placeholderTextColor={colors.placeholder}
+                autoFocus maxLength={40}
+              />
+              <View style={styles.inputSheetActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setRenameVisible(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, !renameText.trim() && styles.confirmBtnDisabled]}
+                  onPress={handleRenameGroup} disabled={!renameText.trim() || saving}
+                >
+                  <Text style={styles.confirmBtnText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Create */}
       <Modal visible={createGroupVisible} transparent animationType="fade" onRequestClose={() => setCreateGroupVisible(false)}>
-        <Pressable style={styles.menuBackdrop} onPress={() => setCreateGroupVisible(false)}>
-          <Pressable style={styles.inputSheet} onPress={() => {}}>
-            <Text style={styles.inputSheetTitle}>New Collection</Text>
-            <TextInput
-              style={styles.nameInput} value={newGroupName} onChangeText={setNewGroupName}
-              placeholder="Collection name" placeholderTextColor={colors.placeholder}
-              autoFocus maxLength={40}
-            />
-            <View style={styles.inputSheetActions}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setCreateGroupVisible(false)}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.confirmBtn, !newGroupName.trim() && styles.confirmBtnDisabled]}
-                onPress={handleCreateGroup} disabled={!newGroupName.trim() || saving}
-              >
-                <Text style={styles.confirmBtnText}>Create</Text>
-              </TouchableOpacity>
-            </View>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={styles.menuBackdrop} onPress={() => setCreateGroupVisible(false)}>
+            <Pressable style={styles.inputSheet} onPress={() => {}}>
+              <Text style={styles.inputSheetTitle}>New Collection</Text>
+              <TextInput
+                style={styles.nameInput} value={newGroupName} onChangeText={setNewGroupName}
+                placeholder="Collection name" placeholderTextColor={colors.placeholder}
+                autoFocus maxLength={40}
+              />
+              <View style={styles.inputSheetActions}>
+                <TouchableOpacity style={styles.cancelBtn} onPress={() => setCreateGroupVisible(false)}>
+                  <Text style={styles.cancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, !newGroupName.trim() && styles.confirmBtnDisabled]}
+                  onPress={handleCreateGroup} disabled={!newGroupName.trim() || saving}
+                >
+                  <Text style={styles.confirmBtnText}>Create</Text>
+                </TouchableOpacity>
+              </View>
+            </Pressable>
           </Pressable>
-        </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Add posts */}
@@ -532,6 +599,7 @@ export default function SavedLooks() {
         <Animated.View style={{ opacity: fadeAnim, transform: [{ translateX: slideX }] }}>
           <View style={styles.collectionsGrid}>
             {buildCollectionsGrid()}
+            {renderNewCollectionCard()}
           </View>
         </Animated.View>
         {renderModals()}
@@ -573,7 +641,15 @@ export default function SavedLooks() {
             {openedCollection ? 'Tap ··· to add posts to this collection' : 'Bookmark posts to see them here'}
           </Text>
         </View>
+      ) : openedCollection === null ? (
+        // "All Saved" — same mosaic grid layout as the Explore feed
+        <View style={styles.postsGrid}>
+          <View style={[styles.masonryCanvas, { height: savedMasonryLayout.totalHeight }]}>
+            {savedMasonryLayout.items.map(renderSavedMasonryItem)}
+          </View>
+        </View>
       ) : (
+        // Individual collection view keeps the existing uniform grid
         <View style={styles.postsGrid}>
           {buildPostsGrid(displayedPosts)}
         </View>
@@ -664,28 +740,28 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
       justifyContent: 'center',
       alignItems: 'center',
     },
-    newCollContainer: {
-      width: collCardW,
-      height: collCardH,
+    // Full-width "New Collection" button — sits above the grid
+    newCollButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      height: 54,
       borderRadius: 14,
       borderWidth: 1.5,
       borderColor: c.primary,
       borderStyle: 'dashed',
       backgroundColor: c.surfaceAlt,
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginBottom: 10,
+    },
+    newCollButtonText: {
+      fontSize: 15,
+      fontFamily: 'Figtree_600SemiBold',
+      color: c.primary,
     },
     collFooter: {
       flexDirection: 'row',
       alignItems: 'center',
       marginTop: 6,
-    },
-    collName: {
-      fontSize: 13,
-      fontFamily: 'Figtree_600SemiBold',
-      color: c.text,
-      flex: 1,
     },
     collMenuBtn: {
       paddingLeft: 4,
@@ -743,6 +819,13 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
       color: c.text,
     },
     postsGrid: { paddingBottom: 40 },
+    // "All Saved" masonry canvas — matches Explore's mosaic grid card styling
+    masonryCanvas: { position: 'relative' },
+    masonryCard: {
+      borderRadius: CARD_RADIUS,
+      overflow: 'hidden',
+      backgroundColor: c.borderLight,
+    },
     postRow: {
       flexDirection: 'row',
       gap: POST_GAP,
@@ -754,9 +837,30 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
       backgroundColor: c.borderLight,
       position: 'relative',
       overflow: 'hidden',
+      borderWidth: 0.5,
+      borderColor: '#E5E5E5',
     },
     postTilePlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    multiDot:    { position: 'absolute', top: 8, right: 8 },
+    // Multi-image page indicator — matches Explore feed's photoDots pattern
+    photoDots: {
+      position: 'absolute',
+      top: 8,
+      right: 8,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
+    photoDot: {
+      width: 5,
+      height: 5,
+      borderRadius: 3,
+      backgroundColor: 'rgba(255,255,255,0.5)',
+    },
+    photoDotActive: {
+      backgroundColor: '#fff',
+      width: 6,
+      height: 6,
+    },
     alreadyBadge: {
       position: 'absolute', top: 6, right: 6,
       width: 20, height: 20, borderRadius: 10,
