@@ -244,11 +244,11 @@ export default function StylistsScreen() {
 
       {/* Filter chips — full width with hairline border, content centered */}
       <View style={styles.topBar}>
+        <View style={[styles.chipsInner, webWrap(WEB_MAX_WIDTHS.feed)]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContent}
-          style={webWrap(WEB_MAX_WIDTHS.feed)}
           keyboardShouldPersistTaps="handled"
           directionalLockEnabled
           alwaysBounceVertical={false}
@@ -270,6 +270,7 @@ export default function StylistsScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+        </View>
       </View>
 
       {/* Main content — centered */}
@@ -347,6 +348,10 @@ const makeStyles = (c) => StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline || c.borderLight,
+  },
+  chipsInner: {
+    height: HEADER_BAR_HEIGHT,
+    overflow: 'hidden',
   },
   filterContent: {
     paddingLeft: 16,
