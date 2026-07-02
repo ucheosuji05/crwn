@@ -222,7 +222,7 @@ export default function StylistsScreen() {
       {/* Search bar — full width when open */}
       {searchOpen && (
         <View style={styles.searchRow}>
-          <View style={[{ flexDirection: 'row', alignItems: 'center', flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
+          <View style={[{ flexDirection: 'row', alignItems: 'center', flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
             <TouchableOpacity
               style={styles.searchIconBtn}
               onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
@@ -248,7 +248,7 @@ export default function StylistsScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContent}
-          style={webWrap(WEB_MAX_WIDTHS.list)}
+          style={webWrap(WEB_MAX_WIDTHS.feed)}
           keyboardShouldPersistTaps="handled"
           directionalLockEnabled
           alwaysBounceVertical={false}
@@ -273,7 +273,7 @@ export default function StylistsScreen() {
       </View>
 
       {/* Main content — centered */}
-      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
+      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
 
         {/* Provider mode banner — visible only to stylists in client mode */}
         {isStylist && (
