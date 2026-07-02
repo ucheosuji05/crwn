@@ -9,10 +9,10 @@ export function useIsWebLayout() {
 }
 
 export const WEB_MAX_WIDTHS = {
-  grid:    1100,  // Explore photo grid
-  feed:     720,  // Community & Notifications single-column feed
-  profile:  900,  // Profile screen
-  list:     860,  // Stylists list
+  grid:    1400,  // Explore photo grid
+  feed:     960,  // Community & Notifications single-column feed
+  profile: 1140,  // Profile screen
+  list:    1200,  // Stylists list
 };
 
 /**

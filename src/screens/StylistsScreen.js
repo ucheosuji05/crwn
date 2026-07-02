@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import SearchBar from '../components/SearchBar';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
-import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
+import { webWrap, WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -159,6 +159,7 @@ export default function StylistsScreen() {
   const isStylist = !!profile?.is_stylist;
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
+  const isWebLayout = useIsWebLayout();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -299,16 +300,12 @@ export default function StylistsScreen() {
           showsVerticalScrollIndicator={false}
           style={styles.list}
           contentContainerStyle={styles.listContent}
+          numColumns={isWebLayout ? 2 : 1}
+          key={isWebLayout ? 'web-2col' : 'native-1col'}
+          columnWrapperStyle={isWebLayout ? styles.columnWrapper : undefined}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
           }
-          // ── Uncomment to re-enable preview banner ──
-          // ListHeaderComponent={isPreviewMode ? (
-          //   <View style={styles.previewBanner}>
-          //     <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
-          //     <Text style={styles.previewText}>Showing preview — real stylists will appear here once they join CRWN</Text>
-          //   </View>
-          // ) : null}
           renderItem={({ item }) => (
             <StylistCard item={item} styles={styles} colors={colors} />
           )}
@@ -396,6 +393,9 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
+    gap: 16,
+  },
+  columnWrapper: {
     gap: 16,
   },
 

@@ -12,6 +12,7 @@ import {
   ScrollView,
   TextInput,
   KeyboardAvoidingView,
+  useWindowDimensions,
 } from 'react-native';
 import { SCREEN_HEIGHT, SCREEN_WIDTH } from '../utils/responsive';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,7 +32,7 @@ import { profileService } from '../services/profileService';
 import { reviewService } from '../services/reviewService';
 import { supabase } from '../config/supabase';
 import { Crown, Scissors } from 'lucide-react-native';
-import { useIsWebLayout } from '../utils/webLayout';
+import { useIsWebLayout, WEB_MAX_WIDTHS } from '../utils/webLayout';
 
 const HONEY = '#D4930A';
 
@@ -83,6 +84,24 @@ function computeProfileMasonry(posts, columnWidth, imageDimensions) {
     }
   });
   return { items, totalHeight: Math.max(leftH, rightH, gap) - gap };
+}
+
+// N-column shortest-column-first masonry for web (numCols > 2)
+function computeNColMasonry(posts, columnWidth, imageDimensions, numCols) {
+  if (numCols === 2) return computeProfileMasonry(posts, columnWidth, imageDimensions);
+  const gap = MASONRY_GAP;
+  const heights = new Array(numCols).fill(0);
+  const items = [];
+  posts.forEach(post => {
+    const dims = imageDimensions[post.id];
+    const ar = dims ? dims.width / dims.height : MASONRY_DEFAULT_AR;
+    const renderAr = Math.max(ar, 1 / MASONRY_MAX_HW);
+    const col = heights.indexOf(Math.min(...heights));
+    const height = columnWidth / renderAr;
+    items.push({ post, column: col, top: heights[col], height });
+    heights[col] += height + gap;
+  });
+  return { items, totalHeight: Math.max(Math.max(...heights) - gap, 0) };
 }
 
 const ALL_TABS = [
@@ -202,6 +221,12 @@ function ClientBookingCard({ booking, colors, styles, onPress }) {
 
 export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const isWebLayout = useIsWebLayout();
+  const { width: windowWidth } = useWindowDimensions();
+  const numCols = isWebLayout ? 3 : 2;
+  const dynColWidth = (() => {
+    const containerW = isWebLayout ? Math.min(windowWidth, WEB_MAX_WIDTHS.profile) : windowWidth;
+    return (containerW - MASONRY_PAD * 2 - MASONRY_GAP * (numCols - 1)) / numCols;
+  })();
   const [activeTab, setActiveTab] = useState('posts');
   const [selectedPost, setSelectedPost] = useState(null);
   const [postCommentsOpen, setPostCommentsOpen] = useState(false);
@@ -265,12 +290,14 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   }, [posts, taggedPosts]);
 
   const renderMasonryGrid = (items) => {
-    const layout = computeProfileMasonry(items, MASONRY_COLUMN_WIDTH, postImageDims);
+    const layout = computeNColMasonry(items, dynColWidth, postImageDims, numCols);
     return (
       <View style={[styles.masonryCanvas, { height: layout.totalHeight }]}>
         {layout.items.map(({ post, column, top, height }) => {
-          const left = column === 'left' ? 0 : column === 'full' ? 0 : MASONRY_COLUMN_WIDTH + MASONRY_GAP;
-          const width = column === 'full' ? MASONRY_COLUMN_WIDTH * 2 + MASONRY_GAP : MASONRY_COLUMN_WIDTH;
+          const left = typeof column === 'number'
+            ? column * (dynColWidth + MASONRY_GAP)
+            : (column === 'left' || column === 'full' ? 0 : dynColWidth + MASONRY_GAP);
+          const width = column === 'full' ? dynColWidth * 2 + MASONRY_GAP : dynColWidth;
           const uri = post.post_media?.[0]?.media_url;
           const stylistName = post.stylists?.full_name || post.stylists?.username;
           return (
@@ -731,13 +758,12 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const SKELETON_POST_HEIGHTS = [200, 240, 170];
   const renderSkeletonMasonry = () => (
     <View style={{ flexDirection: 'row', gap: MASONRY_GAP, marginHorizontal: MASONRY_PAD, marginTop: 12 }}>
-      <View style={{ flex: 1, gap: MASONRY_GAP }}>
-        <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[0], borderRadius: MASONRY_RADIUS }} />
-        <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[2], borderRadius: MASONRY_RADIUS }} />
-      </View>
-      <View style={{ flex: 1, gap: MASONRY_GAP }}>
-        <SkeletonPulse style={{ width: MASONRY_COLUMN_WIDTH, height: SKELETON_POST_HEIGHTS[1], borderRadius: MASONRY_RADIUS }} />
-      </View>
+      {Array.from({ length: numCols }).map((_, ci) => (
+        <View key={ci} style={{ flex: 1, gap: MASONRY_GAP }}>
+          <SkeletonPulse style={{ height: SKELETON_POST_HEIGHTS[ci % SKELETON_POST_HEIGHTS.length], borderRadius: MASONRY_RADIUS }} />
+          <SkeletonPulse style={{ height: SKELETON_POST_HEIGHTS[(ci + 1) % SKELETON_POST_HEIGHTS.length], borderRadius: MASONRY_RADIUS }} />
+        </View>
+      ))}
     </View>
   );
 

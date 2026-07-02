@@ -181,6 +181,30 @@ export function computeMasonryLayout(feedItems, columnWidth, imageDimensions) {
   return { items, totalHeight: Math.max(leftH, rightH) };
 }
 
+// Simple shortest-column-first masonry for N columns (used when numCols > 2)
+function computeNColMasonryLayout(feedItems, columnWidth, imageDimensions, numCols) {
+  const gap = COLUMN_GAP;
+  const heights = new Array(numCols).fill(0);
+  const items = [];
+
+  feedItems.forEach(entry => {
+    let ar = DEFAULT_AR;
+    if (entry.kind === 'post') {
+      const dims = imageDimensions[entry.post.id];
+      ar = dims ? dims.width / dims.height : DEFAULT_AR;
+    } else if (entry.kind === 'topic') {
+      ar = TOPIC_ASPECT_RATIO;
+    }
+    const renderAr = Math.max(ar, 1 / MAX_RENDER_HW);
+    const col = heights.indexOf(Math.min(...heights));
+    const h = columnWidth / renderAr;
+    items.push({ entry, column: col, top: heights[col], height: h });
+    heights[col] += h + gap;
+  });
+
+  return { items, totalHeight: Math.max(...heights) };
+}
+
 function TopicCard({ tag, gradient, style, onPress }) {
   return (
     <TouchableOpacity style={style} onPress={onPress} activeOpacity={0.85}>
@@ -211,21 +235,19 @@ const topicStyles = StyleSheet.create({
 // Full-grid skeleton shown while the very first page of posts is loading
 const SKELETON_HEIGHTS = [220, 180, 200, 240, 190, 210, 230, 170];
 
-function ExploreSkeletonGrid({ styles }) {
-  const leftHeights = SKELETON_HEIGHTS.filter((_, i) => i % 2 === 0);
-  const rightHeights = SKELETON_HEIGHTS.filter((_, i) => i % 2 === 1);
+function ExploreSkeletonGrid({ styles, numCols = 2 }) {
+  const cols = Array.from({ length: numCols }, (_, ci) =>
+    SKELETON_HEIGHTS.filter((_, i) => i % numCols === ci)
+  );
   return (
     <View style={styles.skeletonRow}>
-      <View style={styles.skeletonCol}>
-        {leftHeights.map((h, i) => (
-          <SkeletonPulse key={`l${i}`} style={[styles.skeletonCard, { height: h }]} />
-        ))}
-      </View>
-      <View style={styles.skeletonCol}>
-        {rightHeights.map((h, i) => (
-          <SkeletonPulse key={`r${i}`} style={[styles.skeletonCard, { height: h }]} />
-        ))}
-      </View>
+      {cols.map((heights, ci) => (
+        <View key={ci} style={styles.skeletonCol}>
+          {heights.map((h, i) => (
+            <SkeletonPulse key={`${ci}-${i}`} style={[styles.skeletonCard, { height: h }]} />
+          ))}
+        </View>
+      ))}
     </View>
   );
 }
@@ -380,8 +402,9 @@ export default function ExploreScreen() {
     });
   }, [filteredPosts, flushDims]);
 
+  const numCols = isWebLayout ? 3 : 2;
   const columnWidth = containerWidth > 0
-    ? (containerWidth - SIDE_PAD * 2 - COLUMN_GAP) / 2
+    ? (containerWidth - SIDE_PAD * 2 - COLUMN_GAP * (numCols - 1)) / numCols
     : 0;
 
   // Count tag frequency across all loaded posts; fall back to static list if DB has none yet
@@ -415,9 +438,11 @@ export default function ExploreScreen() {
 
   const masonryLayout = useMemo(
     () => columnWidth > 0
-      ? computeMasonryLayout(feedItems, columnWidth, imageDimensions)
+      ? (numCols === 2
+          ? computeMasonryLayout(feedItems, columnWidth, imageDimensions)
+          : computeNColMasonryLayout(feedItems, columnWidth, imageDimensions, numCols))
       : { items: [], totalHeight: 0 },
-    [feedItems, columnWidth, imageDimensions],
+    [feedItems, columnWidth, imageDimensions, numCols],
   );
 
   const openPost = useCallback((item) => {
@@ -529,8 +554,12 @@ export default function ExploreScreen() {
     } else if (column === 'left') {
       left = 0;
       width = columnWidth;
-    } else {
+    } else if (column === 'right') {
       left = columnWidth + COLUMN_GAP;
+      width = columnWidth;
+    } else {
+      // Numeric index for 3+ column layouts
+      left = column * (columnWidth + COLUMN_GAP);
       width = columnWidth;
     }
 
@@ -755,7 +784,7 @@ export default function ExploreScreen() {
       >
         {/* Absolutely-positioned masonry canvas */}
         {loading && uniquePosts.length === 0 ? (
-          <ExploreSkeletonGrid styles={styles} />
+          <ExploreSkeletonGrid styles={styles} numCols={numCols} />
         ) : (
           <View style={[styles.masonryCanvas, { height: masonryLayout.totalHeight }]}>
             {masonryLayout.items.map(renderMasonryItem)}
