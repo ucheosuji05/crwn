@@ -84,7 +84,7 @@ export default function ThreadList({
       <View style={styles.header}>
         {searchOpen ? (
           <>
-            <View style={styles.searchRow}>
+            <View style={[styles.searchRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
               <Pressable
                 style={styles.searchToggleBtn}
                 onPress={toggleSearch}
@@ -102,7 +102,7 @@ export default function ThreadList({
                 />
               </View>
             </View>
-            <View style={styles.chipsRow}>
+            <View style={[styles.chipsRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
               <FlatList
                 horizontal
                 data={FILTERS}
