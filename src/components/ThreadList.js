@@ -80,11 +80,10 @@ export default function ThreadList({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
+      {/* Header spans full screen width on all platforms */}
       <View style={styles.header}>
         {searchOpen ? (
           <>
-            {/* Search bar on top with X to close */}
             <View style={styles.searchRow}>
               <Pressable
                 style={styles.searchToggleBtn}
@@ -103,7 +102,6 @@ export default function ThreadList({
                 />
               </View>
             </View>
-            {/* Filter chips below */}
             <View style={styles.chipsRow}>
               <FlatList
                 horizontal
@@ -126,7 +124,6 @@ export default function ThreadList({
             </View>
           </>
         ) : (
-          /* Collapsed: search icon + filter chips in one row */
           <View style={styles.chipsRow}>
             <Pressable
               style={styles.searchToggleBtn}
@@ -158,6 +155,7 @@ export default function ThreadList({
         )}
       </View>
 
+      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
       {loading && threads.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
