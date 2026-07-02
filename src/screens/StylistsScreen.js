@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import SearchBar from '../components/SearchBar';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
-import { webWrap, WEB_MAX_WIDTHS, useIsWebLayout } from '../utils/webLayout';
+import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -159,7 +159,6 @@ export default function StylistsScreen() {
   const isStylist = !!profile?.is_stylist;
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
-  const isWebLayout = useIsWebLayout();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState('All');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -219,48 +218,37 @@ export default function StylistsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
 
-      {/* Provider mode banner — visible only to stylists in client mode */}
-      {isStylist && (
-        <TouchableOpacity
-          style={[styles.providerBanner, { backgroundColor: colors.primaryLight || '#FDF1EE', borderBottomColor: colors.borderLight }]}
-          onPress={toggleMode}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="briefcase-outline" size={15} color={colors.primary} />
-          <Text style={[styles.providerBannerText, { color: colors.primary }]}>Switch to Provider Mode</Text>
-          <Ionicons name="chevron-forward" size={15} color={colors.primary} />
-        </TouchableOpacity>
-      )}
-
-      {/* Search bar on top when open, X to dismiss */}
+      {/* Search bar — full width when open */}
       {searchOpen && (
         <View style={styles.searchRow}>
-          <TouchableOpacity
-            style={styles.searchIconBtn}
-            onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
-          >
-            <Ionicons name="close-outline" size={22} color={colors.text} />
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <SearchBar
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Search service providers..."
-              autoFocus
-              containerStyle={styles.searchBarOverride}
-            />
+          <View style={[{ flexDirection: 'row', alignItems: 'center', flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
+            <TouchableOpacity
+              style={styles.searchIconBtn}
+              onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
+            >
+              <Ionicons name="close-outline" size={22} color={colors.text} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <SearchBar
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search service providers..."
+                autoFocus
+                containerStyle={styles.searchBarOverride}
+              />
+            </View>
           </View>
         </View>
       )}
 
-      {/* Filter chips — with search icon when collapsed */}
+      {/* Filter chips — full width with hairline border, content centered */}
       <View style={styles.topBar}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContent}
+          style={webWrap(WEB_MAX_WIDTHS.list)}
           keyboardShouldPersistTaps="handled"
           directionalLockEnabled
           alwaysBounceVertical={false}
@@ -284,43 +272,51 @@ export default function StylistsScreen() {
         </ScrollView>
       </View>
 
-      {/* Loading */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : searching ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={filtered}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          numColumns={isWebLayout ? 2 : 1}
-          key={isWebLayout ? 'web-2col' : 'native-1col'}
-          columnWrapperStyle={isWebLayout ? styles.columnWrapper : undefined}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
-          }
-          renderItem={({ item }) => (
-            <StylistCard item={item} styles={styles} colors={colors} />
-          )}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>No service providers found</Text>
-              <Text style={styles.emptySubtitle}>
-                {searchQuery || activeFilter !== 'All'
-                  ? 'Try a different search or filter'
-                  : 'Service providers will appear here once they join CRWN'}
-              </Text>
-            </View>
-          }
-        />
-      )}
+      {/* Main content — centered */}
+      <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.list)]}>
+
+        {/* Provider mode banner — visible only to stylists in client mode */}
+        {isStylist && (
+          <TouchableOpacity
+            style={[styles.providerBanner, { backgroundColor: colors.primaryLight || '#FDF1EE', borderBottomColor: colors.borderLight }]}
+            onPress={toggleMode}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="briefcase-outline" size={15} color={colors.primary} />
+            <Text style={[styles.providerBannerText, { color: colors.primary }]}>Switch to Provider Mode</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.primary} />
+          </TouchableOpacity>
+        )}
+
+        {loading || searching ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={filtered}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            style={styles.list}
+            contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+            }
+            renderItem={({ item }) => (
+              <StylistCard item={item} styles={styles} colors={colors} />
+            )}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>No service providers found</Text>
+                <Text style={styles.emptySubtitle}>
+                  {searchQuery || activeFilter !== 'All'
+                    ? 'Try a different search or filter'
+                    : 'Service providers will appear here once they join CRWN'}
+                </Text>
+              </View>
+            }
+          />
+        )}
       </View>
     </SafeAreaView>
   );
@@ -349,7 +345,8 @@ const makeStyles = (c) => StyleSheet.create({
   topBar: {
     height: HEADER_BAR_HEIGHT,
     backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.hairline || c.borderLight,
   },
   filterContent: {
     paddingLeft: 16,
@@ -393,9 +390,6 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 24,
-    gap: 16,
-  },
-  columnWrapper: {
     gap: 16,
   },
 
