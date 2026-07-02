@@ -6,7 +6,7 @@ import {
 import { webWrap, WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { UserPlus } from 'lucide-react-native';
+import { UserPlus, Check, X } from 'lucide-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
@@ -23,18 +23,18 @@ import SearchBar from './SearchBar';
 // follows/bookings.
 
 const SOCIAL_TYPE_CONFIG = {
-  like:    { icon: 'heart',               color: '#F27C7C', bg: '#FDEDED', title: 'New Like'     },
+  like:    { icon: 'heart',               color: '#D4726E', bg: '#FAEAEA', title: 'New Like'     },
   crown:   { icon: 'star',                color: '#F8B430', bg: '#FFF7E3', title: 'New Crown'    },
   comment: { icon: 'chatbubble-ellipses', color: '#8E683B', bg: '#F3EDE3', title: 'New Comment'  },
   reply:   { icon: 'chatbubble-ellipses', color: '#8E683B', bg: '#F3EDE3', title: 'New Reply'    },
   mention: { icon: 'at',                  color: '#8E683B', bg: '#F3EDE3', title: 'New Mention'  },
-  follow:  { lucideIcon: UserPlus,        color: '#C8835A', bg: '#FDF1EE', title: 'New Follower' },
+  follow:  { lucideIcon: UserPlus,        color: '#4F4032', bg: '#EDE5D8', title: 'New Follower' },
 };
 
 const BOOKING_TYPE_CONFIG = {
-  booking_confirmed:   { icon: 'checkmark-circle', color: '#10B981', bg: '#ECFDF5', title: 'Booking Confirmed' },
-  booking_declined:    { icon: 'close-circle',     color: '#EF4444', bg: '#FEF2F2', title: 'Booking Update'    },
-  booking_cancelled:   { icon: 'close-circle',     color: '#EF4444', bg: '#FEF2F2', title: 'Booking Update'    },
+  booking_confirmed:   { lucideIcon: Check,        color: '#3F523F', bg: '#E8F0E8', title: 'Booking Confirmed' },
+  booking_declined:    { lucideIcon: X,             color: '#A0522D', bg: '#F5E8E8', title: 'Booking Update'    },
+  booking_cancelled:   { lucideIcon: X,             color: '#A0522D', bg: '#F5E8E8', title: 'Booking Update'    },
   booking_rescheduled: { icon: 'calendar',         color: '#F59E0B', bg: '#FEF9EC', title: 'Booking Update'    },
   booking_request:     { icon: 'calendar-outline', color: '#C8835A', bg: '#FDF1EE', title: 'Booking Update'    },
   booking_completed:   { icon: 'ribbon-outline',   color: '#F8B430', bg: '#FFF7E3', title: 'Booking Update'    },

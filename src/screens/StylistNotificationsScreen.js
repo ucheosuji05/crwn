@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { Check, X } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
@@ -37,9 +38,9 @@ function fmtTime(timeStr) {
 // ── Type config ────────────────────────────────────────────────────────────────
 
 const TYPE_CFG = {
-  booking_request:   { icon: 'calendar-outline',     color: '#F59E0B', bg: '#FEF9EC', label: 'New Request'  },
-  booking_confirmed: { icon: 'checkmark-circle',      color: '#10B981', bg: '#ECFDF5', label: 'Confirmed'    },
-  booking_declined:  { icon: 'close-circle-outline',  color: '#EF4444', bg: '#FEF2F2', label: 'Declined'     },
+  booking_request:   { icon: 'calendar-outline', color: '#F59E0B', bg: '#FEF9EC', label: 'New Request'  },
+  booking_confirmed: { lucideIcon: Check,        color: '#3F523F', bg: '#E8F0E8', label: 'Confirmed'    },
+  booking_declined:  { lucideIcon: X,             color: '#A0522D', bg: '#F5E8E8', label: 'Declined'     },
 };
 
 function getTypeCfg(type) {
@@ -582,7 +583,11 @@ export default function StylistNotificationsScreen() {
                           <Text style={[styles.notifTime, { color: colors.textMuted }]}>{timeAgo(notif.created_at)}</Text>
                         </View>
                         <View style={[styles.notifIcon, { backgroundColor: cfg.bg }]}>
-                          <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+                          {cfg.lucideIcon ? (
+                            <cfg.lucideIcon size={16} color={cfg.color} strokeWidth={2} />
+                          ) : (
+                            <Ionicons name={cfg.icon} size={18} color={cfg.color} />
+                          )}
                         </View>
                       </TouchableOpacity>
                     );
