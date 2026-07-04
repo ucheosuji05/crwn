@@ -502,7 +502,7 @@ async function sendEmail({ to, subject, html, replyTo }) {
   console.log(`[sendEmail] to=${to} from=${from} key=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
   if (process.env.RESEND_API_KEY) {
     const payload = { from, to: [to], subject, html };
-    if (replyTo) payload.reply_to = replyTo;
+    if (replyTo) payload.reply_to = Array.isArray(replyTo) ? replyTo : [replyTo];
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -1059,9 +1059,14 @@ app.post('/api/reports', async (req, res) => {
     });
 
     const typeLabel = type === 'post' ? 'Post' : type === 'user' ? 'User' : 'Content';
+    const reportSubject = `[CRWN Report] ${typeLabel} reported by ${reporterDisplay} — ${reason}`;
+    const reportReplyButton = reporterEmail
+      ? `<a href="mailto:${reporterEmail}?subject=Re: ${encodeURIComponent(reportSubject)}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#5D1F1F;color:#fff;text-decoration:none;border-radius:8px;font-size:14px">Reply to Reporter</a>`
+      : '';
+
     await sendEmail({
       to: 'crwn@crwnhq.com',
-      subject: `[CRWN Report] ${typeLabel} reported by ${reporterDisplay} — ${reason}`,
+      subject: reportSubject,
       replyTo: reporterEmail,
       html: `
         <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
@@ -1073,6 +1078,7 @@ app.post('/api/reports', async (req, res) => {
             <tr><td style="padding:8px 0;color:#666">Reason</td><td style="padding:8px 0"><strong>${reason}</strong></td></tr>
             ${notes ? `<tr><td style="padding:8px 0;color:#666;vertical-align:top">Notes</td><td style="padding:8px 0">${notes}</td></tr>` : ''}
           </table>
+          ${reportReplyButton}
         </div>
       `,
     });
@@ -1106,6 +1112,10 @@ app.post('/api/feedback', async (req, res) => {
       ? `[CRWN Support] Request from ${userDisplay}`
       : `[CRWN Feedback] ${feedbackType || 'General'} from ${userDisplay}`;
 
+    const replyButton = userEmail
+      ? `<a href="mailto:${userEmail}?subject=Re: ${encodeURIComponent(subjectLine)}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#5D1F1F;color:#fff;text-decoration:none;border-radius:8px;font-size:14px">Reply to ${profile.full_name || userDisplay}</a>`
+      : '';
+
     await sendEmail({
       to: 'crwn@crwnhq.com',
       subject: subjectLine,
@@ -1118,6 +1128,7 @@ app.post('/api/feedback', async (req, res) => {
             ${!isSupport ? `<tr><td style="padding:8px 0;color:#666">Type</td><td style="padding:8px 0"><strong>${feedbackType || 'General'}</strong></td></tr>` : ''}
             <tr><td style="padding:8px 0;color:#666;vertical-align:top">Message</td><td style="padding:8px 0;white-space:pre-wrap">${message}</td></tr>
           </table>
+          ${replyButton}
         </div>
       `,
     });
