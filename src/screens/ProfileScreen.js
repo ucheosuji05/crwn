@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Platform, RefreshControl, ActivityIndicator, Animated, Dimensions } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-import { WEB_MAX_WIDTHS } from '../utils/webLayout';
 import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
 import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -108,10 +107,7 @@ export default function ProfileScreen({ route, navigation }) {
           style={{
             height: '100vh',
             overflowY: 'scroll',
-            maxWidth: WEB_MAX_WIDTHS.profile,
             width: '100%',
-            marginLeft: 'auto',
-            marginRight: 'auto',
             scrollbarWidth: 'thin',
             scrollbarColor: 'rgba(0,0,0,0.25) transparent',
           }}

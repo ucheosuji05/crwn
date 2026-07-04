@@ -219,58 +219,75 @@ export default function StylistsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
 
-      {/* Search bar — full width when open */}
-      {searchOpen && (
-        <View style={styles.searchRow}>
-          <View style={[{ flexDirection: 'row', alignItems: 'center', flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
-            <TouchableOpacity
-              style={styles.searchIconBtn}
-              onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
-            >
-              <Ionicons name="close-outline" size={22} color={colors.text} />
-            </TouchableOpacity>
-            <View style={{ flex: 1 }}>
-              <SearchBar
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                placeholder="Search service providers..."
-                autoFocus
-                containerStyle={styles.searchBarOverride}
-              />
+      {/* Header — full width, same structure as Community */}
+      <View style={styles.header}>
+        {searchOpen ? (
+          <>
+            <View style={[styles.searchRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
+              <TouchableOpacity
+                style={styles.searchIconBtn}
+                onPress={() => { setSearchOpen(false); setSearchQuery(''); }}
+              >
+                <Ionicons name="close-outline" size={22} color={colors.text} />
+              </TouchableOpacity>
+              <View style={styles.searchBarWrap}>
+                <SearchBar
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Search service providers..."
+                  autoFocus
+                  containerStyle={styles.searchBarContainer}
+                />
+              </View>
             </View>
-          </View>
-        </View>
-      )}
-
-      {/* Filter chips — full width with hairline border, content centered */}
-      <View style={styles.topBar}>
-        <View style={[styles.chipsInner, webWrap(WEB_MAX_WIDTHS.feed)]}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterContent}
-          keyboardShouldPersistTaps="handled"
-          directionalLockEnabled
-          alwaysBounceVertical={false}
-        >
-          {!searchOpen && (
+            <View style={[styles.chipsRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.filterList}
+                style={styles.filterScrollView}
+                keyboardShouldPersistTaps="handled"
+                directionalLockEnabled
+                alwaysBounceVertical={false}
+              >
+                {SPECIALTY_FILTERS.map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+                    onPress={() => setActiveFilter(f)}
+                  >
+                    <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </>
+        ) : (
+          <View style={[styles.chipsRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
             <TouchableOpacity style={styles.searchIconBtn} onPress={() => setSearchOpen(true)}>
               <Ionicons name="search-outline" size={22} color={colors.text} />
             </TouchableOpacity>
-          )}
-          {SPECIALTY_FILTERS.map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
-              onPress={() => setActiveFilter(f)}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.filterList}
+              style={styles.filterScrollView}
+              keyboardShouldPersistTaps="handled"
+              directionalLockEnabled
+              alwaysBounceVertical={false}
             >
-              <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>
-                {f}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        </View>
+              {SPECIALTY_FILTERS.map((f) => (
+                <TouchableOpacity
+                  key={f}
+                  style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
+                  onPress={() => setActiveFilter(f)}
+                >
+                  <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
       {/* Main content — centered */}
@@ -341,32 +358,24 @@ const makeStyles = (c) => StyleSheet.create({
     fontFamily: 'Figtree_600SemiBold',
   },
 
-  // ── Top bar (chips + search icon row) ── flat #FFFFFF, matching the
-  // Explore feed header (no bottom border)
-  topBar: {
-    height: HEADER_BAR_HEIGHT,
+  header: {
+    minHeight: HEADER_BAR_HEIGHT,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline || c.borderLight,
   },
-  chipsInner: {
-    height: HEADER_BAR_HEIGHT,
-    overflow: 'hidden',
-  },
-  filterContent: {
-    paddingLeft: 16,
-    paddingRight: 14,
-    gap: 8,
+  searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16 },
+  searchBarWrap: { flex: 1 },
+  searchBarContainer: { marginLeft: 6, marginRight: 14, marginVertical: 8 },
+  filterScrollView: { flex: 1 },
+  chipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     height: HEADER_BAR_HEIGHT,
+    paddingLeft: 16,
   },
-  searchRow: { flexDirection: 'row', alignItems: 'center', paddingLeft: 8, backgroundColor: '#FFFFFF' },
+  filterList: { paddingLeft: 6, paddingVertical: 6, paddingRight: 14, gap: 8, alignItems: 'center' },
   searchIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  searchBarOverride: {
-    marginHorizontal: 4,
-    marginVertical: 8,
-  },
   filterChip: {
     borderRadius: 8,
     paddingHorizontal: 14,

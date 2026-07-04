@@ -35,6 +35,7 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(true);
 
   const isDisabled = loading || googleLoading;
 
@@ -46,7 +47,7 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
     setLoading(true);
     try {
       console.log('[AuthScreen] signing in to', AUTH_URL, 'email:', email.trim().toLowerCase());
-      const result = await signIn(email.trim().toLowerCase(), password);
+      const result = await signIn(email.trim().toLowerCase(), password, rememberMe);
       if (result.error) {
         Alert.alert('Sign In Failed', result.error.message || 'Invalid email or password');
       }
@@ -168,10 +169,23 @@ export default function AuthScreen({ onBack, onForgotPassword }) {
                 </View>
               </View>
 
-              {/* Forgot password */}
-              <TouchableOpacity style={styles.forgotButton} onPress={onForgotPassword} disabled={isDisabled}>
-                <Text style={styles.forgotText}>Forgot password?</Text>
-              </TouchableOpacity>
+              {/* Remember me + Forgot password row */}
+              <View style={styles.rememberRow}>
+                <TouchableOpacity
+                  style={styles.rememberToggle}
+                  onPress={() => setRememberMe(v => !v)}
+                  disabled={isDisabled}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.checkbox, rememberMe && styles.checkboxChecked]}>
+                    {rememberMe && <Ionicons name="checkmark" size={13} color="#fff" />}
+                  </View>
+                  <Text style={styles.rememberText}>Remember me</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onForgotPassword} disabled={isDisabled}>
+                  <Text style={styles.forgotText}>Forgot password?</Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Sign In */}
               <TouchableOpacity
@@ -312,7 +326,37 @@ const styles = StyleSheet.create({
   },
   eyeButton: { paddingHorizontal: 12 },
 
-  forgotButton: { alignSelf: 'flex-end', marginBottom: 24, marginTop: -8 },
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+    marginTop: -4,
+  },
+  rememberToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.textBrown,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+  },
+  checkboxChecked: {
+    backgroundColor: colors.maroon,
+    borderColor: colors.maroon,
+  },
+  rememberText: {
+    color: colors.textBrown,
+    fontSize: 13,
+    fontFamily: 'Figtree_400Regular',
+  },
   forgotText: {
     color: colors.textBrown,
     fontSize: 13,

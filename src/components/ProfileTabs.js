@@ -223,8 +223,11 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   const isWebLayout = useIsWebLayout();
   const { width: windowWidth } = useWindowDimensions();
   const numCols = isWebLayout ? 3 : 2;
+  const [measuredWidth, setMeasuredWidth] = useState(0);
   const dynColWidth = (() => {
-    const containerW = isWebLayout ? Math.min(windowWidth, WEB_MAX_WIDTHS.profile) : windowWidth;
+    const containerW = measuredWidth > 0
+      ? measuredWidth
+      : (isWebLayout ? Math.min(windowWidth, WEB_MAX_WIDTHS.profile) : windowWidth);
     return (containerW - MASONRY_PAD * 2 - MASONRY_GAP * (numCols - 1)) / numCols;
   })();
   const [activeTab, setActiveTab] = useState('posts');
@@ -931,7 +934,7 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} onLayout={e => setMeasuredWidth(e.nativeEvent.layout.width)}>
       <View style={styles.tabs}>
         {ALL_TABS.filter((tab) => {
           if (tab.ownOnly && !isOwnProfile) return false;

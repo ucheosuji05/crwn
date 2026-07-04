@@ -124,7 +124,7 @@ export default function ThreadList({
             </View>
           </>
         ) : (
-          <View style={styles.chipsRow}>
+          <View style={[styles.chipsRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
             <Pressable
               style={styles.searchToggleBtn}
               onPress={toggleSearch}

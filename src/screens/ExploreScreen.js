@@ -446,12 +446,12 @@ export default function ExploreScreen() {
   );
 
   const openPost = useCallback((item) => {
-    if (Platform.OS !== 'web') {
+    if (!isWebLayout) {
       navigation.push('PostDetail', { postId: item.id });
     } else {
       setSelectedPost(item);
     }
-  }, [navigation]);
+  }, [navigation, isWebLayout]);
 
   // Search dropdown data — live DB results replace the old post-derived list
   const matchingUsers = isSearching ? userSearchResults : [];

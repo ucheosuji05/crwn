@@ -137,77 +137,212 @@ app.get('/api/auth/oauth-start/:provider', async (req, res) => {
 app.get('/api/auth/open-app', (req, res) => {
   const token = (req.query.token || '').replace(/[<>"'\s]/g, '');
   if (!token) return res.status(400).send('Missing token');
-  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Reset CRWN Password</title>
-    <style>
-      *{box-sizing:border-box;margin:0;padding:0}
-      body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(160deg,#E8C4B8,#D4A574,#A67B5B);font-family:-apple-system,sans-serif;padding:24px}
-      .card{background:#fff;border-radius:20px;padding:32px 24px;max-width:380px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,.15)}
-      h1{font-size:32px;font-weight:800;text-align:center;color:#A67B5B;letter-spacing:1px;margin-bottom:8px}
-      h2{font-size:20px;font-weight:700;color:#222;margin-bottom:8px}
-      p{color:#666;font-size:14px;line-height:1.6;margin-bottom:24px}
-      label{display:block;font-size:13px;font-weight:600;color:#444;margin-bottom:6px}
-      input{display:block;width:100%;padding:14px;border:1.5px solid #ddd;border-radius:10px;font-size:16px;color:#111;margin-bottom:16px;outline:none}
-      input:focus{border-color:#A67B5B}
-      button{width:100%;padding:16px;background:#A67B5B;color:#fff;border:none;border-radius:12px;font-size:16px;font-weight:700;cursor:pointer;margin-top:4px}
-      button:disabled{opacity:.6}
-      .msg{margin-top:16px;padding:12px;border-radius:8px;font-size:14px;text-align:center}
-      .msg.error{background:#fee2e2;color:#b91c1c}
-      .msg.success{background:#dcfce7;color:#166534}
-    </style>
-    </head><body>
-    <div class="card">
-      <h1>crwn</h1>
-      <h2>Set new password</h2>
-      <p>Choose a password that is at least 6 characters long.</p>
-      <div id="form-wrap">
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reset Password — CRWN</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,700;1,400&family=Figtree:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      background: linear-gradient(160deg, #E8C4B8 0%, #D4A574 50%, #A67B5B 100%);
+      font-family: 'Figtree', -apple-system, sans-serif;
+    }
+
+    .card {
+      background: #fff;
+      border-radius: 24px;
+      padding: 40px 32px 36px;
+      max-width: 400px;
+      width: 100%;
+      box-shadow: 0 12px 40px rgba(93, 58, 26, 0.18);
+    }
+
+    .logo-section {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .logo {
+      font-family: 'Libre Baskerville', Georgia, serif;
+      font-weight: 700;
+      font-size: 48px;
+      color: #5D3A1A;
+      line-height: 1.1;
+      letter-spacing: -0.5px;
+    }
+    .tagline {
+      font-family: 'Libre Baskerville', Georgia, serif;
+      font-style: italic;
+      font-weight: 400;
+      font-size: 16px;
+      color: #5D3A1A;
+      margin-top: 6px;
+      opacity: 0.85;
+    }
+
+    .divider {
+      height: 1px;
+      background: rgba(209, 209, 209, 0.6);
+      margin-bottom: 28px;
+    }
+
+    .form-heading {
+      font-family: 'Figtree', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #1A1A1A;
+      margin-bottom: 6px;
+    }
+    .form-sub {
+      font-size: 14px;
+      color: #5E5E5E;
+      line-height: 1.55;
+      margin-bottom: 24px;
+    }
+
+    .input-group { margin-bottom: 18px; }
+    label {
+      display: block;
+      font-size: 13px;
+      font-weight: 400;
+      color: #5E5E5E;
+      margin-bottom: 7px;
+      font-family: 'Figtree', sans-serif;
+    }
+    input[type="password"] {
+      display: block;
+      width: 100%;
+      padding: 13px 16px;
+      border: 1.5px solid #D1D1D1;
+      border-radius: 10px;
+      font-size: 15px;
+      font-family: 'Figtree', sans-serif;
+      color: #1A1A1A;
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type="password"]:focus { border-color: #5D1F1F; }
+
+    button {
+      display: block;
+      width: 100%;
+      padding: 17px;
+      background: #5D1F1F;
+      color: #fff;
+      border: none;
+      border-radius: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: 'Figtree', sans-serif;
+      letter-spacing: 0.3px;
+      cursor: pointer;
+      margin-top: 8px;
+      transition: opacity 0.15s;
+    }
+    button:hover:not(:disabled) { opacity: 0.88; }
+    button:disabled { opacity: 0.55; cursor: default; }
+
+    .msg {
+      margin-top: 16px;
+      padding: 13px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-family: 'Figtree', sans-serif;
+      line-height: 1.5;
+      text-align: center;
+    }
+    .msg.error { background: #fee2e2; color: #991B1B; }
+    .msg.success {
+      background: #FEF9EC;
+      color: #92601A;
+      font-weight: 600;
+    }
+
+    .success-icon {
+      text-align: center;
+      font-size: 44px;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo-section">
+      <div class="logo">crwn.</div>
+      <div class="tagline">set new password</div>
+    </div>
+    <div class="divider"></div>
+
+    <div id="form-wrap">
+      <p class="form-heading">Choose a new password</p>
+      <p class="form-sub">Must be at least 6 characters long.</p>
+      <div class="input-group">
         <label for="pw">New password</label>
         <input id="pw" type="password" placeholder="At least 6 characters" autocomplete="new-password">
+      </div>
+      <div class="input-group">
         <label for="pw2">Confirm password</label>
         <input id="pw2" type="password" placeholder="Repeat your password" autocomplete="new-password">
-        <button id="btn" onclick="submit()">Reset Password</button>
       </div>
+      <button id="btn" onclick="submit()">Reset Password</button>
       <div id="msg" class="msg" style="display:none"></div>
     </div>
-    <script>
-      var token = ${JSON.stringify(token)};
-      function submit() {
-        var pw = document.getElementById('pw').value;
-        var pw2 = document.getElementById('pw2').value;
-        var msg = document.getElementById('msg');
-        msg.style.display = 'none';
-        if (pw.length < 6) { show('Password must be at least 6 characters.', true); return; }
-        if (pw !== pw2) { show('Passwords do not match.', true); return; }
-        var btn = document.getElementById('btn');
-        btn.disabled = true; btn.textContent = 'Resetting...';
-        fetch('/api/auth/web-reset', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'ngrok-skip-browser-warning': '1' },
-          body: JSON.stringify({ newPassword: pw, token: token })
-        })
-        .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
-        .then(function(res) {
-          if (res.ok && res.d.success) {
-            document.getElementById('form-wrap').style.display = 'none';
-            show('Password updated! Go back to the CRWN app and sign in with your new password.', false);
-          } else {
-            btn.disabled = false; btn.textContent = 'Reset Password';
-            show(res.d.message || 'Link may have expired. Request a new one in the app.', true);
-          }
-        })
-        .catch(function() {
-          btn.disabled = false; btn.textContent = 'Reset Password';
-          show('Could not connect. Check your connection and try again.', true);
-        });
-      }
-      function show(text, isErr) {
-        var el = document.getElementById('msg');
-        el.textContent = text;
-        el.className = 'msg ' + (isErr ? 'error' : 'success');
-        el.style.display = 'block';
-      }
-    </script>
-    </body></html>`);
+  </div>
+
+  <script>
+    var token = ${JSON.stringify(token)};
+    function submit() {
+      var pw  = document.getElementById('pw').value;
+      var pw2 = document.getElementById('pw2').value;
+      if (pw.length < 6) { show('Password must be at least 6 characters.', true); return; }
+      if (pw !== pw2)    { show('Passwords do not match.', true); return; }
+      var btn = document.getElementById('btn');
+      btn.disabled = true;
+      btn.textContent = 'Resetting…';
+      fetch('/api/auth/web-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newPassword: pw, token: token })
+      })
+      .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, d: d }; }); })
+      .then(function(res) {
+        if (res.ok && res.d.success) {
+          document.getElementById('form-wrap').innerHTML =
+            '<div class="success-icon">&#10003;</div>' +
+            '<p class="form-heading" style="text-align:center;margin-bottom:10px">Password updated!</p>' +
+            '<p class="form-sub" style="text-align:center">Go back to the CRWN app and sign in with your new password.</p>';
+        } else {
+          btn.disabled = false;
+          btn.textContent = 'Reset Password';
+          show(res.d.message || 'Link may have expired. Request a new one in the app.', true);
+        }
+      })
+      .catch(function() {
+        btn.disabled = false;
+        btn.textContent = 'Reset Password';
+        show('Could not connect. Check your connection and try again.', true);
+      });
+    }
+    function show(text, isErr) {
+      var el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = 'msg ' + (isErr ? 'error' : 'success');
+      el.style.display = 'block';
+    }
+  </script>
+</body>
+</html>`);
 });
 
 // Server-side proxy for the in-browser password reset form.

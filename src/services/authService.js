@@ -1,6 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import { Platform } from 'react-native';
-import { authClient, storeAuthToken, clearAuthToken } from '../lib/auth-client';
+import { authClient, storeAuthToken, clearAuthToken, setPersistNextToken } from '../lib/auth-client';
 import { supabase, clearSupabaseTokenCache } from '../config/supabase'; // keep for profile/hair data writes
 import { AUTH_URL } from '../lib/auth-url';
 
@@ -38,11 +38,14 @@ export const authService = {
   },
 
   // ─── Email sign in ────────────────────────────────────────────────────────
-  async signIn(email, password) {
+  async signIn(email, password, rememberMe = true) {
     try {
+      setPersistNextToken(rememberMe);
       const { data, error } = await authClient.signIn.email({ email, password });
+      if (error) setPersistNextToken(true); // reset on error
       return { user: data?.user, session: data?.session, error };
     } catch (err) {
+      setPersistNextToken(true); // reset on exception
       console.error('[authService.signIn] AUTH_URL:', AUTH_URL, 'email:', email, 'error:', err);
       return { user: null, session: null, error: err };
     }

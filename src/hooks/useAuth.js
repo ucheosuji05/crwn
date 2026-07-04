@@ -90,8 +90,8 @@ export const AuthProvider = ({ children }) => {
     return result;
   }, []);
 
-  const signIn = useCallback(async (email, password) => {
-    const result = await authService.signIn(email, password);
+  const signIn = useCallback(async (email, password, rememberMe = true) => {
+    const result = await authService.signIn(email, password, rememberMe);
     if (result.user) {
       setSession(result.session);
       setUser(result.user);

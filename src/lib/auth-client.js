@@ -5,6 +5,7 @@ import { AUTH_URL } from './auth-url';
 const TOKEN_KEY = '@crwn/auth_token';
 
 let cachedToken = null;
+let _persistNextToken = true;
 
 // Resolved once the stored token has been loaded from disk
 let resolveTokenLoaded;
@@ -36,11 +37,20 @@ export const authClient = createAuthClient({
       const newToken = response?.headers?.get('set-auth-token');
       if (newToken) {
         cachedToken = newToken;
-        await AsyncStorage.setItem(TOKEN_KEY, newToken);
+        if (_persistNextToken) {
+          await AsyncStorage.setItem(TOKEN_KEY, newToken);
+        } else {
+          // Don't persist — user opted out of "remember me"
+          _persistNextToken = true; // reset for next sign-in
+        }
       }
     },
   },
 });
+
+export function setPersistNextToken(value) {
+  _persistNextToken = value;
+}
 
 export async function storeAuthToken(token) {
   cachedToken = token;
