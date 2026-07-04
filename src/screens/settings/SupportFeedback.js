@@ -57,7 +57,6 @@ export default function SupportFeedback({ onBack }) {
       kind: 'feedback',
       feedbackType,
       message: feedback.trim(),
-      userEmail: user?.email,
     });
     setSubmitting(false);
     if (ok) {
@@ -77,13 +76,12 @@ export default function SupportFeedback({ onBack }) {
     const ok = await postFeedback({
       kind: 'support',
       message: contactMessage.trim(),
-      userEmail: user?.email,
     });
     setContactSubmitting(false);
     if (ok) {
       setContactMessage('');
       setShowContact(false);
-      Alert.alert('Message Sent', "We've received your support request and will get back to you at " + (user?.email || 'your email') + '.');
+      Alert.alert('Message Sent', "We've received your support request and will get back to you shortly.");
     } else {
       Alert.alert('Error', 'Could not send your message right now. Please try again.');
     }
@@ -173,7 +171,7 @@ export default function SupportFeedback({ onBack }) {
       <Modal
         visible={showContact}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowContact(false)}
       >
         <KeyboardAvoidingView
@@ -309,11 +307,13 @@ const makeStyles = (c) => StyleSheet.create({
   modalBackdrop: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
   modalCard: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    width: '100%',
+    borderRadius: 20,
     overflow: 'hidden',
   },
   modalHeader: {

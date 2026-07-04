@@ -497,17 +497,19 @@ app.get('/api/auth/web-callback', async (req, res) => {
 
 // ── Shared helpers ────────────────────────────────────────────────────────────
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, replyTo }) {
   const from = process.env.FROM_EMAIL || 'CRWN <onboarding@resend.dev>';
   console.log(`[sendEmail] to=${to} from=${from} key=${process.env.RESEND_API_KEY ? 'set' : 'MISSING'}`);
   if (process.env.RESEND_API_KEY) {
+    const payload = { from, to: [to], subject, html };
+    if (replyTo) payload.reply_to = replyTo;
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      body: JSON.stringify(payload),
     });
     const body = await res.text();
     if (res.ok) {
@@ -517,6 +519,19 @@ async function sendEmail({ to, subject, html }) {
     }
   } else {
     console.log(`[sendEmail] No API key — To: ${to} | Subject: ${subject}`);
+  }
+}
+
+async function getUserProfile(userId) {
+  try {
+    const res = await fetch(
+      `${SUPABASE_URL}/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=full_name,username,email`,
+      { headers: supabaseAdminHeaders() },
+    );
+    const rows = await res.json();
+    return rows?.[0] || {};
+  } catch {
+    return {};
   }
 }
 
@@ -1012,10 +1027,24 @@ app.post('/api/reports', async (req, res) => {
   console.log('[reports] resolved userId:', userId);
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-  const { reason, notes, reportedUserId, reportedPostId, reporterName, targetName, type } = req.body || {};
+  const { reason, notes, reportedUserId, reportedPostId, targetName, type } = req.body || {};
   if (!reason) return res.status(400).json({ message: 'reason is required' });
 
   try {
+    const [reporterProfile, reportedProfile] = await Promise.all([
+      getUserProfile(userId),
+      reportedUserId ? getUserProfile(reportedUserId) : Promise.resolve({}),
+    ]);
+
+    const reporterDisplay = reporterProfile.full_name
+      ? `${reporterProfile.full_name} (@${reporterProfile.username || 'unknown'})`
+      : `@${reporterProfile.username || userId}`;
+    const reporterEmail = reporterProfile.email || null;
+
+    const reportedDisplay = reportedProfile.full_name
+      ? `${reportedProfile.full_name} (@${reportedProfile.username || 'unknown'})`
+      : targetName || (reportedUserId ? `@${reportedProfile.username || reportedUserId}` : '(unknown)');
+
     // Insert into user_reports via service role (bypasses RLS)
     await fetch(`${SUPABASE_URL}/rest/v1/user_reports`, {
       method: 'POST',
@@ -1029,24 +1058,20 @@ app.post('/api/reports', async (req, res) => {
       }),
     });
 
-    // Email crwn@crwnhq.com
     const typeLabel = type === 'post' ? 'Post' : type === 'user' ? 'User' : 'Content';
-    const targetLabel = targetName ? `<strong>${targetName}</strong>` : '(unknown)';
-    const reporterLabel = reporterName || userId;
     await sendEmail({
       to: 'crwn@crwnhq.com',
-      subject: `[CRWN Report] ${typeLabel} reported — ${reason}`,
+      subject: `[CRWN Report] ${typeLabel} reported by ${reporterDisplay} — ${reason}`,
+      replyTo: reporterEmail,
       html: `
         <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
           <h2 style="color:#5D1F1F">New ${typeLabel} Report</h2>
           <table style="width:100%;border-collapse:collapse;font-size:14px">
-            <tr><td style="padding:8px 0;color:#666;width:140px">Reported by</td><td style="padding:8px 0">${reporterLabel}</td></tr>
-            <tr><td style="padding:8px 0;color:#666">Target</td><td style="padding:8px 0">${targetLabel}</td></tr>
-            ${reportedUserId ? `<tr><td style="padding:8px 0;color:#666">User ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px">${reportedUserId}</td></tr>` : ''}
+            <tr><td style="padding:8px 0;color:#666;width:140px">Reported by</td><td style="padding:8px 0"><strong>${reporterDisplay}</strong>${reporterEmail ? ` &lt;${reporterEmail}&gt;` : ''}</td></tr>
+            <tr><td style="padding:8px 0;color:#666">Reported ${typeLabel}</td><td style="padding:8px 0"><strong>${reportedDisplay}</strong></td></tr>
             ${reportedPostId ? `<tr><td style="padding:8px 0;color:#666">Post ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px">${reportedPostId}</td></tr>` : ''}
             <tr><td style="padding:8px 0;color:#666">Reason</td><td style="padding:8px 0"><strong>${reason}</strong></td></tr>
             ${notes ? `<tr><td style="padding:8px 0;color:#666;vertical-align:top">Notes</td><td style="padding:8px 0">${notes}</td></tr>` : ''}
-            <tr><td style="padding:8px 0;color:#666">Reporter ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px">${userId}</td></tr>
           </table>
         </div>
       `,
@@ -1065,24 +1090,31 @@ app.post('/api/feedback', async (req, res) => {
   console.log('[feedback] resolved userId:', userId);
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-  const { kind, feedbackType, message, userEmail } = req.body || {};
+  const { kind, feedbackType, message } = req.body || {};
   if (!message) return res.status(400).json({ message: 'message is required' });
 
   const isSupport = kind === 'support';
-  const subjectLine = isSupport
-    ? `[CRWN Support] Request from ${userEmail || userId}`
-    : `[CRWN Feedback] ${feedbackType || 'General'} — from ${userEmail || userId}`;
 
   try {
+    const profile = await getUserProfile(userId);
+    const userDisplay = profile.full_name
+      ? `${profile.full_name} (@${profile.username || 'unknown'})`
+      : `@${profile.username || userId}`;
+    const userEmail = profile.email || null;
+
+    const subjectLine = isSupport
+      ? `[CRWN Support] Request from ${userDisplay}`
+      : `[CRWN Feedback] ${feedbackType || 'General'} from ${userDisplay}`;
+
     await sendEmail({
       to: 'crwn@crwnhq.com',
       subject: subjectLine,
+      replyTo: userEmail,
       html: `
         <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
           <h2 style="color:#5D1F1F">${isSupport ? 'Support Request' : 'User Feedback'}</h2>
           <table style="width:100%;border-collapse:collapse;font-size:14px">
-            <tr><td style="padding:8px 0;color:#666;width:140px">From</td><td style="padding:8px 0">${userEmail || '(not provided)'}</td></tr>
-            <tr><td style="padding:8px 0;color:#666">User ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px">${userId}</td></tr>
+            <tr><td style="padding:8px 0;color:#666;width:140px">From</td><td style="padding:8px 0"><strong>${userDisplay}</strong>${userEmail ? ` &lt;${userEmail}&gt;` : ''}</td></tr>
             ${!isSupport ? `<tr><td style="padding:8px 0;color:#666">Type</td><td style="padding:8px 0"><strong>${feedbackType || 'General'}</strong></td></tr>` : ''}
             <tr><td style="padding:8px 0;color:#666;vertical-align:top">Message</td><td style="padding:8px 0;white-space:pre-wrap">${message}</td></tr>
           </table>
