@@ -40,9 +40,12 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
   };
 
   // ── Change Password ────────────────────────────────────────────────────────
+  const isPwStrong = (p) =>
+    p.length >= 8 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p) && /[^A-Za-z0-9]/.test(p);
+
   const handleChangePassword = async () => {
-    if (newPassword.length < 8) {
-      Alert.alert('Too Short', 'Password must be at least 8 characters.');
+    if (!isPwStrong(newPassword)) {
+      Alert.alert('Weak password', 'Password must be at least 8 characters and include an uppercase letter, lowercase letter, number, and special character.');
       return;
     }
     if (newPassword !== confirmPassword) {

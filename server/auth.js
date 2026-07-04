@@ -90,7 +90,7 @@ export const auth = betterAuth({
   // Email + password sign up / sign in
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 6,
+    minPasswordLength: 8,
     sendResetPassword: async ({ user, url }) => {
       console.log('\n── sendResetPassword called ────────────────────────');
       console.log('   user:', user.email);

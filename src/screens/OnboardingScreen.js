@@ -569,9 +569,17 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   };
 
   const isValidEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  const PW_RULES = [
+    { key: 'length',    label: 'At least 8 characters',   test: p => p.length >= 8 },
+    { key: 'uppercase', label: 'One uppercase letter',     test: p => /[A-Z]/.test(p) },
+    { key: 'lowercase', label: 'One lowercase letter',     test: p => /[a-z]/.test(p) },
+    { key: 'number',    label: 'One number',               test: p => /[0-9]/.test(p) },
+    { key: 'special',   label: 'One special character',    test: p => /[^A-Za-z0-9]/.test(p) },
+  ];
+  const isPwStrong = (p) => PW_RULES.every(r => r.test(p));
   const isEmailStepValid = () =>
     isValidEmail(formData.email) &&
-    formData.password.length >= 6 &&
+    isPwStrong(formData.password) &&
     formData.password === formData.confirmPassword;
   const isUsernameValid = (u) => /^[a-z0-9_.]{3,20}$/.test(u);
 
@@ -745,7 +753,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
             style={styles.passwordInput}
             value={formData.password}
             onChangeText={t => update('password', t)}
-            placeholder="At least 6 characters"
+            placeholder="Create a strong password"
             placeholderTextColor="#999"
             secureTextEntry={!showPassword}
             autoCapitalize="none"
@@ -754,8 +762,25 @@ export default function OnboardingScreen({ onDone = () => {} }) {
             <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={22} color="#999" />
           </TouchableOpacity>
         </View>
-        {formData.password.length > 0 && formData.password.length < 6 && (
-          <Text style={styles.errorText}>Password must be at least 6 characters</Text>
+        {formData.password.length > 0 && (
+          <View style={styles.pwRulesWrap}>
+            <Text style={styles.pwRulesTitle}>Must contain:</Text>
+            {PW_RULES.map(rule => {
+              const met = rule.test(formData.password);
+              return (
+                <View key={rule.key} style={styles.pwRuleRow}>
+                  <Ionicons
+                    name={met ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={14}
+                    color={met ? '#3B7A3B' : '#AAAAAA'}
+                  />
+                  <Text style={[styles.pwRuleText, met && styles.pwRuleTextMet]}>
+                    {rule.label}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
         )}
       </View>
 
@@ -1809,6 +1834,11 @@ const styles = StyleSheet.create({
   passwordInput: { flex: 1, paddingVertical: 12, paddingHorizontal: 16, fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
   eyeButton: { paddingHorizontal: 12 },
   errorText: { color: '#ef4444', fontSize: 12, marginTop: 4 },
+  pwRulesWrap: { marginTop: 10, gap: 5 },
+  pwRulesTitle: { fontSize: 12, color: '#666', marginBottom: 2, fontFamily: 'Figtree_500Medium' },
+  pwRuleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pwRuleText: { fontSize: 12, color: '#AAAAAA', fontFamily: 'Figtree_400Regular' },
+  pwRuleTextMet: { color: '#3B7A3B' },
 
   // OTP-style phone verification code input
   otpInput: { borderWidth: 1, borderColor: '#D1D1D1', borderRadius: 10, paddingVertical: 16, fontSize: 24, letterSpacing: 12, color: colors.textPrimary, backgroundColor: colors.white, fontFamily: 'Figtree_600SemiBold' },

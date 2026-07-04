@@ -269,11 +269,10 @@ app.get('/api/auth/open-app', (req, res) => {
       font-weight: 600;
     }
 
-    .success-icon {
-      text-align: center;
-      font-size: 44px;
-      margin-bottom: 12px;
-    }
+    .rules-title { font-size: 12px; color: #666; margin-bottom: 6px; font-weight: 600; }
+    .rule { display: flex; align-items: center; gap: 7px; font-size: 13px; color: #AAAAAA; margin-bottom: 5px; }
+    .rule-icon { font-style: normal; width: 16px; text-align: center; }
+    .rule.rule-met { color: #3B7A3B; }
   </style>
 </head>
 <body>
@@ -286,11 +285,20 @@ app.get('/api/auth/open-app', (req, res) => {
 
     <div id="form-wrap">
       <p class="form-heading">Choose a new password</p>
-      <p class="form-sub">Must be at least 6 characters long.</p>
       <div class="input-group">
         <label for="pw">New password</label>
-        <input id="pw" type="password" placeholder="At least 6 characters" autocomplete="new-password">
+        <input id="pw" type="password" placeholder="Create a strong password" autocomplete="new-password" oninput="checkRules()">
       </div>
+
+      <div id="rules" style="display:none;margin-bottom:18px">
+        <p class="rules-title">Must contain:</p>
+        <div class="rule" id="r-length">   <span class="rule-icon">&#9711;</span> At least 8 characters</div>
+        <div class="rule" id="r-upper">    <span class="rule-icon">&#9711;</span> One uppercase letter</div>
+        <div class="rule" id="r-lower">    <span class="rule-icon">&#9711;</span> One lowercase letter</div>
+        <div class="rule" id="r-number">   <span class="rule-icon">&#9711;</span> One number</div>
+        <div class="rule" id="r-special">  <span class="rule-icon">&#9711;</span> One special character</div>
+      </div>
+
       <div class="input-group">
         <label for="pw2">Confirm password</label>
         <input id="pw2" type="password" placeholder="Repeat your password" autocomplete="new-password">
@@ -302,11 +310,36 @@ app.get('/api/auth/open-app', (req, res) => {
 
   <script>
     var token = ${JSON.stringify(token)};
+
+    var RULES = [
+      { id: 'r-length',  test: function(p){ return p.length >= 8; } },
+      { id: 'r-upper',   test: function(p){ return /[A-Z]/.test(p); } },
+      { id: 'r-lower',   test: function(p){ return /[a-z]/.test(p); } },
+      { id: 'r-number',  test: function(p){ return /[0-9]/.test(p); } },
+      { id: 'r-special', test: function(p){ return /[^A-Za-z0-9]/.test(p); } },
+    ];
+
+    function checkRules() {
+      var pw = document.getElementById('pw').value;
+      var rules = document.getElementById('rules');
+      rules.style.display = pw.length > 0 ? 'block' : 'none';
+      RULES.forEach(function(r) {
+        var el = document.getElementById(r.id);
+        var met = r.test(pw);
+        el.className = 'rule' + (met ? ' rule-met' : '');
+        el.querySelector('.rule-icon').innerHTML = met ? '&#10003;' : '&#9711;';
+      });
+    }
+
+    function isPwStrong(pw) {
+      return RULES.every(function(r){ return r.test(pw); });
+    }
+
     function submit() {
       var pw  = document.getElementById('pw').value;
       var pw2 = document.getElementById('pw2').value;
-      if (pw.length < 6) { show('Password must be at least 6 characters.', true); return; }
-      if (pw !== pw2)    { show('Passwords do not match.', true); return; }
+      if (!isPwStrong(pw)) { show('Please meet all password requirements.', true); return; }
+      if (pw !== pw2) { show('Passwords do not match.', true); return; }
       var btn = document.getElementById('btn');
       btn.disabled = true;
       btn.textContent = 'Resetting…';
@@ -319,7 +352,7 @@ app.get('/api/auth/open-app', (req, res) => {
       .then(function(res) {
         if (res.ok && res.d.success) {
           document.getElementById('form-wrap').innerHTML =
-            '<div class="success-icon">&#10003;</div>' +
+            '<div style="text-align:center;font-size:48px;color:#3B7A3B;margin-bottom:12px">&#10003;</div>' +
             '<p class="form-heading" style="text-align:center;margin-bottom:10px">Password updated!</p>' +
             '<p class="form-sub" style="text-align:center">Go back to the CRWN app and sign in with your new password.</p>';
         } else {
