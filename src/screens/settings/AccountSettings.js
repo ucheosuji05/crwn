@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../config/supabase';
+import { authClient } from '../../lib/auth-client';
 import EditProfileScreen from '../EditProfileScreen';
 
 export default function AccountSettings({ onBack, onProfileUpdated }) {
@@ -20,8 +21,10 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPw, setShowCurrentPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [pwLoading, setPwLoading] = useState(false);
@@ -44,6 +47,10 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
     p.length >= 8 && /[A-Z]/.test(p) && /[a-z]/.test(p) && /[0-9]/.test(p) && /[^A-Za-z0-9]/.test(p);
 
   const handleChangePassword = async () => {
+    if (!currentPassword) {
+      Alert.alert('Required', 'Please enter your current password.');
+      return;
+    }
     if (!isPwStrong(newPassword)) {
       Alert.alert('Weak password', 'Password must be at least 8 characters and include an uppercase letter, lowercase letter, number, and special character.');
       return;
@@ -54,11 +61,16 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
     }
     setPwLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
       if (error) {
-        Alert.alert('Error', error.message);
+        Alert.alert('Error', error.message || 'Incorrect current password.');
       } else {
         setShowPasswordModal(false);
+        setCurrentPassword('');
         setNewPassword('');
         setConfirmPassword('');
         Alert.alert('Success', 'Your password has been updated.');
@@ -178,6 +190,21 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
             <View style={styles.inputRow}>
               <TextInput
                 style={styles.input}
+                placeholder="Current password"
+                placeholderTextColor={colors.placeholder}
+                secureTextEntry={!showCurrentPw}
+                value={currentPassword}
+                onChangeText={setCurrentPassword}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity onPress={() => setShowCurrentPw(v => !v)} style={styles.eyeBtn}>
+                <Ionicons name={showCurrentPw ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6b7280" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.inputRow}>
+              <TextInput
+                style={styles.input}
                 placeholder="New password"
                 placeholderTextColor={colors.placeholder}
                 secureTextEntry={!showNewPw}
@@ -235,7 +262,7 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
             <View style={styles.modalActions}>
               <TouchableOpacity
                 style={styles.cancelBtn}
-                onPress={() => { setShowPasswordModal(false); setNewPassword(''); setConfirmPassword(''); }}
+                onPress={() => { setShowPasswordModal(false); setCurrentPassword(''); setNewPassword(''); setConfirmPassword(''); }}
               >
                 <Text style={styles.cancelBtnText}>Cancel</Text>
               </TouchableOpacity>

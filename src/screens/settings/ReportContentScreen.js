@@ -34,10 +34,11 @@ export default function ReportContentScreen({ onBack }) {
   const [reportType, setReportType] = useState(null);
   const [detail, setDetail] = useState('');
   const [reason, setReason] = useState(null);
+  const [comments, setComments] = useState('');
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
 
-  const canSubmit = reportType && reason && detail.trim().length > 0;
+  const canSubmit = reportType && reason && detail.trim().length > 0 && comments.trim().length > 0;
 
   const handleSubmit = async () => {
     if (!canSubmit || !user?.id) return;
@@ -53,7 +54,7 @@ export default function ReportContentScreen({ onBack }) {
         body: JSON.stringify({
           type: reportType,
           reason,
-          notes: `[${reportType === 'user' ? 'User' : 'Content'}] ${detail.trim()}`,
+          notes: `[${reportType === 'user' ? 'User' : 'Content'}] ${detail.trim()} | Comments: ${comments.trim()}`,
         }),
       });
     } catch (_) {}
@@ -154,6 +155,23 @@ export default function ReportContentScreen({ onBack }) {
               ))}
             </View>
 
+            <View style={styles.commentLabelRow}>
+              <Text style={[styles.sectionLabel, { marginTop: 0, marginBottom: 0 }]}>Additional comments</Text>
+              <Text style={styles.requiredBadge}>Required</Text>
+            </View>
+            <TextInput
+              style={[styles.textInput, styles.commentInput]}
+              placeholder="Please provide more context about what happened…"
+              placeholderTextColor={colors.placeholder}
+              value={comments}
+              onChangeText={setComments}
+              multiline
+              numberOfLines={4}
+              maxLength={1000}
+              textAlignVertical="top"
+            />
+            <Text style={styles.charCount}>{comments.length}/1000</Text>
+
             <TouchableOpacity
               style={[styles.submitBtn, !canSubmit && styles.submitBtnDisabled]}
               onPress={handleSubmit}
@@ -227,6 +245,31 @@ const makeStyles = (c) => StyleSheet.create({
     fontFamily: 'Figtree_400Regular',
     color: c.text,
     textAlignVertical: 'top',
+  },
+  commentLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 24,
+    marginBottom: 8,
+  },
+  requiredBadge: {
+    fontSize: 11,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#5D1F1F',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  commentInput: {
+    minHeight: 110,
+    paddingTop: 12,
+  },
+  charCount: {
+    fontSize: 11,
+    fontFamily: 'Figtree_400Regular',
+    color: c.textMuted,
+    textAlign: 'right',
+    marginTop: 4,
   },
   submitBtn: {
     backgroundColor: '#5D1F1F',
