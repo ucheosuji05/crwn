@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { threadService } from '../services/threadService';
 import { supabase } from '../config/supabase';
 import { useAuth } from './useAuth';
+import { useBlock } from '../context/BlockContext';
 
 /**
  * useThreads
@@ -13,6 +14,7 @@ import { useAuth } from './useAuth';
  */
 export const useThreads = () => {
   const { user } = useAuth();
+  const { allHiddenIds } = useBlock();
 
   const [threads, setThreads] = useState([]);
   const [upvotedIds, setUpvotedIds] = useState(new Set());
@@ -122,8 +124,13 @@ export const useThreads = () => {
     setThreads((prev) => prev.filter((t) => t.id !== threadId));
   }, []);
 
+  const visibleThreads = useMemo(
+    () => threads.filter(t => !allHiddenIds.has(t.user_id)),
+    [threads, allHiddenIds]
+  );
+
   return {
-    threads,
+    threads: visibleThreads,
     upvotedIds,
     loading,
     error,

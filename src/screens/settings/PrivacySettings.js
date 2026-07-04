@@ -1,13 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator,
+  Alert, ActivityIndicator, Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../config/supabase';
 import CommunityGuidelines from './CommunityGuidelines';
+import BlockedUsersScreen from './BlockedUsersScreen';
+import ReportContentScreen from './ReportContentScreen';
 
 const VISIBILITY_OPTIONS = [
   { value: 'public',    label: 'Public',         description: 'Anyone can see your profile' },
@@ -23,6 +25,8 @@ export default function PrivacySettings({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showGuidelines, setShowGuidelines] = useState(false);
+  const [showBlocked, setShowBlocked] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -48,10 +52,6 @@ export default function PrivacySettings({ onBack }) {
       .eq('id', user.id);
     setSaving(false);
   };
-
-  if (showGuidelines) {
-    return <CommunityGuidelines onBack={() => setShowGuidelines(false)} />;
-  }
 
   return (
     <View style={styles.container}>
@@ -95,7 +95,7 @@ export default function PrivacySettings({ onBack }) {
           <View style={styles.card}>
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
-              onPress={() => Alert.alert('Blocked Users', 'Blocked users management coming soon.')}
+              onPress={() => setShowBlocked(true)}
             >
               <Ionicons name="ban-outline" size={20} color={colors.textSecondary} style={styles.rowIcon} />
               <Text style={[styles.rowTitle, styles.flex]}>Blocked Users</Text>
@@ -103,7 +103,7 @@ export default function PrivacySettings({ onBack }) {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.row, styles.rowBorder]}
-              onPress={() => Alert.alert('Report', 'Report content or users coming soon.')}
+              onPress={() => setShowReport(true)}
             >
               <Ionicons name="flag-outline" size={20} color={colors.textSecondary} style={styles.rowIcon} />
               <Text style={[styles.rowTitle, styles.flex]}>Report Content or Users</Text>
@@ -143,6 +143,19 @@ export default function PrivacySettings({ onBack }) {
 
         </ScrollView>
       )}
+
+      <Modal visible={showGuidelines} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowGuidelines(false)}>
+        <CommunityGuidelines onBack={() => setShowGuidelines(false)} />
+      </Modal>
+
+      <Modal visible={showBlocked} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowBlocked(false)}>
+        <BlockedUsersScreen onBack={() => setShowBlocked(false)} />
+      </Modal>
+
+      <Modal visible={showReport} animationType="slide" presentationStyle="fullScreen" onRequestClose={() => setShowReport(false)}>
+        <ReportContentScreen onBack={() => setShowReport(false)} />
+      </Modal>
+
     </View>
   );
 }

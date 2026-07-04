@@ -77,6 +77,39 @@ CREATE POLICY "Reviews are publicly readable"
   ON reviews FOR SELECT
   USING (true);
 
+-- ── Block / Report ────────────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS user_blocks (
+  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  blocker_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  blocked_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(blocker_id, blocked_id)
+);
+
+ALTER TABLE user_blocks ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users manage their own blocks"
+  ON user_blocks FOR ALL
+  USING (auth.uid() = blocker_id)
+  WITH CHECK (auth.uid() = blocker_id);
+
+CREATE TABLE IF NOT EXISTS user_reports (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  reporter_id      UUID NOT NULL,
+  reported_user_id UUID,
+  reported_post_id UUID,
+  reason           TEXT NOT NULL,
+  notes            TEXT,
+  created_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE user_reports ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can submit reports"
+  ON user_reports FOR INSERT
+  WITH CHECK (auth.uid() = reporter_id);
+
 -- Only the client who made the booking can insert a review
 CREATE POLICY "Clients can submit their own review"
   ON reviews FOR INSERT

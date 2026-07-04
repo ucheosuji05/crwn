@@ -21,6 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { useUnreadCount } from '../context/UnreadCountContext';
 import { messagingService } from '../services/messagingService';
+import { useBlock } from '../context/BlockContext';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,6 +88,7 @@ export default function MessagingScreen() {
   const [searchResults, setSearchResults]   = useState([]);
   const [searchLoading, setSearchLoading]   = useState(false);
 
+  const { allHiddenIds } = useBlock();
   const flatListRef = useRef(null);
   const channelRef  = useRef(null);
   const convoChannelRef = useRef(null);
@@ -112,8 +114,12 @@ export default function MessagingScreen() {
     setLoadingConvos(true);
     const { data } = await messagingService.getConversations(user.id);
     if (data) {
-      setConversations(data);
-      computeUnreadIds(data, user.id);
+      const visible = data.filter(c => {
+        const other = c.participant1_id === user.id ? c.participant2 : c.participant1;
+        return !allHiddenIds.has(other?.id);
+      });
+      setConversations(visible);
+      computeUnreadIds(visible, user.id);
     }
     setLoadingConvos(false);
   }, [user?.id, computeUnreadIds]);
@@ -231,7 +237,7 @@ export default function MessagingScreen() {
     const timer = setTimeout(async () => {
       setSearchLoading(true);
       const { data } = await messagingService.searchUsers(searchQuery, user.id);
-      setSearchResults(data || []);
+      setSearchResults((data || []).filter(u => !allHiddenIds.has(u.id)));
       setSearchLoading(false);
     }, 300);
     return () => clearTimeout(timer);

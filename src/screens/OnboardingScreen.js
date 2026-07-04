@@ -668,7 +668,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
     <GradientScreen>
       <View style={styles.welcomeContent}>
         <Text style={styles.welcomeLogo}>crwn.</Text>
-        <Text style={styles.welcomeTagline}>every crown tells a story.</Text>
+        <Text style={styles.welcomeTagline}>Every crown tells a story.</Text>
       </View>
       <View style={styles.welcomeButtons}>
         <TouchableOpacity style={styles.createAccountButton} onPress={goNext}>

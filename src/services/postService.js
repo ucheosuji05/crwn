@@ -17,8 +17,8 @@ async function authedFetch(path, options = {}) {
 
 export const postService = {
   // Get all posts (for Explore page)
-  async getPosts(limit = 20, offset = 0) {
-    const { data, error } = await supabase
+  async getPosts(limit = 20, offset = 0, excludeUserIds = []) {
+    let query = supabase
       .from('posts')
       .select(`
         *,
@@ -31,6 +31,12 @@ export const postService = {
       .or('is_public.eq.true,is_public.is.null')
       .order('created_at', { ascending: false })
       .range(offset, offset + limit - 1);
+
+    if (excludeUserIds.length > 0) {
+      query = query.not('user_id', 'in', `(${excludeUserIds.join(',')})`);
+    }
+
+    const { data, error } = await query;
 
     const sorted = data?.map(p => ({
       ...p,

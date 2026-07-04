@@ -38,6 +38,7 @@ import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { UnreadCountProvider } from './src/context/UnreadCountContext';
 import { ProviderModeProvider } from './src/context/ProviderModeContext';
+import { BlockProvider } from './src/context/BlockContext';
 import { colors } from './src/theme/themes';
 
 // =============================================================================
@@ -177,11 +178,13 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <ThemeProvider>
-          <UnreadCountProvider>
-            <ProviderModeProvider>
-              <AppContent />
-            </ProviderModeProvider>
-          </UnreadCountProvider>
+          <BlockProvider>
+            <UnreadCountProvider>
+              <ProviderModeProvider>
+                <AppContent />
+              </ProviderModeProvider>
+            </UnreadCountProvider>
+          </BlockProvider>
         </ThemeProvider>
       </AuthProvider>
     </SafeAreaProvider>

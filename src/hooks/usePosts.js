@@ -1,16 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { postService } from '../services/postService';
 import { supabase } from '../config/supabase';
+import { useBlock } from '../context/BlockContext';
 
 const PAGE_SIZE = 20;
 
 export const usePosts = (userId = null) => {
+  const { allHiddenIds } = useBlock();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState(null);
   const offsetRef = useRef(0); // track current offset without re-renders
+
+  const hiddenIdsRef = useRef(allHiddenIds);
+  useEffect(() => { hiddenIdsRef.current = allHiddenIds; }, [allHiddenIds]);
 
   const fetchPosts = async () => {
     setLoading(true);
@@ -22,7 +27,7 @@ export const usePosts = (userId = null) => {
       if (userId) {
         result = await postService.getPostsByUser(userId);
       } else {
-        result = await postService.getPosts(PAGE_SIZE, 0);
+        result = await postService.getPosts(PAGE_SIZE, 0, Array.from(hiddenIdsRef.current));
       }
 
       if (result.error) {
@@ -47,7 +52,7 @@ export const usePosts = (userId = null) => {
     if (userId || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const { data, error: err } = await postService.getPosts(PAGE_SIZE, offsetRef.current);
+      const { data, error: err } = await postService.getPosts(PAGE_SIZE, offsetRef.current, Array.from(hiddenIdsRef.current));
       if (!err && data) {
         const fetched = data || [];
         setPosts(prev => {
@@ -107,7 +112,7 @@ export const usePosts = (userId = null) => {
     try {
       const result = userId
         ? await postService.getPostsByUser(userId)
-        : await postService.getPosts();
+        : await postService.getPosts(PAGE_SIZE, 0, Array.from(hiddenIdsRef.current));
       if (!result.error) setPosts(result.data || []);
     } catch (err) {
       console.error('usePosts silentRefetch error:', err);
@@ -167,5 +172,11 @@ export const usePosts = (userId = null) => {
     };
   }, [userId]);
 
-  return { posts, loading, loadingMore, hasMore, loadMore, error, refresh: fetchPosts, silentRefetch, deletePost, updatePost };
+  // Filter out hidden users (blocked by me or blocking me) for instant feed update
+  const visiblePosts = useMemo(
+    () => posts.filter(p => !allHiddenIds.has(p.user_id)),
+    [posts, allHiddenIds]
+  );
+
+  return { posts: visiblePosts, loading, loadingMore, hasMore, loadMore, error, refresh: fetchPosts, silentRefetch, deletePost, updatePost };
 };

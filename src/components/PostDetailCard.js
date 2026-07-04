@@ -13,6 +13,8 @@ import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
 import { analyticsService } from '../services/analyticsService';
 import { supabase } from '../config/supabase';
+import ReportModal from './ReportModal';
+import { useBlock } from '../context/BlockContext';
 
 const CARD_H_MARGIN = 16; // card sits 16px from each screen edge
 
@@ -52,6 +54,7 @@ export default function PostDetailCard({
   const MAROON = colors.primary;
   const OCHRE = colors.accent;
   const { user, profile: currentUserProfile } = useAuth();
+  const { allHiddenIds } = useBlock();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const carouselRef     = useRef(null);
   const commentInputRef = useRef(null);
@@ -76,6 +79,7 @@ export default function PostDetailCard({
 
   // Menu
   const [menuVisible, setMenuVisible] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
 
   // Post analytics (owner-only)
   const [analyticsVisible, setAnalyticsVisible] = useState(false);
@@ -134,7 +138,7 @@ export default function PostDetailCard({
     if (!post?.id) return;
     setCommentsLoading(true);
     postService.getComments(post.id).then(async ({ data }) => {
-      const top = data || [];
+      const top = (data || []).filter(c => !allHiddenIds.has(c.user_id));
       setComments(top);
       setCommentsLoading(false);
       if (top.length > 0 && user?.id) {
@@ -293,7 +297,7 @@ export default function PostDetailCard({
 
   const handleReport = () => {
     setMenuVisible(false);
-    Alert.alert('Report', 'This post has been reported for review.');
+    setShowReportModal(true);
   };
 
   // ── Comments ─────────────────────────────────────────────────────────────────
@@ -972,6 +976,15 @@ export default function PostDetailCard({
           <Text style={styles.deletingText}>Deleting…</Text>
         </View>
       </Modal>
+
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        type="post"
+        targetId={post?.id}
+        targetName={authorName}
+        reportedUserId={authorId}
+      />
     </>
   );
 }

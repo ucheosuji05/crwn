@@ -174,7 +174,6 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
         <View style={styles.overlay}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>Change Password</Text>
-            <Text style={styles.modalSubtitle}>Must be at least 8 characters.</Text>
 
             <View style={styles.inputRow}>
               <TextInput
@@ -190,6 +189,33 @@ export default function AccountSettings({ onBack, onProfileUpdated }) {
                 <Ionicons name={showNewPw ? 'eye-off-outline' : 'eye-outline'} size={20} color="#6b7280" />
               </TouchableOpacity>
             </View>
+
+            {newPassword.length > 0 && (
+              <View style={styles.pwRulesWrap}>
+                <Text style={styles.pwRulesTitle}>Must contain:</Text>
+                {[
+                  { key: 'length',    label: 'At least 8 characters',  test: p => p.length >= 8 },
+                  { key: 'uppercase', label: 'One uppercase letter',    test: p => /[A-Z]/.test(p) },
+                  { key: 'lowercase', label: 'One lowercase letter',    test: p => /[a-z]/.test(p) },
+                  { key: 'number',    label: 'One number',              test: p => /[0-9]/.test(p) },
+                  { key: 'special',   label: 'One special character',   test: p => /[^A-Za-z0-9]/.test(p) },
+                ].map(rule => {
+                  const met = rule.test(newPassword);
+                  return (
+                    <View key={rule.key} style={styles.pwRuleRow}>
+                      <Ionicons
+                        name={met ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={13}
+                        color={met ? '#3B7A3B' : '#AAAAAA'}
+                      />
+                      <Text style={[styles.pwRuleText, met && styles.pwRuleTextMet]}>
+                        {rule.label}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
 
             <View style={styles.inputRow}>
               <TextInput
@@ -407,4 +433,9 @@ const makeStyles = (c) => StyleSheet.create({
     marginBottom: 8,
   },
   deleteInput: { letterSpacing: 2 },
+  pwRulesWrap: { marginBottom: 12, gap: 4 },
+  pwRulesTitle: { fontSize: 12, color: '#666', marginBottom: 2, fontFamily: 'Figtree_500Medium' },
+  pwRuleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pwRuleText: { fontSize: 12, color: '#AAAAAA', fontFamily: 'Figtree_400Regular' },
+  pwRuleTextMet: { color: '#3B7A3B' },
 });

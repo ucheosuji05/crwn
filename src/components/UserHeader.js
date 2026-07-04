@@ -25,7 +25,9 @@ import { useTheme } from '../context/ThemeContext';
 import { profileService } from '../services/profileService';
 import EditProfileScreen from '../screens/EditProfileScreen';
 import SkeletonPulse from './SkeletonPulse';
+import ReportModal from './ReportModal';
 import { HEADER_BAR_HEIGHT } from './ScreenHeader';
+import { useBlock } from '../context/BlockContext';
 
 // Distance (px) of scroll over which the full header collapses into the
 // condensed pinned bar — see UserHeader's scrollY prop.
@@ -47,6 +49,7 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
   const navigation = useNavigation();
   const isWebLayout = useIsWebLayout();
   const insets = useSafeAreaInsets();
+  const { blockUser, unblockUser, isBlocked } = useBlock();
 
   const [profile, setProfile]         = useState(null);
   const [loading, setLoading]         = useState(true);
@@ -61,6 +64,9 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
   const [followList, setFollowList]   = useState(null); // { title, data }
   const [followListLoading, setFollowListLoading] = useState(false);
   const [unfollowSheetVisible, setUnfollowSheetVisible] = useState(false);
+  const [moreSheetVisible, setMoreSheetVisible] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
 
   // Fetch the viewed user's profile whenever the target ID changes
   useEffect(() => {
@@ -182,7 +188,18 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
 
   const handleReportProfile = () => {
     setUnfollowSheetVisible(false);
-    Alert.alert('Report', 'This profile has been reported for review.');
+    setMoreSheetVisible(false);
+    setShowReportModal(true);
+  };
+
+  const handleBlockUser = async () => {
+    setUnfollowSheetVisible(false);
+    setMoreSheetVisible(false);
+    if (!user?.id || !viewedUserId) return;
+    setBlockLoading(true);
+    await blockUser(viewedUserId);
+    setBlockLoading(false);
+    // profile stays visible — the blocked banner replaces the action buttons
   };
 
   // ── Edit Profile ──────────────────────────────────────────────────────────
@@ -380,6 +397,17 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
                 <Text style={styles.btnText}>Share</Text>
               </TouchableOpacity>
             </>
+          ) : isBlocked(viewedUserId) ? (
+            <View style={styles.blockedBanner}>
+              <Ionicons name="ban" size={16} color="#ef4444" />
+              <Text style={styles.blockedBannerText}>You've blocked this user</Text>
+              <TouchableOpacity
+                style={styles.unblockBtn}
+                onPress={() => unblockUser(viewedUserId)}
+              >
+                <Text style={styles.unblockBtnText}>Unblock</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
             <>
               <TouchableOpacity
@@ -406,6 +434,12 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
                 })}
               >
                 <Text style={[styles.btnText, styles.messageBtnText]}>Message</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.btn, styles.moreBtn]}
+                onPress={() => setMoreSheetVisible(true)}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={colors.text} />
               </TouchableOpacity>
             </>
           )}
@@ -514,6 +548,24 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.sheetItem, styles.sheetItemDanger]}
+              onPress={() => {
+                setUnfollowSheetVisible(false);
+                Alert.alert(
+                  `Block ${profile?.full_name || profile?.username || 'this user'}?`,
+                  "They won't be able to find your profile or posts. You won't see their content either.",
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Block', style: 'destructive', onPress: handleBlockUser },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="ban-outline" size={22} color="#ef4444" />
+              <Text style={[styles.sheetItemText, styles.sheetItemTextDanger]}>Block User</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.sheetItem, styles.sheetCancel, { borderTopColor: colors.borderLight }]}
               onPress={() => setUnfollowSheetVisible(false)}
             >
@@ -522,6 +574,58 @@ export default function UserHeader({ viewedUserId, isOwnProfile, scrollY }) {
           </View>
         </Pressable>
       </Modal>
+
+      {/* ── More options sheet (report / block — accessible for non-followers too) ── */}
+      <Modal
+        visible={moreSheetVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMoreSheetVisible(false)}
+      >
+        <Pressable style={styles.sheetOverlay} onPress={() => setMoreSheetVisible(false)}>
+          <View style={[styles.sheetContainer, { backgroundColor: colors.surface }]}>
+            <View style={[styles.sheetHandle, { backgroundColor: colors.border }]} />
+
+            <TouchableOpacity style={[styles.sheetItem, styles.sheetItemDanger]} onPress={handleReportProfile}>
+              <Ionicons name="flag-outline" size={22} color="#ef4444" />
+              <Text style={[styles.sheetItemText, styles.sheetItemTextDanger]}>Report Profile</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sheetItem, styles.sheetItemDanger]}
+              onPress={() => {
+                setMoreSheetVisible(false);
+                Alert.alert(
+                  `Block ${profile?.full_name || profile?.username || 'this user'}?`,
+                  "They won't be able to find your profile or posts. You won't see their content either.",
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Block', style: 'destructive', onPress: handleBlockUser },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="ban-outline" size={22} color="#ef4444" />
+              <Text style={[styles.sheetItemText, styles.sheetItemTextDanger]}>Block User</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.sheetItem, styles.sheetCancel, { borderTopColor: colors.borderLight }]}
+              onPress={() => setMoreSheetVisible(false)}
+            >
+              <Text style={[styles.sheetCancelText, { color: colors.text }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        type="user"
+        targetId={viewedUserId}
+        targetName={profile?.full_name || profile?.username || 'User'}
+      />
     </Animated.View>
   );
 }
@@ -698,6 +802,44 @@ const makeStyles = (c) => StyleSheet.create({
   },
   messageBtnText: {
     color: '#77674B',
+  },
+  moreBtn: {
+    borderWidth: 1.5,
+    borderColor: '#E2DACB',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 12,
+    minWidth: 0,
+    flex: 0,
+  },
+  blockedBanner: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+    backgroundColor: '#fff1f2',
+  },
+  blockedBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: 'Figtree_500Medium',
+    color: '#ef4444',
+  },
+  unblockBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+  },
+  unblockBtnText: {
+    fontSize: 13,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#ef4444',
   },
 
   // ── Follow list modal ──

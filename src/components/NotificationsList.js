@@ -11,6 +11,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { useUnreadCount } from '../context/UnreadCountContext';
+import { useBlock } from '../context/BlockContext';
 import { notificationService } from '../services/notificationService';
 import { bookingService } from '../services/bookingService';
 import { supabase } from '../config/supabase';
@@ -73,6 +74,7 @@ export default function NotificationsList({ panelMode = false }) {
     msgCount, decrementNotif, decrementBookingNotif,
     clearNotifs, clearBookingNotifs,
   } = useUnreadCount();
+  const { allHiddenIds } = useBlock();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [notifications, setNotifications] = useState([]);
@@ -101,9 +103,9 @@ export default function NotificationsList({ panelMode = false }) {
   useEffect(() => {
     fetchNotifications().finally(() => setLoading(false));
 
-    // Realtime: social notifications
+    // Realtime: social notifications (skip if the actor is blocked)
     const socialChannel = notificationService.subscribeToNotifications(user?.id, (payload) => {
-      if (payload.new) {
+      if (payload.new && !allHiddenIds.has(payload.new.actor?.id)) {
         setNotifications(prev => [{ ...payload.new, _source: 'social' }, ...prev]);
       }
     });
@@ -302,7 +304,8 @@ export default function NotificationsList({ panelMode = false }) {
   };
 
   const filteredNotifications = useMemo(() => {
-    let list = notifications;
+    // Hide all notifications from blocked users
+    let list = notifications.filter(n => !allHiddenIds.has(n.actor?.id));
 
     if (notifFilter !== 'All') {
       const typeMap = {

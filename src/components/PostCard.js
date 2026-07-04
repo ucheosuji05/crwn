@@ -24,6 +24,7 @@ import { useTheme } from '../context/ThemeContext';
 import { postService } from '../services/postService';
 import { collectionService } from '../services/collectionService';
 import { supabase } from '../config/supabase';
+import ReportModal from './ReportModal';
 
 
 export default function PostCard({
@@ -71,6 +72,7 @@ export default function PostCard({
   const [webPanelH, setWebPanelH] = useState(0);      // actual height of the web comment panel
   const [cmtHdrH, setCmtHdrH] = useState(50);  // "N Comments" header row height
   const [cmtInputH, setCmtInputH] = useState(56); // input bar height (grows when reply banner shows)
+  const [showReportModal, setShowReportModal] = useState(false);
   const [savePickerVisible, setSavePickerVisible] = useState(false);
   const [pickerCollections, setPickerCollections] = useState([]);
   const [pickerLoading, setPickerLoading] = useState(false);
@@ -512,7 +514,7 @@ export default function PostCard({
 
   const handleReport = () => {
     setMenuVisible(false);
-    Alert.alert('Report', 'This post has been reported for review.');
+    setShowReportModal(true);
   };
 
   // ── @mention helpers ─────────────────────────────────────────────────────────
@@ -1198,6 +1200,14 @@ export default function PostCard({
         </Pressable>
       </Modal>
 
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        type="post"
+        targetId={postId}
+        targetName={profiles?.full_name || profiles?.username || 'User'}
+        reportedUserId={profiles?.id || user_id}
+      />
 
     </View>
   );

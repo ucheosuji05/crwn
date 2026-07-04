@@ -30,6 +30,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../context/ThemeContext';
 import { supabase } from '../config/supabase';
 import { postService } from '../services/postService';
+import { useBlock } from '../context/BlockContext';
 
 export const SIDE_PAD = 12;
 export const COLUMN_GAP = 10;
@@ -320,6 +321,7 @@ export default function ExploreScreen() {
   const rafRef = useRef(null);
 
   const { posts, loading, loadingMore, hasMore, loadMore, refresh } = usePosts();
+  const { allHiddenIds } = useBlock();
   const isLoadingMoreRef = useRef(false);
 
   // Live user search against the profiles table (all users, not just those in the feed)
@@ -338,7 +340,7 @@ export default function ExploreScreen() {
         .select('id, full_name, username, avatar_url, is_stylist')
         .or(`full_name.ilike.%${q}%,username.ilike.%${q}%`)
         .limit(8);
-      setUserSearchResults((data || []).map(u => ({ ...u, userId: u.id })));
+      setUserSearchResults((data || []).filter(u => !allHiddenIds.has(u.id)).map(u => ({ ...u, userId: u.id })));
       setUsersSearching(false);
     }, 300);
     return () => clearTimeout(userSearchTimerRef.current);

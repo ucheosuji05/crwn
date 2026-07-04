@@ -21,7 +21,9 @@ import { useIsWebLayout } from '../utils/webLayout';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
 import SkeletonPulse from '../components/SkeletonPulse';
+import ReportModal from '../components/ReportModal';
 import { HEADER_BAR_HEIGHT } from '../components/ScreenHeader';
+import { useBlock } from '../context/BlockContext';
 
 // Distance (px) of scroll over which the full header collapses into the
 // condensed pinned bar.
@@ -1000,6 +1002,8 @@ export default function StylistProfileScreen({ route, navigation }) {
   // "More options" sheet — report stylist only; following is now a direct
   // toggle on the Follow button itself (see followFullBtn/followingBtn below).
   const [moreOptionsVisible, setMoreOptionsVisible] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [blockLoading, setBlockLoading] = useState(false);
   const [requirementsOpen, setRequirementsOpen] = useState(true);
   const [requirementsList, setRequirementsList] = useState([]);
   const [editingServiceId, setEditingServiceId] = useState(null);
@@ -1009,6 +1013,7 @@ export default function StylistProfileScreen({ route, navigation }) {
   const [requirementDraft, setRequirementDraft] = useState('');
   const [savingRequirement, setSavingRequirement] = useState(false);
   const { user } = useAuth();
+  const { blockUser } = useBlock();
 
   useEffect(() => {
     if (Platform.OS === 'web') injectScrollbarCSS();
@@ -1242,7 +1247,16 @@ export default function StylistProfileScreen({ route, navigation }) {
 
   const handleReportStylist = () => {
     setMoreOptionsVisible(false);
-    Alert.alert('Report', 'This stylist has been reported for review.');
+    setShowReportModal(true);
+  };
+
+  const handleBlockStylist = async () => {
+    setMoreOptionsVisible(false);
+    if (!user?.id || !stylistId) return;
+    setBlockLoading(true);
+    await blockUser(stylistId);
+    setBlockLoading(false);
+    navigation.goBack();
   };
 
   const openBooking = (svc = null) => {
@@ -2002,6 +2016,24 @@ export default function StylistProfileScreen({ route, navigation }) {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.sheetItem, styles.sheetItemDanger]}
+              onPress={() => {
+                setMoreOptionsVisible(false);
+                Alert.alert(
+                  `Block ${name || 'this stylist'}?`,
+                  "They won't be able to find your profile or posts. You won't see their content either.",
+                  [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Block', style: 'destructive', onPress: handleBlockStylist },
+                  ]
+                );
+              }}
+            >
+              <Ionicons name="ban-outline" size={22} color="#ef4444" />
+              <Text style={[styles.sheetItemText, styles.sheetItemTextDanger]}>Block Stylist</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.sheetItem, styles.sheetCancel, { borderTopColor: colors.borderLight }]}
               onPress={() => setMoreOptionsVisible(false)}
             >
@@ -2010,6 +2042,14 @@ export default function StylistProfileScreen({ route, navigation }) {
           </View>
         </Pressable>
       </Modal>
+
+      <ReportModal
+        visible={showReportModal}
+        onClose={() => setShowReportModal(false)}
+        type="user"
+        targetId={stylistId}
+        targetName={name}
+      />
     </View>
   );
 }
