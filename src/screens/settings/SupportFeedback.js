@@ -1,50 +1,92 @@
 import React, { useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet,
-  Alert, ActivityIndicator,
+  Alert, ActivityIndicator, Modal, Pressable, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
-import { supabase } from '../../config/supabase';
+import { getAuthToken } from '../../lib/auth-client';
+import { AUTH_URL } from '../../lib/auth-url';
+
+const FEEDBACK_TYPES = [
+  { value: 'bug',        label: 'Report a Bug',      icon: 'bug-outline' },
+  { value: 'suggestion', label: 'Suggest a Feature',  icon: 'bulb-outline' },
+  { value: 'question',   label: 'Ask a Question',     icon: 'help-circle-outline' },
+];
+
+async function postFeedback(payload) {
+  const token = getAuthToken();
+  const res = await fetch(`${AUTH_URL}/api/feedback`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    console.warn('[SupportFeedback] server error', res.status, body);
+  }
+  return res.ok;
+}
 
 export default function SupportFeedback({ onBack }) {
   const { user } = useAuth();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  // Share Your Thoughts state
   const [feedback, setFeedback] = useState('');
   const [feedbackType, setFeedbackType] = useState('suggestion');
   const [submitting, setSubmitting] = useState(false);
 
-  const feedbackTypes = [
-    { value: 'bug', label: 'Report a Bug', icon: 'bug-outline' },
-    { value: 'suggestion', label: 'Suggest a Feature', icon: 'bulb-outline' },
-    { value: 'question', label: 'Ask a Question', icon: 'help-circle-outline' },
-  ];
+  // Contact Support modal state
+  const [showContact, setShowContact] = useState(false);
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSubmitting, setContactSubmitting] = useState(false);
 
-  const handleSubmit = async () => {
+  const handleSubmitFeedback = async () => {
     if (!feedback.trim()) {
       Alert.alert('Empty Feedback', 'Please enter your feedback before submitting.');
       return;
     }
     setSubmitting(true);
-    const { error } = await supabase.from('feedback').insert({
-      user_id: user?.id ?? null,
-      type: feedbackType,
+    const ok = await postFeedback({
+      kind: 'feedback',
+      feedbackType,
       message: feedback.trim(),
+      userEmail: user?.email,
     });
     setSubmitting(false);
-
-    if (error) {
-      // Gracefully handle missing table by still thanking the user
-      console.warn('Feedback insert error:', error.message);
+    if (ok) {
+      setFeedback('');
+      Alert.alert('Thank You!', "Your feedback has been sent to the CRWN team. We'll review it shortly.");
+    } else {
+      Alert.alert('Error', 'Could not send feedback right now. Please try again.');
     }
+  };
 
-    Alert.alert(
-      'Thank You!',
-      "Your feedback helps us make CRWN better. We'll review it and get back to you if needed.",
-      [{ text: 'OK', onPress: () => setFeedback('') }],
-    );
+  const handleSubmitContact = async () => {
+    if (!contactMessage.trim()) {
+      Alert.alert('Empty Message', 'Please describe your issue before sending.');
+      return;
+    }
+    setContactSubmitting(true);
+    const ok = await postFeedback({
+      kind: 'support',
+      message: contactMessage.trim(),
+      userEmail: user?.email,
+    });
+    setContactSubmitting(false);
+    if (ok) {
+      setContactMessage('');
+      setShowContact(false);
+      Alert.alert('Message Sent', "We've received your support request and will get back to you at " + (user?.email || 'your email') + '.');
+    } else {
+      Alert.alert('Error', 'Could not send your message right now. Please try again.');
+    }
   };
 
   return (
@@ -57,51 +99,34 @@ export default function SupportFeedback({ onBack }) {
         <View style={styles.placeholder} />
       </View>
 
-      <ScrollView style={styles.container}>
+      <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Text style={styles.headerTitle}>We're Listening</Text>
           <Text style={styles.headerDescription}>
-            Your voice matters. Help us build CRWN together through co-creation, not complaints.
+            Your voice matters. Help us build CRWN together.
           </Text>
         </View>
 
-        {/* Quick Actions */}
+        {/* Contact Support */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => Alert.alert('Help Center', 'Help center articles coming soon.')}
-          >
-            <Ionicons name="book-outline" size={24} color={colors.primary} />
-            <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>Help Center</Text>
-              <Text style={styles.actionDescription}>Browse FAQs and guides</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionCard}
-            onPress={() => Alert.alert('Contact Support', 'Email: support@crwnapp.com')}
-          >
+          <TouchableOpacity style={styles.actionCard} onPress={() => setShowContact(true)}>
             <Ionicons name="mail-outline" size={24} color={colors.primary} />
             <View style={styles.actionContent}>
               <Text style={styles.actionTitle}>Contact Support</Text>
               <Text style={styles.actionDescription}>Get help from our team</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
 
-        {/* Feedback Form */}
+        {/* Share Your Thoughts */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Share Your Thoughts</Text>
-
           <Text style={styles.question}>What would make CRWN better for you?</Text>
 
           <View style={styles.typeSelector}>
-            {feedbackTypes.map((type) => (
+            {FEEDBACK_TYPES.map((type) => (
               <TouchableOpacity
                 key={type.value}
                 style={[styles.typeButton, feedbackType === type.value && styles.typeButtonActive]}
@@ -110,7 +135,7 @@ export default function SupportFeedback({ onBack }) {
                 <Ionicons
                   name={type.icon}
                   size={20}
-                  color={feedbackType === type.value ? colors.primary : '#6b7280'}
+                  color={feedbackType === type.value ? colors.primary : colors.textSecondary}
                 />
                 <Text style={[styles.typeText, feedbackType === type.value && styles.typeTextActive]}>
                   {type.label}
@@ -121,7 +146,7 @@ export default function SupportFeedback({ onBack }) {
 
           <TextInput
             style={styles.textArea}
-            placeholder="Tell us more... We're all ears!"
+            placeholder="Tell us more… We're all ears!"
             placeholderTextColor={colors.placeholder}
             multiline
             numberOfLines={6}
@@ -131,9 +156,9 @@ export default function SupportFeedback({ onBack }) {
           />
 
           <TouchableOpacity
-            style={[styles.submitButton, submitting && styles.submitButtonDisabled]}
-            onPress={handleSubmit}
-            disabled={submitting}
+            style={[styles.submitButton, (!feedback.trim() || submitting) && styles.submitButtonDisabled]}
+            onPress={handleSubmitFeedback}
+            disabled={!feedback.trim() || submitting}
           >
             {submitting
               ? <ActivityIndicator color="#fff" size="small" />
@@ -141,21 +166,69 @@ export default function SupportFeedback({ onBack }) {
           </TouchableOpacity>
         </View>
 
-        {/* Community Impact */}
-        <View style={styles.impactCard}>
-          <Ionicons name="people" size={32} color={colors.primary} />
-          <Text style={styles.impactTitle}>Community-Driven Growth</Text>
-          <Text style={styles.impactText}>
-            Over 500+ features suggested by our community. Your ideas shape CRWN's future.
-          </Text>
-        </View>
+        <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Contact Support Modal */}
+      <Modal
+        visible={showContact}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowContact(false)}
+      >
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={() => setShowContact(false)}>
+            <Pressable style={[styles.modalCard, { backgroundColor: colors.surface }]} onPress={() => {}}>
+              <View style={[styles.modalHeader, { borderBottomColor: colors.borderLight }]}>
+                <View style={styles.modalIconWrap}>
+                  <Ionicons name="mail-outline" size={22} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalTitle, { color: colors.text }]}>Contact Support</Text>
+                  <Text style={[styles.modalSubtitle, { color: colors.textMuted }]}>We'll reply to {user?.email || 'your email'}</Text>
+                </View>
+                <TouchableOpacity onPress={() => setShowContact(false)} style={styles.modalClose}>
+                  <Ionicons name="close" size={22} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalBody}>
+                <Text style={[styles.modalLabel, { color: colors.textSecondary }]}>Describe your issue or question</Text>
+                <TextInput
+                  style={[styles.contactInput, { backgroundColor: colors.background, borderColor: colors.borderLight, color: colors.text }]}
+                  placeholder="Tell us what's going on…"
+                  placeholderTextColor={colors.placeholder}
+                  multiline
+                  numberOfLines={5}
+                  value={contactMessage}
+                  onChangeText={setContactMessage}
+                  textAlignVertical="top"
+                  autoFocus
+                />
+                <TouchableOpacity
+                  style={[styles.submitButton, (!contactMessage.trim() || contactSubmitting) && styles.submitButtonDisabled]}
+                  onPress={handleSubmitContact}
+                  disabled={!contactMessage.trim() || contactSubmitting}
+                >
+                  {contactSubmitting
+                    ? <ActivityIndicator color="#fff" size="small" />
+                    : <Text style={styles.submitButtonText}>Send Message</Text>}
+                </TouchableOpacity>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
 
 const makeStyles = (c) => StyleSheet.create({
   fullContainer: { flex: 1, backgroundColor: c.background },
+  flex: { flex: 1 },
   detailHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,7 +261,6 @@ const makeStyles = (c) => StyleSheet.create({
     padding: 16,
     backgroundColor: c.surface,
     borderRadius: 12,
-    marginBottom: 12,
     gap: 12,
     borderWidth: 1,
     borderColor: c.borderLight,
@@ -230,23 +302,44 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
   },
-  submitButtonDisabled: { opacity: 0.6 },
+  submitButtonDisabled: { opacity: 0.4 },
   submitButtonText: { color: '#fff', fontSize: 16, fontFamily: 'Figtree_600SemiBold' },
-  impactCard: {
-    margin: 20,
-    padding: 20,
-    backgroundColor: c.primaryLight,
-    borderRadius: 12,
+
+  // Contact modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+  },
+  modalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  modalIconWrap: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#FEF3E2',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  modalTitle:    { fontSize: 16, fontFamily: 'Figtree_700Bold' },
+  modalSubtitle: { fontSize: 12, fontFamily: 'Figtree_400Regular', marginTop: 1 },
+  modalClose:    { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  modalBody:     { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 32, gap: 10 },
+  modalLabel:    { fontSize: 13, fontFamily: 'Figtree_500Medium' },
+  contactInput: {
     borderWidth: 1,
-    borderColor: '#fecaca',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    minHeight: 130,
+    marginBottom: 4,
   },
-  impactTitle: {
-    fontSize: 18,
-    fontFamily: 'Figtree_700Bold',
-    color: c.primary,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-  impactText: { fontSize: 14, color: c.textSecondary, textAlign: 'center', lineHeight: 20 },
 });

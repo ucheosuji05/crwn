@@ -1059,6 +1059,43 @@ app.post('/api/reports', async (req, res) => {
   }
 });
 
+app.post('/api/feedback', async (req, res) => {
+  console.log('[feedback] POST hit, auth header:', req.headers.authorization ? 'present' : 'MISSING');
+  const userId = await getSessionUserId(req);
+  console.log('[feedback] resolved userId:', userId);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { kind, feedbackType, message, userEmail } = req.body || {};
+  if (!message) return res.status(400).json({ message: 'message is required' });
+
+  const isSupport = kind === 'support';
+  const subjectLine = isSupport
+    ? `[CRWN Support] Request from ${userEmail || userId}`
+    : `[CRWN Feedback] ${feedbackType || 'General'} — from ${userEmail || userId}`;
+
+  try {
+    await sendEmail({
+      to: 'crwn@crwnhq.com',
+      subject: subjectLine,
+      html: `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto">
+          <h2 style="color:#5D1F1F">${isSupport ? 'Support Request' : 'User Feedback'}</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:14px">
+            <tr><td style="padding:8px 0;color:#666;width:140px">From</td><td style="padding:8px 0">${userEmail || '(not provided)'}</td></tr>
+            <tr><td style="padding:8px 0;color:#666">User ID</td><td style="padding:8px 0;font-family:monospace;font-size:12px">${userId}</td></tr>
+            ${!isSupport ? `<tr><td style="padding:8px 0;color:#666">Type</td><td style="padding:8px 0"><strong>${feedbackType || 'General'}</strong></td></tr>` : ''}
+            <tr><td style="padding:8px 0;color:#666;vertical-align:top">Message</td><td style="padding:8px 0;white-space:pre-wrap">${message}</td></tr>
+          </table>
+        </div>
+      `,
+    });
+    return res.json({ success: true });
+  } catch (err) {
+    console.error('[feedback] error:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Better Auth handles all /api/auth/* routes
 app.all('/api/auth/*', (req, res, next) => {
   Promise.resolve(toNodeHandler(auth)(req, res)).catch((err) => {
