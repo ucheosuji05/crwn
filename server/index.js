@@ -1060,8 +1060,17 @@ app.post('/api/reports', async (req, res) => {
 
     const typeLabel = type === 'post' ? 'Post' : type === 'user' ? 'User' : 'Content';
     const reportSubject = `[CRWN Report] ${typeLabel} reported by ${reporterDisplay} — ${reason}`;
+    const reportQuote = [
+      ``,
+      ``,
+      `--- Original Report ---`,
+      `From: ${reporterDisplay}${reporterEmail ? ` <${reporterEmail}>` : ''}`,
+      `Reported ${typeLabel}: ${reportedDisplay}`,
+      `Reason: ${reason}`,
+      notes ? `Notes: ${notes}` : '',
+    ].filter(Boolean).join('\n');
     const reportReplyButton = reporterEmail
-      ? `<a href="mailto:${reporterEmail}?subject=Re: ${encodeURIComponent(reportSubject)}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#5D1F1F;color:#fff;text-decoration:none;border-radius:8px;font-size:14px">Reply to Reporter</a>`
+      ? `<a href="mailto:${reporterEmail}?subject=Re: ${encodeURIComponent(reportSubject)}&body=${encodeURIComponent(reportQuote)}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#5D1F1F;color:#fff;text-decoration:none;border-radius:8px;font-size:14px">Reply to Reporter</a>`
       : '';
 
     await sendEmail({
@@ -1112,8 +1121,17 @@ app.post('/api/feedback', async (req, res) => {
       ? `[CRWN Support] Request from ${userDisplay}`
       : `[CRWN Feedback] ${feedbackType || 'General'} from ${userDisplay}`;
 
+    const replyQuote = [
+      ``,
+      ``,
+      `--- Original Message ---`,
+      `From: ${userDisplay}${userEmail ? ` <${userEmail}>` : ''}`,
+      isSupport ? `Type: Support Request` : `Type: ${feedbackType || 'General'}`,
+      ``,
+      message,
+    ].join('\n');
     const replyButton = userEmail
-      ? `<a href="mailto:${userEmail}?subject=Re: ${encodeURIComponent(subjectLine)}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#5D1F1F;color:#fff;text-decoration:none;border-radius:8px;font-size:14px">Reply to ${profile.full_name || userDisplay}</a>`
+      ? `<a href="mailto:${userEmail}?subject=Re: ${encodeURIComponent(subjectLine)}&body=${encodeURIComponent(replyQuote)}" style="display:inline-block;margin-top:20px;padding:10px 20px;background:#5D1F1F;color:#fff;text-decoration:none;border-radius:8px;font-size:14px">Reply to ${profile.full_name || userDisplay}</a>`
       : '';
 
     await sendEmail({
