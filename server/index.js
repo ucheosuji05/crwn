@@ -1205,12 +1205,15 @@ app.post('/api/feedback', async (req, res) => {
 // ── Booking page scraper ──────────────────────────────────────────────────────
 
 function detectPlatform(url) {
-  if (url.includes('styleseat.com'))       return 'styleseat';
-  if (url.includes('vagaro.com'))           return 'vagaro';
-  if (url.includes('squareup.com') || url.includes('book.squareup.com')) return 'square';
-  if (url.includes('calendly.com'))         return 'calendly';
-  if (url.includes('acuityscheduling.com')) return 'acuity';
-  if (url.includes('mindbodyonline.com'))   return 'mindbody';
+  const u = url.toLowerCase();
+  if (u.includes('styleseat.com'))                            return 'styleseat';
+  if (u.includes('vagaro.com'))                               return 'vagaro';
+  if (u.includes('squareup.com') || u.includes('square.site')) return 'square';
+  if (u.includes('calendly.com'))                             return 'calendly';
+  if (u.includes('booksy.com'))                               return 'booksy';
+  if (u.includes('fresha.com'))                               return 'fresha';
+  if (u.includes('acuityscheduling.com'))                     return 'acuity';
+  if (u.includes('mindbodyonline.com'))                       return 'mindbody';
   return 'unknown';
 }
 
@@ -1221,13 +1224,13 @@ function extractNextData(html) {
 }
 
 function extractJsonLd(html) {
-  const tags = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi) || [];
-  return tags.flatMap(tag => {
-    try {
-      const json = JSON.parse(tag.replace(/<script[^>]*>/, '').replace(/<\/script>/, ''));
-      return Array.isArray(json) ? json : [json];
-    } catch { return []; }
-  });
+  return [...html.matchAll(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)]
+    .flatMap(([, content]) => {
+      try {
+        const json = JSON.parse(content);
+        return Array.isArray(json) ? json : [json];
+      } catch { return []; }
+    });
 }
 
 function extractMeta(html, name) {
@@ -1236,112 +1239,219 @@ function extractMeta(html, name) {
   return m?.[1] || '';
 }
 
-function scrapeStyleSeat(html, nextData) {
-  const props = nextData?.props?.pageProps || nextData?.props || {};
-  const pro = props.pro || props.stylist || props.profile || {};
-  const rawServices = pro.services || props.services || [];
+// Recursively walk a nested object looking for an array that resembles service listings
+function findServicesDeep(obj, depth = 0) {
+  if (depth > 10 || !obj || typeof obj !== 'object') return null;
+  if (Array.isArray(obj)) {
+    if (obj.length > 0 && obj.slice(0, 3).every(item =>
+      item && typeof item === 'object' && !Array.isArray(item) &&
+      (item.name || item.sName || item.title || item.service_name ||
+       item.ServiceName || item.displayName || item.slug)
+    )) return obj;
+    for (const item of obj) {
+      const found = findServicesDeep(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  for (const key of ['services', 'service_list', 'serviceList', 'items', 'eventTypes',
+                      'event_types', 'offerings', 'catalogItems', 'catalog_items']) {
+    if (Array.isArray(obj[key]) && obj[key].length > 0) {
+      const found = findServicesDeep(obj[key], depth);
+      if (found) return found;
+    }
+  }
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === 'object') {
+      const found = findServicesDeep(v, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
 
-  const services = rawServices.map(s => ({
-    name: s.name || s.title || s.service_name || '',
-    price: s.price ? `$${s.price}` : (s.priceRange || ''),
-    description: s.description || s.details || '',
-  })).filter(s => s.name);
+function normalizeService(item) {
+  const name = (item.name || item.sName || item.title || item.service_name ||
+                item.ServiceName || item.displayName || '').trim();
+  if (!name) return null;
+
+  let price = '';
+  const raw = item.price ?? item.priceMin ?? item.min_price ?? item.starting_price;
+  if (raw !== undefined && raw !== null) {
+    const n = parseFloat(String(raw).replace(/[^0-9.]/g, ''));
+    if (!isNaN(n) && n > 0) {
+      price = n > 500 ? `$${(n / 100).toFixed(0)}` : `$${Number.isInteger(n) ? n : n.toFixed(2)}`;
+    } else if (typeof raw === 'string' && raw.trim()) {
+      price = raw.includes('$') ? raw.trim() : `$${raw.trim()}`;
+    }
+  }
+  if (!price && item.priceRange)  price = item.priceRange;
+  if (!price && item.price_range) price = item.price_range;
 
   return {
-    businessName: pro.displayName || pro.name || pro.business_name || extractMeta(html, 'og:title').split('|')[0].trim(),
-    bio: pro.bio || pro.description || extractMeta(html, 'og:description'),
-    services,
+    name,
+    price,
+    description: (item.description || item.details || item.sDescription || item.description_plain || '').trim(),
   };
+}
+
+// Recursively walk for a business/owner entity object
+function findBusinessDeep(obj, depth = 0) {
+  if (depth > 8 || !obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
+  for (const key of ['pro', 'stylist', 'profile', 'business', 'businessInfo',
+                      'merchant', 'seller', 'owner', 'provider', 'venue', 'location']) {
+    if (obj[key] && typeof obj[key] === 'object' && !Array.isArray(obj[key])) return obj[key];
+  }
+  for (const v of Object.values(obj)) {
+    if (v && typeof v === 'object' && !Array.isArray(v)) {
+      const found = findBusinessDeep(v, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function extractBizName(obj) {
+  if (!obj) return '';
+  for (const k of ['name', 'displayName', 'businessName', 'business_name', 'bName', 'organization', 'company_name']) {
+    if (typeof obj[k] === 'string' && obj[k].trim()) return obj[k].trim();
+  }
+  return '';
+}
+
+// Core extractor — works on any platform's embedded JSON
+function extractFromJson(data) {
+  if (!data) return { businessName: '', bio: '', services: [] };
+  const biz = findBusinessDeep(data);
+  const rawServices = findServicesDeep(data);
+  return {
+    businessName: extractBizName(biz),
+    bio: (biz?.bio || biz?.description || biz?.about || '').trim(),
+    services: (rawServices || []).map(normalizeService).filter(Boolean),
+  };
+}
+
+function scrapeStyleSeat(_html, nextData) {
+  return extractFromJson(nextData);
 }
 
 function scrapeVagaro(html, nextData) {
-  const props = nextData?.props?.pageProps || {};
-  const biz = props.business || props.businessInfo || {};
-  const rawServices = props.services || biz.services || [];
-
-  const services = rawServices.map(s => ({
-    name: s.sName || s.name || s.ServiceName || '',
-    price: s.price ? `$${Number(s.price).toFixed(0)}` : '',
-    description: s.description || s.sDescription || '',
-  })).filter(s => s.name);
-
-  return {
-    businessName: biz.bName || biz.name || extractMeta(html, 'og:title').split('|')[0].trim(),
-    bio: biz.bio || biz.description || extractMeta(html, 'og:description'),
-    services,
-  };
+  const result = extractFromJson(nextData);
+  // Vagaro sometimes also uses a Nuxt state blob
+  if (result.services.length === 0) {
+    const m = html.match(/window\.__NUXT__\s*=\s*([\s\S]*?);<\/script>/);
+    if (m) {
+      try { return extractFromJson(JSON.parse(m[1])); } catch {}
+    }
+  }
+  return result;
 }
 
-function scrapeCalendly(html, nextData) {
-  const props = nextData?.props?.pageProps || {};
-  const owner = props.owner || props.profile || {};
-  const eventTypes = props.eventTypes || props.event_types || [];
-
-  const services = eventTypes.map(e => ({
-    name: e.name || e.slug || '',
-    price: '',
-    description: e.description_plain || e.description || `${e.duration || ''} min`,
-  })).filter(s => s.name);
-
-  return {
-    businessName: owner.name || owner.organization || extractMeta(html, 'og:title'),
-    bio: owner.description || extractMeta(html, 'og:description'),
-    services,
-  };
+async function scrapeCalendly(_html, nextData, url) {
+  // Calendly's undocumented public booking API returns event types reliably
+  const username = url.match(/calendly\.com\/([^/?#]+)/)?.[1];
+  if (username && !['d', 'event_types', 'api', 'app'].includes(username)) {
+    try {
+      const apiRes = await fetch(`https://calendly.com/api/booking/profiles/${username}`, {
+        headers: {
+          Accept: 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15',
+        },
+      });
+      if (apiRes.ok) {
+        const d = await apiRes.json();
+        const owner = d.owner || d;
+        const events = d.event_types || d.eventTypes || [];
+        if (owner.name || events.length > 0) {
+          return {
+            businessName: owner.name || owner.full_name || '',
+            bio: owner.description || '',
+            services: events.map(e => ({
+              name: e.name || '',
+              price: '',
+              description: [e.duration ? `${e.duration} min` : '', e.description_plain || ''].filter(Boolean).join(' — '),
+            })).filter(s => s.name),
+          };
+        }
+      }
+    } catch {}
+  }
+  return extractFromJson(nextData);
 }
 
 function scrapeSquare(html, nextData) {
-  // Square often embeds state in window.__SQUARE_INITIAL_STATE__ or __NEXT_DATA__
-  const stateMatch = html.match(/window\.__SQUARE_INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
-  let state = null;
-  if (stateMatch) { try { state = JSON.parse(stateMatch[1]); } catch {} }
-
-  const props = state || nextData?.props?.pageProps || {};
-  const seller = props.seller || props.merchant || {};
-  const items = props.catalogItems || props.items || props.services || [];
-
-  const services = items.map(item => ({
-    name: item.name || item.itemData?.name || '',
-    price: item.price ? `$${(item.price / 100).toFixed(0)}` : (item.itemData?.variations?.[0]?.itemVariationData?.priceMoney?.amount ? `$${(item.itemData.variations[0].itemVariationData.priceMoney.amount / 100).toFixed(0)}` : ''),
-    description: item.description || item.itemData?.description || '',
-  })).filter(s => s.name);
-
-  return {
-    businessName: seller.name || extractMeta(html, 'og:title'),
-    bio: seller.description || extractMeta(html, 'og:description'),
-    services,
-  };
+  const patterns = [
+    /window\.__SQUARE_INITIAL_STATE__\s*=\s*({[\s\S]*?});\s*(?:window|<\/script>)/,
+    /window\.__SQUARE_MARKETPLACE_STATE__\s*=\s*({[\s\S]*?});\s*(?:window|<\/script>)/,
+    /window\.__PRELOADED_STATE__\s*=\s*({[\s\S]*?});\s*(?:window|<\/script>)/,
+  ];
+  for (const pat of patterns) {
+    const m = html.match(pat);
+    if (m) {
+      try {
+        const r = extractFromJson(JSON.parse(m[1]));
+        if (r.businessName || r.services.length > 0) return r;
+      } catch {}
+    }
+  }
+  return extractFromJson(nextData);
 }
 
-// Fallback: use JSON-LD + meta tags
-function scrapeFallback(html) {
+function scrapeBooksy(html, nextData) {
+  const result = extractFromJson(nextData);
+  if (result.services.length === 0) {
+    const m = html.match(/window\.__INITIAL_STATE__\s*=\s*([\s\S]*?);\s*<\/script>/);
+    if (m) {
+      try {
+        const r = extractFromJson(JSON.parse(m[1]));
+        if (r.services.length > 0 || r.businessName) return r;
+      } catch {}
+    }
+  }
+  return result;
+}
+
+function scrapeFallback(html, nextData) {
+  if (nextData) {
+    const result = extractFromJson(nextData);
+    if (result.businessName || result.services.length > 0) return result;
+  }
   const ld = extractJsonLd(html);
-  const businessLd = ld.find(o => o['@type'] === 'LocalBusiness' || o['@type'] === 'HairSalon' || o['@type'] === 'BeautySalon');
-  const hasOffers = ld.filter(o => o['@type'] === 'Offer' || o['@type'] === 'Service');
-
-  const services = hasOffers.map(o => ({
-    name: o.name || '',
-    price: o.price ? `$${o.price}` : (o.priceRange || ''),
-    description: o.description || '',
-  })).filter(s => s.name);
-
+  const bizLd = ld.find(o => ['LocalBusiness', 'HairSalon', 'BeautySalon', 'HealthAndBeautyBusiness'].includes(o['@type']));
+  const offerLd = ld.filter(o => ['Offer', 'Service', 'Product'].includes(o['@type']));
   return {
-    businessName: businessLd?.name || extractMeta(html, 'og:title').replace(' | StyleSeat', '').replace(' - Vagaro', '').trim(),
-    bio: businessLd?.description || extractMeta(html, 'og:description'),
-    services,
+    businessName: bizLd?.name || '',
+    bio: bizLd?.description || '',
+    services: offerLd.map(o => ({
+      name: o.name || '',
+      price: o.price ? `$${o.price}` : (o.priceRange || ''),
+      description: o.description || '',
+    })).filter(s => s.name),
   };
 }
 
 app.post('/api/scrape-booking', async (req, res) => {
-  const { url } = req.body || {};
+  let { url } = req.body || {};
   if (!url) return res.status(400).json({ error: 'url required' });
+
+  // Normalize — add protocol if missing
+  url = url.trim();
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
 
   try {
     const response = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
-        'Accept': 'text/html,application/xhtml+xml',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Cache-Control': 'max-age=0',
       },
       redirect: 'follow',
     });
@@ -1355,14 +1465,16 @@ app.post('/api/scrape-booking', async (req, res) => {
     const nextData = extractNextData(html);
 
     let result;
-    if (platform === 'styleseat') result = scrapeStyleSeat(html, nextData);
-    else if (platform === 'vagaro')     result = scrapeVagaro(html, nextData);
-    else if (platform === 'calendly')   result = scrapeCalendly(html, nextData);
-    else if (platform === 'square')     result = scrapeSquare(html, nextData);
-    else                                result = scrapeFallback(html);
+    switch (platform) {
+      case 'styleseat': result = scrapeStyleSeat(html, nextData); break;
+      case 'vagaro':    result = scrapeVagaro(html, nextData); break;
+      case 'calendly':  result = await scrapeCalendly(html, nextData, url); break;
+      case 'square':    result = scrapeSquare(html, nextData); break;
+      case 'booksy':    result = scrapeBooksy(html, nextData); break;
+      default:          result = scrapeFallback(html, nextData);
+    }
 
-    // Always fall back to meta tags if nothing found
-    if (!result.businessName) result.businessName = extractMeta(html, 'og:title').split(/[|\-–]/)[0].trim();
+    if (!result.businessName) result.businessName = extractMeta(html, 'og:title').split(/[|—\-]/)[0].trim();
     if (!result.bio)          result.bio = extractMeta(html, 'og:description');
 
     return res.json({ platform, ...result });
