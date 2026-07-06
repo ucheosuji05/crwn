@@ -27,6 +27,7 @@ import { profileService } from '../services/profileService';
 import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
 import { AUTH_URL } from '../lib/auth-url';
+import { getAuthToken } from '../lib/auth-client';
 import AuthScreen from './AuthScreen';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
 
@@ -503,6 +504,21 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         const social = Object.fromEntries(Object.entries(formData.socialLinks).filter(([, v]) => v?.trim()));
         if (Object.keys(social).length) prefs.social_links = social;
         if (credentialsPhotoUrl)        prefs.credentials_photo_url = credentialsPhotoUrl;
+
+        // Create CRWN posts for each selected Instagram photo
+        if (selectedInstagramPhotos.length > 0) {
+          const token = getAuthToken();
+          if (token) {
+            await fetch(`${AUTH_URL}/api/import-instagram-posts`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                photoUrls: selectedInstagramPhotos,
+                businessName: formData.businessName || undefined,
+              }),
+            }).catch(e => console.warn('[import-instagram]', e.message));
+          }
+        }
       }
 
       if (Object.keys(prefs).length > 0 && userId) {

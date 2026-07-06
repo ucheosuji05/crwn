@@ -782,6 +782,48 @@ app.post('/api/threads', async (req, res) => {
   }
 });
 
+// ── Import Instagram photos as posts ─────────────────────────────────────────
+// Stores photo URLs directly in post_media — no file upload needed.
+
+app.post('/api/import-instagram-posts', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { photoUrls, businessName } = req.body || {};
+  if (!Array.isArray(photoUrls) || !photoUrls.length) {
+    return res.status(400).json({ message: 'photoUrls array required' });
+  }
+
+  const h = supabaseAdminHeaders();
+  const postTitle = businessName || 'Portfolio';
+  const created = [];
+
+  try {
+    for (const url of photoUrls) {
+      const postRes = await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
+        method: 'POST',
+        headers: { ...h, Prefer: 'return=representation' },
+        body: JSON.stringify({ user_id: userId, title: postTitle, description: '', tags: [], is_public: true }),
+      });
+      if (!postRes.ok) { console.error('[import-instagram] post error:', await postRes.text()); continue; }
+      const [post] = await postRes.json();
+
+      const mediaRes = await fetch(`${SUPABASE_URL}/rest/v1/post_media`, {
+        method: 'POST',
+        headers: { ...h, Prefer: 'return=representation' },
+        body: JSON.stringify({ post_id: post.id, media_url: url, media_type: 'image', position: 0 }),
+      });
+      if (!mediaRes.ok) { console.error('[import-instagram] media error:', await mediaRes.text()); continue; }
+
+      created.push(post.id);
+    }
+    return res.json({ created: created.length });
+  } catch (err) {
+    console.error('[import-instagram] error:', err.message);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // ── Post likes ────────────────────────────────────────────────────────────────
 app.post('/api/posts/:postId/like', async (req, res) => {
   const userId = await getSessionUserId(req);
