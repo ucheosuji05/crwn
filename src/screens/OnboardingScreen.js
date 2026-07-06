@@ -367,11 +367,13 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   const [importedData, setImportedData] = useState(null);
   const [scrapeLoading, setScrapeLoading] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
-  const [instagramPhotos, setInstagramPhotos] = useState([]);
-  const [selectedInstagramPhotos, setSelectedInstagramPhotos] = useState([]);
+  const [instagramPhotos, setInstagramPhotos] = useState([]); // { url, caption }[]
+  const [selectedInstagramPhotos, setSelectedInstagramPhotos] = useState([]); // url string[]
+  const [instagramCaptionEdits, setInstagramCaptionEdits] = useState({}); // { [url]: string }
   const [instagramLoading, setInstagramLoading] = useState(false);
   const [stylistPath, setStylistPath] = useState('import'); // 'import' | 'manual'
   const skeletonPulse = useRef(new Animated.Value(0.4)).current;
+  const signupInProgress = useRef(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const loadingProgress = useRef(new Animated.Value(0)).current;
@@ -412,6 +414,8 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   }, [currentStep]);
 
   const handleSignup = async () => {
+    if (signupInProgress.current) return;
+    signupInProgress.current = true;
     loadingProgress.setValue(0);
     Animated.timing(loadingProgress, { toValue: 0.3, duration: 500, useNativeDriver: false }).start();
     setLoadingMessage(isGoogleUser ? 'Saving your profile...' : 'Creating your account...');
@@ -450,8 +454,17 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         );
         if (error) {
           console.error('[Signup] error:', JSON.stringify(error));
-          Alert.alert('Signup Failed', error.message || `${error.status || ''} ${error.statusText || error.code || 'Please try again'}`);
-          goToStep(STEPS.EMAIL);
+          signupInProgress.current = false;
+          if (error.code === 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL') {
+            Alert.alert(
+              'Account Already Exists',
+              'An account with this email already exists. Please sign in from the home screen instead.',
+              [{ text: 'OK', onPress: () => goToStep(STEPS.EMAIL) }]
+            );
+          } else {
+            Alert.alert('Signup Failed', error.message || `${error.status || ''} ${error.statusText || error.code || 'Please try again'}`);
+            goToStep(STEPS.EMAIL);
+          }
           return;
         }
         userId = user?.id;
@@ -513,7 +526,10 @@ export default function OnboardingScreen({ onDone = () => {} }) {
               method: 'POST',
               headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                photoUrls: selectedInstagramPhotos,
+                posts: selectedInstagramPhotos.map(url => {
+                  const original = instagramPhotos.find(p => p.url === url);
+                  return { url, description: instagramCaptionEdits[url] ?? original?.caption ?? '' };
+                }),
                 businessName: formData.businessName || undefined,
               }),
             }).catch(e => console.warn('[import-instagram]', e.message));
@@ -528,8 +544,10 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       Animated.timing(loadingProgress, { toValue: 1, duration: 500, useNativeDriver: false }).start();
       setLoadingMessage('Almost there...');
       await new Promise(resolve => setTimeout(resolve, 500));
+      signupInProgress.current = false;
       goToStep(STEPS.COMPLETE);
     } catch (err) {
+      signupInProgress.current = false;
       Alert.alert('Error', 'Something went wrong. Please try again.');
       goToStep(isGoogleUser ? STEPS.USERNAME : STEPS.EMAIL);
     }
@@ -1645,9 +1663,9 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           const urlObj = new URL(result.url);
           const photosStr = urlObj.searchParams.get('photos');
           if (photosStr) {
-            const photos = JSON.parse(decodeURIComponent(photosStr));
+            const photos = JSON.parse(decodeURIComponent(photosStr)); // [{ url, caption }]
             setInstagramPhotos(photos);
-            setSelectedInstagramPhotos(photos); // auto-select all
+            setSelectedInstagramPhotos(photos.map(p => p.url)); // auto-select all
           }
         }
       } catch (e) {
@@ -1674,19 +1692,19 @@ export default function OnboardingScreen({ onDone = () => {} }) {
               {selectedInstagramPhotos.length} of {instagramPhotos.length} selected — tap to toggle
             </Text>
             <View style={styles.importPhotoGrid}>
-              {instagramPhotos.map((uri, i) => {
-                const selected = selectedInstagramPhotos.includes(uri);
+              {instagramPhotos.map((item, i) => {
+                const selected = selectedInstagramPhotos.includes(item.url);
                 return (
                   <TouchableOpacity
                     key={i}
                     onPress={() => setSelectedInstagramPhotos(prev =>
-                      prev.includes(uri) ? prev.filter(u => u !== uri) : [...prev, uri]
+                      prev.includes(item.url) ? prev.filter(u => u !== item.url) : [...prev, item.url]
                     )}
                     activeOpacity={0.8}
                     style={{ position: 'relative' }}
                   >
                     <Image
-                      source={{ uri }}
+                      source={{ uri: item.url }}
                       style={[styles.importPhotoThumb, !selected && { opacity: 0.35 }]}
                     />
                     {selected && (
@@ -1783,13 +1801,28 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         {selectedInstagramPhotos.length > 0 && (
           <View style={styles.reviewSection}>
             <Text style={styles.reviewSectionTitle}>
-              Portfolio photos ({selectedInstagramPhotos.length})
+              Posts to publish ({selectedInstagramPhotos.length})
             </Text>
-            <View style={styles.importPhotoGrid}>
-              {selectedInstagramPhotos.slice(0, 6).map((uri, i) => (
-                <Image key={i} source={{ uri }} style={styles.importPhotoThumb} />
-              ))}
-            </View>
+            <Text style={styles.reviewPostHint}>Edit captions before publishing</Text>
+            {selectedInstagramPhotos.map((url, i) => {
+              const original = instagramPhotos.find(p => p.url === url);
+              const caption = instagramCaptionEdits[url] ?? original?.caption ?? '';
+              return (
+                <View key={i} style={styles.reviewPostCard}>
+                  <Image source={{ uri: url }} style={styles.reviewPostThumb} />
+                  <TextInput
+                    style={styles.reviewPostCaption}
+                    value={caption}
+                    onChangeText={text =>
+                      setInstagramCaptionEdits(prev => ({ ...prev, [url]: text }))
+                    }
+                    placeholder="Add a caption..."
+                    placeholderTextColor="#B0A090"
+                    multiline
+                  />
+                </View>
+              );
+            })}
           </View>
         )}
       </WhiteScreen>
@@ -2618,4 +2651,32 @@ const styles = StyleSheet.create({
   reviewSectionValue: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', color: colors.textPrimary },
   reviewEmptyState: { alignItems: 'center', paddingVertical: 32, gap: 12 },
   reviewEmptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, fontFamily: 'Figtree_400Regular' },
+  reviewPostHint: { fontSize: 12, color: '#B0A090', fontFamily: 'Figtree_400Regular', marginBottom: 8 },
+  reviewPostCard: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0E8DF',
+  },
+  reviewPostThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    backgroundColor: '#F0E8DF',
+  },
+  reviewPostCaption: {
+    flex: 1,
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    color: colors.textPrimary,
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
 });

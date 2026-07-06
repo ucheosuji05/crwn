@@ -789,9 +789,12 @@ app.post('/api/import-instagram-posts', async (req, res) => {
   const userId = await getSessionUserId(req);
   if (!userId) return res.status(401).json({ message: 'Unauthorized' });
 
-  const { photoUrls, businessName } = req.body || {};
-  if (!Array.isArray(photoUrls) || !photoUrls.length) {
-    return res.status(400).json({ message: 'photoUrls array required' });
+  const { posts, photoUrls, businessName } = req.body || {};
+  // Accept new `posts: [{ url, description }]` format or legacy `photoUrls: string[]`
+  const postItems = posts
+    || (Array.isArray(photoUrls) ? photoUrls.map(url => ({ url, description: '' })) : null);
+  if (!postItems?.length) {
+    return res.status(400).json({ message: 'posts array required' });
   }
 
   const h = supabaseAdminHeaders();
@@ -799,11 +802,11 @@ app.post('/api/import-instagram-posts', async (req, res) => {
   const created = [];
 
   try {
-    for (const url of photoUrls) {
+    for (const { url, description } of postItems) {
       const postRes = await fetch(`${SUPABASE_URL}/rest/v1/posts`, {
         method: 'POST',
         headers: { ...h, Prefer: 'return=representation' },
-        body: JSON.stringify({ user_id: userId, title: postTitle, description: '', tags: [], is_public: true }),
+        body: JSON.stringify({ user_id: userId, title: postTitle, description: description || '', tags: [], is_public: true }),
       });
       if (!postRes.ok) { console.error('[import-instagram] post error:', await postRes.text()); continue; }
       const [post] = await postRes.json();
@@ -1406,15 +1409,15 @@ app.get('/api/instagram/callback', async (req, res) => {
     }
 
     const mediaRes = await fetch(
-      `https://graph.instagram.com/me/media?fields=id,media_type,media_url&limit=20&access_token=${tokenData.access_token}`
+      `https://graph.instagram.com/me/media?fields=id,media_type,media_url,caption&limit=20&access_token=${tokenData.access_token}`
     );
     const mediaData = await mediaRes.json();
 
     const photos = (mediaData.data || [])
       .filter(m => m.media_type === 'IMAGE' || m.media_type === 'CAROUSEL_ALBUM')
       .slice(0, 12)
-      .map(m => m.media_url)
-      .filter(Boolean);
+      .map(m => ({ url: m.media_url, caption: m.caption || '' }))
+      .filter(p => p.url);
 
     return res.redirect(`${appScheme}?photos=${encodeURIComponent(JSON.stringify(photos))}`);
   } catch (err) {
