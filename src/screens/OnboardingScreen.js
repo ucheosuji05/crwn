@@ -103,6 +103,7 @@ const STYLIST_STEP_ORDER = [
   STEPS.STYLIST_BOOKING_LINK,
   STEPS.STYLIST_SOCIAL_LINKS,
   STEPS.STYLIST_PORTFOLIO,
+  STEPS.STYLIST_INSTAGRAM,
 ];
 
 // Old stylist-path order — kept for reference / easy re-enabling, no longer wired into navigation
