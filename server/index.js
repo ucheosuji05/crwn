@@ -1332,7 +1332,7 @@ app.post('/api/scrape-booking', async (req, res) => {
 app.get('/api/instagram/auth-url', (_req, res) => {
   const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
     || `${process.env.BETTER_AUTH_URL}/api/instagram/callback`;
-  const url = `https://api.instagram.com/oauth/authorize?client_id=${encodeURIComponent(process.env.INSTAGRAM_APP_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user_profile,user_media&response_type=code`;
+  const url = `https://api.instagram.com/oauth/authorize?client_id=${encodeURIComponent(process.env.META_CLIENT_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user_profile,user_media&response_type=code`;
   res.json({ url });
 });
 
@@ -1349,8 +1349,8 @@ app.get('/api/instagram/callback', async (req, res) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({
-        client_id:     process.env.INSTAGRAM_APP_ID,
-        client_secret: process.env.INSTAGRAM_APP_SECRET,
+        client_id:     process.env.META_CLIENT_ID,
+        client_secret: process.env.META_CLIENT_SECRET,
         grant_type:    'authorization_code',
         redirect_uri:  process.env.INSTAGRAM_REDIRECT_URI || `${process.env.BETTER_AUTH_URL}/api/instagram/callback`,
         code,
