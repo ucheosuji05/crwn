@@ -13,15 +13,20 @@ import {
   Platform,
   ScrollView,
   Image,
+  Modal,
+  FlatList,
+  Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import * as WebBrowser from 'expo-web-browser';
 import { authService } from '../services/authService';
 import { profileService } from '../services/profileService';
 import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
+import { AUTH_URL } from '../lib/auth-url';
 import AuthScreen from './AuthScreen';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
 
@@ -54,7 +59,11 @@ const STEPS = {
   LOCATION: 'location',
   PROFILE_PHOTO: 'profilePhoto',
   USER_TYPE: 'userType',
-  // stylist path
+  // stylist import path
+  STYLIST_IMPORT: 'stylistImport',
+  STYLIST_INSTAGRAM: 'stylistInstagram',
+  STYLIST_REVIEW: 'stylistReview',
+  // stylist manual path
   STYLIST_WORK_TYPE: 'stylistWorkType',
   STYLIST_EXPERIENCE: 'stylistExperience',
   STYLIST_SPECIALTIES: 'stylistSpecialties',
@@ -76,6 +85,13 @@ const STEPS = {
   LOADING: 'loading',
   COMPLETE: 'complete',
 };
+
+// Import flow order (steps 1–3 of the new-stylist wizard)
+const IMPORT_STEP_ORDER = [
+  STEPS.STYLIST_IMPORT,
+  STEPS.STYLIST_INSTAGRAM,
+  STEPS.STYLIST_REVIEW,
+];
 
 // Active stylist-path order (8 screens) — used for both navigation and its progress bar
 const STYLIST_STEP_ORDER = [
@@ -131,7 +147,7 @@ const EXPLORER_PROGRESS_STEPS = [
 
 // EXPLORER_PROGRESS_STEPS is no longer rendered — usage goals, the loading screen, and the
 // styles grid are all progress-bar-free in the explorer flow.
-const PROGRESS_GROUPS = [MAIN_STEPS, STYLIST_STEP_ORDER];
+const PROGRESS_GROUPS = [MAIN_STEPS, IMPORT_STEP_ORDER, STYLIST_STEP_ORDER];
 
 // Old flat progress bar — kept for reference / easy re-enabling, no longer used by renderProgress
 const PROGRESS_STEPS = [
@@ -214,6 +230,90 @@ const MOCK_HAIR_LOOKS = [
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+// ── US location data ─────────────────────────────────────────────────────────
+const US_STATES = [
+  { abbr: 'AL', name: 'Alabama' }, { abbr: 'AK', name: 'Alaska' },
+  { abbr: 'AZ', name: 'Arizona' }, { abbr: 'AR', name: 'Arkansas' },
+  { abbr: 'CA', name: 'California' }, { abbr: 'CO', name: 'Colorado' },
+  { abbr: 'CT', name: 'Connecticut' }, { abbr: 'DE', name: 'Delaware' },
+  { abbr: 'DC', name: 'Washington D.C.' }, { abbr: 'FL', name: 'Florida' },
+  { abbr: 'GA', name: 'Georgia' }, { abbr: 'HI', name: 'Hawaii' },
+  { abbr: 'ID', name: 'Idaho' }, { abbr: 'IL', name: 'Illinois' },
+  { abbr: 'IN', name: 'Indiana' }, { abbr: 'IA', name: 'Iowa' },
+  { abbr: 'KS', name: 'Kansas' }, { abbr: 'KY', name: 'Kentucky' },
+  { abbr: 'LA', name: 'Louisiana' }, { abbr: 'ME', name: 'Maine' },
+  { abbr: 'MD', name: 'Maryland' }, { abbr: 'MA', name: 'Massachusetts' },
+  { abbr: 'MI', name: 'Michigan' }, { abbr: 'MN', name: 'Minnesota' },
+  { abbr: 'MS', name: 'Mississippi' }, { abbr: 'MO', name: 'Missouri' },
+  { abbr: 'MT', name: 'Montana' }, { abbr: 'NE', name: 'Nebraska' },
+  { abbr: 'NV', name: 'Nevada' }, { abbr: 'NH', name: 'New Hampshire' },
+  { abbr: 'NJ', name: 'New Jersey' }, { abbr: 'NM', name: 'New Mexico' },
+  { abbr: 'NY', name: 'New York' }, { abbr: 'NC', name: 'North Carolina' },
+  { abbr: 'ND', name: 'North Dakota' }, { abbr: 'OH', name: 'Ohio' },
+  { abbr: 'OK', name: 'Oklahoma' }, { abbr: 'OR', name: 'Oregon' },
+  { abbr: 'PA', name: 'Pennsylvania' }, { abbr: 'RI', name: 'Rhode Island' },
+  { abbr: 'SC', name: 'South Carolina' }, { abbr: 'SD', name: 'South Dakota' },
+  { abbr: 'TN', name: 'Tennessee' }, { abbr: 'TX', name: 'Texas' },
+  { abbr: 'UT', name: 'Utah' }, { abbr: 'VT', name: 'Vermont' },
+  { abbr: 'VA', name: 'Virginia' }, { abbr: 'WA', name: 'Washington' },
+  { abbr: 'WV', name: 'West Virginia' }, { abbr: 'WI', name: 'Wisconsin' },
+  { abbr: 'WY', name: 'Wyoming' },
+];
+
+const US_CITIES = {
+  AL: ['Birmingham','Montgomery','Huntsville','Mobile','Tuscaloosa','Hoover','Auburn','Dothan','Decatur'],
+  AK: ['Anchorage','Fairbanks','Juneau','Sitka','Wasilla','Kenai','Kodiak'],
+  AZ: ['Phoenix','Tucson','Mesa','Chandler','Scottsdale','Gilbert','Glendale','Tempe','Peoria','Flagstaff','Yuma'],
+  AR: ['Little Rock','Fort Smith','Fayetteville','Springdale','Jonesboro','Conway','Rogers','Bentonville'],
+  CA: ['Los Angeles','San Diego','San Jose','San Francisco','Fresno','Sacramento','Long Beach','Oakland','Bakersfield','Anaheim','Santa Ana','Riverside','Stockton','Chula Vista','Irvine','Modesto','Compton','Inglewood','Pasadena','Pomona','Torrance','San Bernardino','Fontana'],
+  CO: ['Denver','Colorado Springs','Aurora','Fort Collins','Lakewood','Thornton','Arvada','Westminster','Pueblo','Boulder'],
+  CT: ['Bridgeport','New Haven','Hartford','Stamford','Waterbury','Norwalk','Danbury','New Britain'],
+  DC: ['Washington'],
+  DE: ['Wilmington','Dover','Newark','Middletown','Smyrna','Milford'],
+  FL: ['Jacksonville','Miami','Tampa','Orlando','St. Petersburg','Hialeah','Tallahassee','Cape Coral','Fort Lauderdale','Pembroke Pines','Hollywood','Gainesville','Miramar','Coral Springs','West Palm Beach','Lakeland','Miami Gardens','Boca Raton','Clearwater','Pompano Beach'],
+  GA: ['Atlanta','Augusta','Columbus','Macon','Savannah','Athens','Sandy Springs','Roswell','Johns Creek','Albany','Warner Robins','Alpharetta','Marietta','Smyrna','Valdosta','Brookhaven','Dunwoody'],
+  HI: ['Honolulu','Pearl City','Hilo','Kailua','Waipahu','Kaneohe','Kahului'],
+  ID: ['Boise','Nampa','Meridian','Idaho Falls','Pocatello','Caldwell','Twin Falls'],
+  IL: ['Chicago','Aurora','Rockford','Joliet','Naperville','Springfield','Peoria','Elgin','Waukegan','Champaign','Bloomington','Evanston','Cicero'],
+  IN: ['Indianapolis','Fort Wayne','Evansville','South Bend','Carmel','Fishers','Bloomington','Hammond','Gary','Lafayette','Muncie','Terre Haute'],
+  IA: ['Des Moines','Cedar Rapids','Davenport','Sioux City','Iowa City','Waterloo','Ames','Ankeny','Dubuque'],
+  KS: ['Wichita','Overland Park','Kansas City','Olathe','Topeka','Lawrence','Shawnee','Manhattan','Lenexa'],
+  KY: ['Louisville','Lexington','Bowling Green','Owensboro','Covington','Richmond','Georgetown','Florence','Elizabethtown'],
+  LA: ['New Orleans','Baton Rouge','Shreveport','Metairie','Lafayette','Lake Charles','Kenner','Bossier City','Monroe','Alexandria'],
+  ME: ['Portland','Lewiston','Bangor','South Portland','Auburn','Augusta'],
+  MD: ['Baltimore','Frederick','Rockville','Gaithersburg','Bowie','Hagerstown','Annapolis','Columbia','Silver Spring','Germantown'],
+  MA: ['Boston','Worcester','Springfield','Lowell','Cambridge','New Bedford','Brockton','Quincy','Lynn','Fall River','Newton','Somerville','Lawrence'],
+  MI: ['Detroit','Grand Rapids','Warren','Sterling Heights','Ann Arbor','Lansing','Flint','Dearborn','Livonia','Troy','Farmington Hills','Kalamazoo','Pontiac'],
+  MN: ['Minneapolis','Saint Paul','Rochester','Duluth','Bloomington','Brooklyn Park','Plymouth','Saint Cloud','Woodbury','Burnsville'],
+  MS: ['Jackson','Gulfport','Southaven','Biloxi','Hattiesburg','Olive Branch','Tupelo','Meridian','Starkville'],
+  MO: ['Kansas City','St. Louis','Springfield','Columbia','Independence','Lee\'s Summit','O\'Fallon','St. Joseph','Joplin'],
+  MT: ['Billings','Missoula','Great Falls','Bozeman','Butte','Helena','Kalispell'],
+  NE: ['Omaha','Lincoln','Bellevue','Grand Island','Kearney','Fremont','Norfolk'],
+  NV: ['Las Vegas','Henderson','Reno','North Las Vegas','Sparks','Carson City'],
+  NH: ['Manchester','Nashua','Concord','Dover','Rochester','Salem'],
+  NJ: ['Newark','Jersey City','Paterson','Elizabeth','Trenton','Camden','Clifton','Passaic','Union City','East Orange','Bayonne','Irvington','New Brunswick','Edison'],
+  NM: ['Albuquerque','Las Cruces','Rio Rancho','Santa Fe','Roswell','Farmington','Hobbs'],
+  NY: ['New York City','Brooklyn','Queens','The Bronx','Staten Island','Buffalo','Rochester','Yonkers','Syracuse','Albany','New Rochelle','Mount Vernon','Schenectady','Utica','White Plains','Harlem','Niagara Falls'],
+  NC: ['Charlotte','Raleigh','Greensboro','Durham','Winston-Salem','Fayetteville','Cary','Wilmington','High Point','Concord','Gastonia','Asheville','Chapel Hill','Huntersville'],
+  ND: ['Fargo','Bismarck','Grand Forks','Minot','West Fargo','Dickinson'],
+  OH: ['Columbus','Cleveland','Cincinnati','Toledo','Akron','Dayton','Parma','Canton','Youngstown','Lorain','Hamilton','Springfield','Kettering'],
+  OK: ['Oklahoma City','Tulsa','Norman','Broken Arrow','Lawton','Edmond','Moore','Enid','Stillwater'],
+  OR: ['Portland','Eugene','Salem','Gresham','Hillsboro','Beaverton','Bend','Medford','Corvallis'],
+  PA: ['Philadelphia','Pittsburgh','Allentown','Erie','Reading','Scranton','Bethlehem','Lancaster','Harrisburg','York','Wilkes-Barre'],
+  RI: ['Providence','Cranston','Warwick','Pawtucket','East Providence','Woonsocket','Newport'],
+  SC: ['Columbia','Charleston','North Charleston','Mount Pleasant','Rock Hill','Greenville','Summerville','Hilton Head Island','Florence','Spartanburg','Myrtle Beach'],
+  SD: ['Sioux Falls','Rapid City','Aberdeen','Brookings','Watertown','Pierre'],
+  TN: ['Memphis','Nashville','Knoxville','Chattanooga','Clarksville','Murfreesboro','Franklin','Jackson','Johnson City','Bartlett','Hendersonville'],
+  TX: ['Houston','San Antonio','Dallas','Austin','Fort Worth','El Paso','Arlington','Corpus Christi','Plano','Lubbock','Laredo','Garland','Irving','Amarillo','Grand Prairie','McKinney','Frisco','Brownsville','Pasadena','Killeen','McAllen','Mesquite','Denton','Waco','Round Rock','Sugar Land','Tyler','Beaumont','League City'],
+  UT: ['Salt Lake City','West Valley City','Provo','West Jordan','Orem','Sandy','Ogden','St. George','Layton','South Jordan'],
+  VT: ['Burlington','South Burlington','Rutland','Barre','Montpelier'],
+  VA: ['Virginia Beach','Norfolk','Chesapeake','Richmond','Newport News','Alexandria','Hampton','Roanoke','Portsmouth','Suffolk','Lynchburg','Harrisonburg','Charlottesville','Arlington'],
+  WA: ['Seattle','Spokane','Tacoma','Vancouver','Bellevue','Kent','Renton','Federal Way','Kirkland','Bellingham','Everett','Yakima'],
+  WV: ['Charleston','Huntington','Morgantown','Parkersburg','Wheeling','Beckley'],
+  WI: ['Milwaukee','Madison','Green Bay','Kenosha','Racine','Appleton','Waukesha','Oshkosh','Eau Claire','Janesville'],
+  WY: ['Cheyenne','Casper','Laramie','Gillette','Rock Springs','Sheridan'],
+};
+
 export default function OnboardingScreen({ onDone = () => {} }) {
   const { signInWithGoogle, signUp, user: authUser } = useAuth();
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -256,6 +356,18 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   const [hairLookFilter, setHairLookFilter] = useState('All');
   const [phoneStage, setPhoneStage] = useState('enter'); // 'enter' | 'code'
   const [phoneCode, setPhoneCode] = useState('');
+  const [locStateAbbr, setLocStateAbbr] = useState('');
+  const [locCity, setLocCity] = useState('');
+  const [showStatePicker, setShowStatePicker] = useState(false);
+  const [pickerSearch, setPickerSearch] = useState('');
+  // Import flow state
+  const [importUrl, setImportUrl] = useState('');
+  const [importedData, setImportedData] = useState(null);
+  const [scrapeLoading, setScrapeLoading] = useState(false);
+  const [scrapeError, setScrapeError] = useState('');
+  const [instagramPhotos, setInstagramPhotos] = useState([]);
+  const [instagramLoading, setInstagramLoading] = useState(false);
+  const [stylistPath, setStylistPath] = useState('import'); // 'import' | 'manual'
   const skeletonPulse = useRef(new Animated.Value(0.4)).current;
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -387,6 +499,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         const social = Object.fromEntries(Object.entries(formData.socialLinks).filter(([, v]) => v?.trim()));
         if (Object.keys(social).length) prefs.social_links = social;
         if (credentialsPhotoUrl)        prefs.credentials_photo_url = credentialsPhotoUrl;
+        if (instagramPhotos.length > 0) prefs.instagram_portfolio_urls = instagramPhotos;
       }
 
       if (Object.keys(prefs).length > 0 && userId) {
@@ -424,6 +537,13 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   };
 
   const goNext = () => {
+    const importIdx = IMPORT_STEP_ORDER.indexOf(currentStep);
+    if (importIdx !== -1) {
+      goToStep(importIdx < IMPORT_STEP_ORDER.length - 1
+        ? IMPORT_STEP_ORDER[importIdx + 1]
+        : STEPS.ENDING_BUFFER);
+      return;
+    }
     const stylistIdx = STYLIST_STEP_ORDER.indexOf(currentStep);
     if (stylistIdx !== -1) {
       goToStep(stylistIdx < STYLIST_STEP_ORDER.length - 1
@@ -433,7 +553,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
     }
     switch (currentStep) {
       case STEPS.USER_TYPE:
-        goToStep(formData.userType === 'stylist' ? STYLIST_STEP_ORDER[0] : STEPS.USAGE_GOALS);
+        goToStep(formData.userType === 'stylist' ? IMPORT_STEP_ORDER[0] : STEPS.USAGE_GOALS);
         break;
       case STEPS.USAGE_GOALS: goToStep(STEPS.STYLES_LOADING); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.ENDING_BUFFER); break;
@@ -451,6 +571,11 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       goToStep(STEPS.WELCOME);
       return;
     }
+    const importIdx = IMPORT_STEP_ORDER.indexOf(currentStep);
+    if (importIdx !== -1) {
+      goToStep(importIdx > 0 ? IMPORT_STEP_ORDER[importIdx - 1] : STEPS.USER_TYPE);
+      return;
+    }
     const stylistIdx = STYLIST_STEP_ORDER.indexOf(currentStep);
     if (stylistIdx !== -1) {
       goToStep(stylistIdx > 0 ? STYLIST_STEP_ORDER[stylistIdx - 1] : STEPS.USER_TYPE);
@@ -461,7 +586,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       case STEPS.HAIR_STYLES: goToStep(STEPS.USAGE_GOALS); break;
       case STEPS.ENDING_BUFFER:
         goToStep(formData.userType === 'stylist'
-          ? STYLIST_STEP_ORDER[STYLIST_STEP_ORDER.length - 1]
+          ? (stylistPath === 'import' ? STEPS.STYLIST_REVIEW : STYLIST_STEP_ORDER[STYLIST_STEP_ORDER.length - 1])
           : STEPS.HAIR_STYLES);
         break;
       default: {
@@ -926,28 +1051,105 @@ export default function OnboardingScreen({ onDone = () => {} }) {
     </WhiteScreen>
   );
 
-  const renderLocation = () => (
-    <WhiteScreen>
-      {renderBack()}
-      {renderProgress()}
-      <Text style={styles.questionTitle}>Where are you located?</Text>
-      <Text style={styles.questionSubtitle}>We'll show you stylists and content near you.</Text>
+  const renderLocation = () => {
+    const stateObj = US_STATES.find(s => s.abbr === locStateAbbr);
+    const filteredStates = pickerSearch
+      ? US_STATES.filter(s => s.name.toLowerCase().includes(pickerSearch.toLowerCase()) || s.abbr.toLowerCase().includes(pickerSearch.toLowerCase()))
+      : US_STATES;
 
-      <View style={styles.inputGroup}>
-        <Text style={styles.inputLabel}>City, State</Text>
-        <TextInput
-          style={styles.input}
-          value={formData.location}
-          onChangeText={t => update('location', t)}
-          placeholder="e.g., Atlanta, GA"
-          placeholderTextColor="#999"
-          autoCapitalize="words"
-        />
-      </View>
+    const selectState = (abbr) => {
+      setLocStateAbbr(abbr);
+      setLocCity('');
+      update('location', '');
+      setPickerSearch('');
+      setShowStatePicker(false);
+    };
 
-      <ContinueButton onPress={goNext} disabled={!formData.location} />
-    </WhiteScreen>
-  );
+    const handleCityChange = (text) => {
+      setLocCity(text);
+      update('location', text && locStateAbbr ? `${text}, ${locStateAbbr}` : '');
+    };
+
+    return (
+      <WhiteScreen>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>Where are you located?</Text>
+        <Text style={styles.questionSubtitle}>We'll show you stylists and content near you.</Text>
+
+        {/* State picker */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>State</Text>
+          <TouchableOpacity
+            style={styles.pickerButton}
+            onPress={() => { setPickerSearch(''); setShowStatePicker(true); }}
+          >
+            <Text style={[styles.pickerButtonText, !stateObj && styles.pickerPlaceholder]}>
+              {stateObj ? `${stateObj.name} (${stateObj.abbr})` : 'Select a state'}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color="#999" />
+          </TouchableOpacity>
+        </View>
+
+        {/* City — free text, shown after state selected */}
+        {locStateAbbr ? (
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>City</Text>
+            <TextInput
+              style={styles.input}
+              value={locCity}
+              onChangeText={handleCityChange}
+              placeholder="Enter your city"
+              placeholderTextColor="#999"
+              autoCapitalize="words"
+            />
+          </View>
+        ) : null}
+
+        <ContinueButton onPress={goNext} disabled={!formData.location} />
+
+        {/* State picker modal */}
+        <Modal visible={showStatePicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowStatePicker(false)}>
+          <View style={styles.pickerModal}>
+            <View style={styles.pickerModalHeader}>
+              <Text style={styles.pickerModalTitle}>Select State</Text>
+              <TouchableOpacity onPress={() => setShowStatePicker(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.pickerSearchWrap}>
+              <Ionicons name="search" size={16} color="#999" style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.pickerSearchInput}
+                placeholder="Search states…"
+                placeholderTextColor="#999"
+                value={pickerSearch}
+                onChangeText={setPickerSearch}
+                autoFocus
+              />
+            </View>
+            <FlatList
+              data={filteredStates}
+              keyExtractor={item => item.abbr}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.pickerItem, item.abbr === locStateAbbr && styles.pickerItemSelected]}
+                  onPress={() => selectState(item.abbr)}
+                >
+                  <Text style={[styles.pickerItemText, item.abbr === locStateAbbr && styles.pickerItemTextSelected]}>
+                    {item.name}
+                  </Text>
+                  <Text style={styles.pickerItemAbbr}>{item.abbr}</Text>
+                  {item.abbr === locStateAbbr && <Ionicons name="checkmark" size={18} color={colors.primary} />}
+                </TouchableOpacity>
+              )}
+              ItemSeparatorComponent={() => <View style={styles.pickerSep} />}
+            />
+          </View>
+        </Modal>
+      </WhiteScreen>
+    );
+  };
 
   const renderProfilePhoto = () => (
     <WhiteScreen>
@@ -1313,6 +1515,244 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       )}
     </WhiteScreen>
   );
+
+  const renderStylistImport = () => {
+    const canScrape = importUrl.trim().length > 5;
+
+    const handleScrape = async () => {
+      setScrapeLoading(true);
+      setScrapeError('');
+      try {
+        const res = await fetch(`${AUTH_URL}/api/scrape-booking`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: importUrl.trim() }),
+        });
+        const data = await res.json();
+        if (data.error && !data.businessName) {
+          setScrapeError('Could not read that page. Try a different link or set up manually.');
+        } else {
+          setImportedData(data);
+        }
+      } catch {
+        setScrapeError('Could not reach that page. Check the link and try again.');
+      } finally {
+        setScrapeLoading(false);
+      }
+    };
+
+    return (
+      <WhiteScreen scrollable footer={importedData
+        ? <ContinueButton onPress={goNext} label="Continue" />
+        : null
+      }>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>Import your services</Text>
+        <Text style={styles.questionSubtitle}>
+          Paste your StyleSeat, Vagaro, Square, or Calendly link and we'll pull in your services automatically.
+        </Text>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>Booking link</Text>
+          <TextInput
+            style={styles.input}
+            value={importUrl}
+            onChangeText={setImportUrl}
+            placeholder="https://styleseat.com/..."
+            placeholderTextColor="#999"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="url"
+          />
+        </View>
+
+        <TouchableOpacity
+          style={[styles.importScrapeBtn, (!canScrape || scrapeLoading) && { opacity: 0.4 }]}
+          onPress={handleScrape}
+          disabled={!canScrape || scrapeLoading}
+        >
+          {scrapeLoading
+            ? <ActivityIndicator color="#fff" size="small" />
+            : <Text style={styles.importScrapeBtnText}>Import Services</Text>}
+        </TouchableOpacity>
+
+        {!!scrapeError && <Text style={[styles.errorText, { marginTop: 8 }]}>{scrapeError}</Text>}
+
+        {importedData && (
+          <View style={styles.importResultCard}>
+            {!!importedData.businessName && (
+              <Text style={styles.importResultBiz}>{importedData.businessName}</Text>
+            )}
+            {importedData.services?.length > 0 ? (
+              <>
+                <Text style={styles.importResultLabel}>
+                  {importedData.services.length} service{importedData.services.length !== 1 ? 's' : ''} found
+                </Text>
+                {importedData.services.slice(0, 5).map((s, i) => (
+                  <View key={i} style={styles.importResultRow}>
+                    <Text style={styles.importResultServiceName}>{s.name}</Text>
+                    {!!s.price && <Text style={styles.importResultPrice}>{s.price}</Text>}
+                  </View>
+                ))}
+                {importedData.services.length > 5 && (
+                  <Text style={styles.importResultMore}>+ {importedData.services.length - 5} more</Text>
+                )}
+              </>
+            ) : (
+              <Text style={styles.importResultLabel}>No services found — you can add them manually after setup.</Text>
+            )}
+          </View>
+        )}
+
+        <TouchableOpacity
+          style={styles.skipLink}
+          onPress={() => { setStylistPath('manual'); goToStep(STYLIST_STEP_ORDER[0]); }}
+        >
+          <Text style={styles.skipLinkText}>Set up manually instead</Text>
+        </TouchableOpacity>
+      </WhiteScreen>
+    );
+  };
+
+  const renderStylistInstagram = () => {
+    const handleConnect = async () => {
+      setInstagramLoading(true);
+      try {
+        const res = await fetch(`${AUTH_URL}/api/instagram/auth-url`);
+        const { url } = await res.json();
+        const result = await WebBrowser.openAuthSessionAsync(url, 'crwn://instagram-callback');
+        if (result.type === 'success') {
+          const urlObj = new URL(result.url);
+          const photosStr = urlObj.searchParams.get('photos');
+          if (photosStr) {
+            const photos = JSON.parse(decodeURIComponent(photosStr));
+            setInstagramPhotos(photos);
+          }
+        }
+      } catch (e) {
+        console.warn('[Instagram OAuth]', e.message);
+      } finally {
+        setInstagramLoading(false);
+      }
+    };
+
+    return (
+      <WhiteScreen scrollable footer={
+        <ContinueButton onPress={goNext} label={instagramPhotos.length > 0 ? 'Continue' : 'Skip'} />
+      }>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>Add portfolio photos</Text>
+        <Text style={styles.questionSubtitle}>
+          Connect Instagram to pull your best work in automatically. You can also add photos manually after setup.
+        </Text>
+
+        {instagramPhotos.length > 0 ? (
+          <>
+            <Text style={styles.importResultLabel}>{instagramPhotos.length} photos imported</Text>
+            <View style={styles.importPhotoGrid}>
+              {instagramPhotos.slice(0, 9).map((uri, i) => (
+                <Image key={i} source={{ uri }} style={styles.importPhotoThumb} />
+              ))}
+            </View>
+          </>
+        ) : (
+          <TouchableOpacity
+            style={[styles.importConnectBtn, instagramLoading && { opacity: 0.6 }]}
+            onPress={handleConnect}
+            disabled={instagramLoading}
+          >
+            {instagramLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="logo-instagram" size={22} color="#fff" />
+                <Text style={styles.importConnectBtnText}>Connect Instagram</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity style={styles.skipLink} onPress={goNext}>
+          <Text style={styles.skipLinkText}>Skip for now</Text>
+        </TouchableOpacity>
+      </WhiteScreen>
+    );
+  };
+
+  const renderStylistReview = () => {
+    const handleConfirm = () => {
+      if (importedData) {
+        if (importedData.businessName) update('businessName', importedData.businessName);
+        if (importedData.services?.length > 0) {
+          setServices(importedData.services.map(s => ({
+            name: s.name,
+            price: s.price ? s.price.replace(/[^0-9.]/g, '') : '',
+          })));
+        }
+      }
+      goToStep(STEPS.ENDING_BUFFER);
+    };
+
+    const hasAnything = importedData?.businessName || importedData?.services?.length || instagramPhotos.length;
+
+    return (
+      <WhiteScreen scrollable footer={
+        <ContinueButton onPress={handleConfirm} label="Confirm & Continue" />
+      }>
+        {renderBack()}
+        {renderProgress()}
+        <Text style={styles.questionTitle}>Review your profile</Text>
+        <Text style={styles.questionSubtitle}>
+          Here's what we'll add to your CRWN profile. Everything can be edited later.
+        </Text>
+
+        {!hasAnything && (
+          <View style={styles.reviewEmptyState}>
+            <Ionicons name="information-circle-outline" size={40} color="#C4B5A0" />
+            <Text style={styles.reviewEmptyText}>
+              Nothing was imported. Tap confirm to continue and add your details from your profile settings.
+            </Text>
+          </View>
+        )}
+
+        {!!importedData?.businessName && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.reviewSectionTitle}>Business name</Text>
+            <Text style={styles.reviewSectionValue}>{importedData.businessName}</Text>
+          </View>
+        )}
+
+        {importedData?.services?.length > 0 && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.reviewSectionTitle}>
+              Services ({importedData.services.length})
+            </Text>
+            {importedData.services.map((s, i) => (
+              <View key={i} style={styles.importResultRow}>
+                <Text style={styles.importResultServiceName}>{s.name}</Text>
+                {!!s.price && <Text style={styles.importResultPrice}>{s.price}</Text>}
+              </View>
+            ))}
+          </View>
+        )}
+
+        {instagramPhotos.length > 0 && (
+          <View style={styles.reviewSection}>
+            <Text style={styles.reviewSectionTitle}>
+              Portfolio photos ({instagramPhotos.length})
+            </Text>
+            <View style={styles.importPhotoGrid}>
+              {instagramPhotos.slice(0, 6).map((uri, i) => (
+                <Image key={i} source={{ uri }} style={styles.importPhotoThumb} />
+              ))}
+            </View>
+          </View>
+        )}
+      </WhiteScreen>
+    );
+  };
 
   const renderStylistFindCreators = () => {
     const leftCreators = MOCK_CREATORS.filter((_, i) => i % 2 === 0);
@@ -1683,6 +2123,9 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       case STEPS.LOCATION:          return renderLocation();
       case STEPS.PROFILE_PHOTO:     return renderProfilePhoto();
       case STEPS.USER_TYPE:              return renderUserType();
+      case STEPS.STYLIST_IMPORT:         return renderStylistImport();
+      case STEPS.STYLIST_INSTAGRAM:      return renderStylistInstagram();
+      case STEPS.STYLIST_REVIEW:         return renderStylistReview();
       case STEPS.STYLIST_WORK_TYPE:      return renderStylistWorkType();
       case STEPS.STYLIST_EXPERIENCE:     return renderStylistExperience();
       case STEPS.STYLIST_SPECIALTIES:    return renderStylistSpecialties();
@@ -2010,4 +2453,121 @@ const styles = StyleSheet.create({
   completeButtonContainer: { paddingHorizontal: 24, paddingBottom: 32 },
   whiteButton: { backgroundColor: colors.white, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   whiteButtonText: { color: colors.textBrown, fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
+
+  // Location pickers
+  pickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#D1D1D1',
+    borderRadius: 10,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    backgroundColor: colors.white,
+  },
+  pickerButtonText: { fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular', flex: 1 },
+  pickerPlaceholder: { color: '#999' },
+  pickerModal: { flex: 1, backgroundColor: colors.white },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E5E5E5',
+  },
+  pickerModalTitle: { fontSize: 17, fontFamily: 'Figtree_700Bold', color: colors.textPrimary },
+  pickerSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#D1D1D1',
+    borderRadius: 10,
+    backgroundColor: '#F9F9F9',
+  },
+  pickerSearchInput: { flex: 1, fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+  },
+  pickerItemSelected: { backgroundColor: '#FFF8F2' },
+  pickerItemText: { flex: 1, fontSize: 15, color: colors.textPrimary, fontFamily: 'Figtree_400Regular' },
+  pickerItemTextSelected: { color: colors.primary, fontFamily: 'Figtree_600SemiBold' },
+  pickerItemAbbr: { fontSize: 13, color: '#999', fontFamily: 'Figtree_400Regular', marginRight: 8 },
+  pickerSep: { height: StyleSheet.hairlineWidth, backgroundColor: '#EFEFEF', marginLeft: 20 },
+
+  // Import flow
+  importScrapeBtn: {
+    backgroundColor: '#3F523F',
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  importScrapeBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
+  importResultCard: {
+    borderWidth: 1,
+    borderColor: '#D8D0C8',
+    borderRadius: 14,
+    padding: 16,
+    backgroundColor: '#FDFAF6',
+    marginBottom: 8,
+    gap: 8,
+  },
+  importResultBiz: { fontSize: 16, fontFamily: 'Figtree_700Bold', color: colors.textPrimary },
+  importResultLabel: { fontSize: 13, fontFamily: 'Figtree_500Medium', color: colors.textSecondary, marginBottom: 4 },
+  importResultRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 4 },
+  importResultServiceName: { flex: 1, fontSize: 14, fontFamily: 'Figtree_400Regular', color: colors.textPrimary },
+  importResultPrice: { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: colors.forest, marginLeft: 8 },
+  importResultMore: { fontSize: 12, color: colors.textSecondary, fontFamily: 'Figtree_400Regular', fontStyle: 'italic' },
+  importConnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#833AB4',
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginVertical: 12,
+  },
+  importConnectBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
+  importPhotoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginVertical: 8,
+  },
+  importPhotoThumb: {
+    width: (SCREEN_WIDTH - 48 - 12) / 3,
+    height: (SCREEN_WIDTH - 48 - 12) / 3,
+    borderRadius: 8,
+  },
+
+  // Review step
+  reviewSection: {
+    borderWidth: 1,
+    borderColor: '#E8DDD0',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    gap: 6,
+  },
+  reviewSectionTitle: {
+    fontSize: 12,
+    fontFamily: 'Figtree_600SemiBold',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  reviewSectionValue: { fontSize: 16, fontFamily: 'Figtree_600SemiBold', color: colors.textPrimary },
+  reviewEmptyState: { alignItems: 'center', paddingVertical: 32, gap: 12 },
+  reviewEmptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, fontFamily: 'Figtree_400Regular' },
 });

@@ -1157,6 +1157,230 @@ app.post('/api/feedback', async (req, res) => {
   }
 });
 
+// ── Booking page scraper ──────────────────────────────────────────────────────
+
+function detectPlatform(url) {
+  if (url.includes('styleseat.com'))       return 'styleseat';
+  if (url.includes('vagaro.com'))           return 'vagaro';
+  if (url.includes('squareup.com') || url.includes('book.squareup.com')) return 'square';
+  if (url.includes('calendly.com'))         return 'calendly';
+  if (url.includes('acuityscheduling.com')) return 'acuity';
+  if (url.includes('mindbodyonline.com'))   return 'mindbody';
+  return 'unknown';
+}
+
+function extractNextData(html) {
+  const m = html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return null;
+  try { return JSON.parse(m[1]); } catch { return null; }
+}
+
+function extractJsonLd(html) {
+  const tags = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi) || [];
+  return tags.flatMap(tag => {
+    try {
+      const json = JSON.parse(tag.replace(/<script[^>]*>/, '').replace(/<\/script>/, ''));
+      return Array.isArray(json) ? json : [json];
+    } catch { return []; }
+  });
+}
+
+function extractMeta(html, name) {
+  const m = html.match(new RegExp(`<meta[^>]+(?:name|property)=["']${name}["'][^>]*content=["']([^"']+)["']`, 'i'))
+           || html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]*(?:name|property)=["']${name}["']`, 'i'));
+  return m?.[1] || '';
+}
+
+function scrapeStyleSeat(html, nextData) {
+  const props = nextData?.props?.pageProps || nextData?.props || {};
+  const pro = props.pro || props.stylist || props.profile || {};
+  const rawServices = pro.services || props.services || [];
+
+  const services = rawServices.map(s => ({
+    name: s.name || s.title || s.service_name || '',
+    price: s.price ? `$${s.price}` : (s.priceRange || ''),
+    description: s.description || s.details || '',
+  })).filter(s => s.name);
+
+  return {
+    businessName: pro.displayName || pro.name || pro.business_name || extractMeta(html, 'og:title').split('|')[0].trim(),
+    bio: pro.bio || pro.description || extractMeta(html, 'og:description'),
+    services,
+  };
+}
+
+function scrapeVagaro(html, nextData) {
+  const props = nextData?.props?.pageProps || {};
+  const biz = props.business || props.businessInfo || {};
+  const rawServices = props.services || biz.services || [];
+
+  const services = rawServices.map(s => ({
+    name: s.sName || s.name || s.ServiceName || '',
+    price: s.price ? `$${Number(s.price).toFixed(0)}` : '',
+    description: s.description || s.sDescription || '',
+  })).filter(s => s.name);
+
+  return {
+    businessName: biz.bName || biz.name || extractMeta(html, 'og:title').split('|')[0].trim(),
+    bio: biz.bio || biz.description || extractMeta(html, 'og:description'),
+    services,
+  };
+}
+
+function scrapeCalendly(html, nextData) {
+  const props = nextData?.props?.pageProps || {};
+  const owner = props.owner || props.profile || {};
+  const eventTypes = props.eventTypes || props.event_types || [];
+
+  const services = eventTypes.map(e => ({
+    name: e.name || e.slug || '',
+    price: '',
+    description: e.description_plain || e.description || `${e.duration || ''} min`,
+  })).filter(s => s.name);
+
+  return {
+    businessName: owner.name || owner.organization || extractMeta(html, 'og:title'),
+    bio: owner.description || extractMeta(html, 'og:description'),
+    services,
+  };
+}
+
+function scrapeSquare(html, nextData) {
+  // Square often embeds state in window.__SQUARE_INITIAL_STATE__ or __NEXT_DATA__
+  const stateMatch = html.match(/window\.__SQUARE_INITIAL_STATE__\s*=\s*({[\s\S]*?});/);
+  let state = null;
+  if (stateMatch) { try { state = JSON.parse(stateMatch[1]); } catch {} }
+
+  const props = state || nextData?.props?.pageProps || {};
+  const seller = props.seller || props.merchant || {};
+  const items = props.catalogItems || props.items || props.services || [];
+
+  const services = items.map(item => ({
+    name: item.name || item.itemData?.name || '',
+    price: item.price ? `$${(item.price / 100).toFixed(0)}` : (item.itemData?.variations?.[0]?.itemVariationData?.priceMoney?.amount ? `$${(item.itemData.variations[0].itemVariationData.priceMoney.amount / 100).toFixed(0)}` : ''),
+    description: item.description || item.itemData?.description || '',
+  })).filter(s => s.name);
+
+  return {
+    businessName: seller.name || extractMeta(html, 'og:title'),
+    bio: seller.description || extractMeta(html, 'og:description'),
+    services,
+  };
+}
+
+// Fallback: use JSON-LD + meta tags
+function scrapeFallback(html) {
+  const ld = extractJsonLd(html);
+  const businessLd = ld.find(o => o['@type'] === 'LocalBusiness' || o['@type'] === 'HairSalon' || o['@type'] === 'BeautySalon');
+  const hasOffers = ld.filter(o => o['@type'] === 'Offer' || o['@type'] === 'Service');
+
+  const services = hasOffers.map(o => ({
+    name: o.name || '',
+    price: o.price ? `$${o.price}` : (o.priceRange || ''),
+    description: o.description || '',
+  })).filter(s => s.name);
+
+  return {
+    businessName: businessLd?.name || extractMeta(html, 'og:title').replace(' | StyleSeat', '').replace(' - Vagaro', '').trim(),
+    bio: businessLd?.description || extractMeta(html, 'og:description'),
+    services,
+  };
+}
+
+app.post('/api/scrape-booking', async (req, res) => {
+  const { url } = req.body || {};
+  if (!url) return res.status(400).json({ error: 'url required' });
+
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+        'Accept': 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      redirect: 'follow',
+    });
+
+    if (!response.ok) {
+      return res.json({ error: `Page returned ${response.status}`, businessName: '', bio: '', services: [] });
+    }
+
+    const html = await response.text();
+    const platform = detectPlatform(url);
+    const nextData = extractNextData(html);
+
+    let result;
+    if (platform === 'styleseat') result = scrapeStyleSeat(html, nextData);
+    else if (platform === 'vagaro')     result = scrapeVagaro(html, nextData);
+    else if (platform === 'calendly')   result = scrapeCalendly(html, nextData);
+    else if (platform === 'square')     result = scrapeSquare(html, nextData);
+    else                                result = scrapeFallback(html);
+
+    // Always fall back to meta tags if nothing found
+    if (!result.businessName) result.businessName = extractMeta(html, 'og:title').split(/[|\-–]/)[0].trim();
+    if (!result.bio)          result.bio = extractMeta(html, 'og:description');
+
+    return res.json({ platform, ...result });
+  } catch (err) {
+    console.error('[scrape-booking] error:', err.message);
+    return res.status(200).json({ error: err.message, businessName: '', bio: '', services: [] });
+  }
+});
+
+// ── Instagram OAuth ───────────────────────────────────────────────────────────
+
+app.get('/api/instagram/auth-url', (_req, res) => {
+  const redirectUri = process.env.INSTAGRAM_REDIRECT_URI
+    || `${process.env.BETTER_AUTH_URL}/api/instagram/callback`;
+  const url = `https://api.instagram.com/oauth/authorize?client_id=${encodeURIComponent(process.env.INSTAGRAM_APP_ID)}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=user_profile,user_media&response_type=code`;
+  res.json({ url });
+});
+
+app.get('/api/instagram/callback', async (req, res) => {
+  const { code, error } = req.query;
+  const appScheme = 'crwn://instagram-callback';
+
+  if (error || !code) {
+    return res.redirect(`${appScheme}?error=${encodeURIComponent(error || 'cancelled')}`);
+  }
+
+  try {
+    const tokenRes = await fetch('https://api.instagram.com/oauth/access_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     process.env.INSTAGRAM_APP_ID,
+        client_secret: process.env.INSTAGRAM_APP_SECRET,
+        grant_type:    'authorization_code',
+        redirect_uri:  process.env.INSTAGRAM_REDIRECT_URI || `${process.env.BETTER_AUTH_URL}/api/instagram/callback`,
+        code,
+      }).toString(),
+    });
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      console.error('[instagram/callback] token error:', tokenData);
+      return res.redirect(`${appScheme}?error=token_failed`);
+    }
+
+    const mediaRes = await fetch(
+      `https://graph.instagram.com/me/media?fields=id,media_type,media_url&limit=20&access_token=${tokenData.access_token}`
+    );
+    const mediaData = await mediaRes.json();
+
+    const photos = (mediaData.data || [])
+      .filter(m => m.media_type === 'IMAGE' || m.media_type === 'CAROUSEL_ALBUM')
+      .slice(0, 12)
+      .map(m => m.media_url)
+      .filter(Boolean);
+
+    return res.redirect(`${appScheme}?photos=${encodeURIComponent(JSON.stringify(photos))}`);
+  } catch (err) {
+    console.error('[instagram/callback] error:', err.message);
+    return res.redirect(`${appScheme}?error=server_error`);
+  }
+});
+
 // Better Auth handles all /api/auth/* routes
 app.all('/api/auth/*', (req, res, next) => {
   Promise.resolve(toNodeHandler(auth)(req, res)).catch((err) => {
