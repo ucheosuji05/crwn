@@ -367,6 +367,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   const [scrapeLoading, setScrapeLoading] = useState(false);
   const [scrapeError, setScrapeError] = useState('');
   const [instagramPhotos, setInstagramPhotos] = useState([]);
+  const [selectedInstagramPhotos, setSelectedInstagramPhotos] = useState([]);
   const [instagramLoading, setInstagramLoading] = useState(false);
   const [stylistPath, setStylistPath] = useState('import'); // 'import' | 'manual'
   const skeletonPulse = useRef(new Animated.Value(0.4)).current;
@@ -491,7 +492,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         }
         await stylistService.registerAsStylist(userId, {
           specialties: formData.stylistSpecialties,
-          portfolioPhotos: photoUrls,
+          portfolioPhotos: [...photoUrls, ...selectedInstagramPhotos],
         });
         if (formData.businessName)      prefs.business_name = formData.businessName;
         if (formData.stylistWorkType)   prefs.work_type = formData.stylistWorkType;
@@ -500,7 +501,6 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         const social = Object.fromEntries(Object.entries(formData.socialLinks).filter(([, v]) => v?.trim()));
         if (Object.keys(social).length) prefs.social_links = social;
         if (credentialsPhotoUrl)        prefs.credentials_photo_url = credentialsPhotoUrl;
-        if (instagramPhotos.length > 0) prefs.instagram_portfolio_urls = instagramPhotos;
       }
 
       if (Object.keys(prefs).length > 0 && userId) {
@@ -1629,6 +1629,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           if (photosStr) {
             const photos = JSON.parse(decodeURIComponent(photosStr));
             setInstagramPhotos(photos);
+            setSelectedInstagramPhotos(photos); // auto-select all
           }
         }
       } catch (e) {
@@ -1651,11 +1652,33 @@ export default function OnboardingScreen({ onDone = () => {} }) {
 
         {instagramPhotos.length > 0 ? (
           <>
-            <Text style={styles.importResultLabel}>{instagramPhotos.length} photos imported</Text>
+            <Text style={styles.importResultLabel}>
+              {selectedInstagramPhotos.length} of {instagramPhotos.length} selected — tap to toggle
+            </Text>
             <View style={styles.importPhotoGrid}>
-              {instagramPhotos.slice(0, 9).map((uri, i) => (
-                <Image key={i} source={{ uri }} style={styles.importPhotoThumb} />
-              ))}
+              {instagramPhotos.map((uri, i) => {
+                const selected = selectedInstagramPhotos.includes(uri);
+                return (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => setSelectedInstagramPhotos(prev =>
+                      prev.includes(uri) ? prev.filter(u => u !== uri) : [...prev, uri]
+                    )}
+                    activeOpacity={0.8}
+                    style={{ position: 'relative' }}
+                  >
+                    <Image
+                      source={{ uri }}
+                      style={[styles.importPhotoThumb, !selected && { opacity: 0.35 }]}
+                    />
+                    {selected && (
+                      <View style={styles.igPhotoCheck}>
+                        <Ionicons name="checkmark-circle" size={22} color="#fff" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </>
         ) : (
@@ -1696,7 +1719,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       goToStep(STEPS.ENDING_BUFFER);
     };
 
-    const hasAnything = importedData?.businessName || importedData?.services?.length || instagramPhotos.length;
+    const hasAnything = importedData?.businessName || importedData?.services?.length || selectedInstagramPhotos.length;
 
     return (
       <WhiteScreen scrollable footer={
@@ -1739,13 +1762,13 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           </View>
         )}
 
-        {instagramPhotos.length > 0 && (
+        {selectedInstagramPhotos.length > 0 && (
           <View style={styles.reviewSection}>
             <Text style={styles.reviewSectionTitle}>
-              Portfolio photos ({instagramPhotos.length})
+              Portfolio photos ({selectedInstagramPhotos.length})
             </Text>
             <View style={styles.importPhotoGrid}>
-              {instagramPhotos.slice(0, 6).map((uri, i) => (
+              {selectedInstagramPhotos.slice(0, 6).map((uri, i) => (
                 <Image key={i} source={{ uri }} style={styles.importPhotoThumb} />
               ))}
             </View>
@@ -2549,6 +2572,11 @@ const styles = StyleSheet.create({
     width: (SCREEN_WIDTH - 48 - 12) / 3,
     height: (SCREEN_WIDTH - 48 - 12) / 3,
     borderRadius: 8,
+  },
+  igPhotoCheck: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
   },
 
   // Review step
