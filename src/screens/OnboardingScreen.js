@@ -423,6 +423,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         userId = authUser?.id;
         if (!userId) throw new Error('Missing user id for Google sign-in');
         await profileService.upsertProfile(userId, {
+          email: formData.email,
           full_name: `${formData.firstName} ${formData.lastName}`.trim(),
           username,
           location: formData.location,
@@ -455,6 +456,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
         userId = user?.id;
         if (userId) {
           await profileService.upsertProfile(userId, {
+            email: formData.email,
             full_name: `${formData.firstName} ${formData.lastName}`.trim(),
             username,
             location: formData.location,
@@ -1847,9 +1849,10 @@ export default function OnboardingScreen({ onDone = () => {} }) {
     const leftHeights = placeholderHeights.filter((_, i) => i % 2 === 0);
     const rightHeights = placeholderHeights.filter((_, i) => i % 2 === 1);
     const renderPlaceholderCard = (height, key) => (
-      <Animated.View key={key} style={[styles.skeletonCard, { height, opacity: skeletonPulse }]}>
+      <View key={key} style={[styles.skeletonCard, { height }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, { opacity: skeletonPulse, backgroundColor: '#E8E2DA', borderRadius: 14 }]} />
         <View style={styles.skeletonLabel} />
-      </Animated.View>
+      </View>
     );
 
     return (
