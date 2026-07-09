@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Animated,
+  Easing,
   Dimensions,
   ActivityIndicator,
   Alert,
@@ -30,8 +31,20 @@ import { AUTH_URL } from '../lib/auth-url';
 import { getAuthToken } from '../lib/auth-client';
 import AuthScreen from './AuthScreen';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
+import { HAIR_STYLE_CATEGORIES, HAIR_STYLES } from '../constants/hairStyles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Skeleton-card gradients cycled across the STYLES_LOADING placeholder grid so
+// it reads as a varied shimmer instead of one flat color repeated.
+const SKELETON_GRADIENTS = [
+  ['#EDE4D8', '#DCCBB4'],
+  ['#E4E4E2', '#CFCFCB'],
+  ['#E8D9C8', '#CBB08C'],
+  ['#EFE6DC', '#DED0BE'],
+  ['#DEE1DE', '#C7CCC7'],
+  ['#EAD9C7', '#D2B896'],
+];
 
 const colors = {
   gradientTop: '#E8C4B8',
@@ -46,7 +59,19 @@ const colors = {
   forest: '#3F523F',
   copper: '#C4956A',
   honey: '#F8B430',
+  burntOchre: '#B35D2B',
 };
+
+// Gradient configs cycled by AnimatedGradientBackground (shared by the
+// completion and stylist-buffer screens). Each entry also nudges `start`/`end`
+// so the gradient's origin drifts along with the color crossfade instead of
+// just tinting in place.
+const SUNSET_GRADIENTS = [
+  { colors: ['#F2C9A8', '#E8A87C', '#E8C4A8'], locations: [0, 0.5, 1], start: { x: 0, y: 0 }, end: { x: 0.8, y: 1 } },
+  { colors: ['#E8A87C', 'rgba(248,180,48,0.35)', '#FCFCFC'], locations: [0, 0.5, 1], start: { x: 1, y: 0 }, end: { x: 0, y: 1 } },
+  { colors: ['#FCFCFC', '#F2C9A8', '#E8C4A8'], locations: [0, 0.5, 1], start: { x: 0, y: 0.2 }, end: { x: 1, y: 1 } },
+  { colors: ['#E8C4A8', '#C2B093', '#E8A87C'], locations: [0, 0.5, 1], start: { x: 0.2, y: 0 }, end: { x: 0.9, y: 1 } },
+];
 
 // ── Step definitions ──────────────────────────────────────────────────────────
 
@@ -64,7 +89,8 @@ const STEPS = {
   STYLIST_IMPORT: 'stylistImport',
   STYLIST_INSTAGRAM: 'stylistInstagram',
   STYLIST_REVIEW: 'stylistReview',
-  // stylist manual path
+  // stylist buffer / manual path
+  STYLIST_BUFFER: 'stylistBuffer',
   STYLIST_WORK_TYPE: 'stylistWorkType',
   STYLIST_EXPERIENCE: 'stylistExperience',
   STYLIST_SPECIALTIES: 'stylistSpecialties',
@@ -83,8 +109,6 @@ const STEPS = {
   CREATORS: 'creators',
   DISCOVER_STYLISTS: 'discoverStylists',
   ENDING_BUFFER: 'endingBuffer',
-  LOADING: 'loading',
-  COMPLETE: 'complete',
 };
 
 // Import flow order (steps 1–3 of the new-stylist wizard)
@@ -216,19 +240,9 @@ const USAGE_GOAL_OPTIONS = [
   'Share my journey with others',
 ];
 
-// Hair "looks" grid shown on the redesigned HAIR_STYLES / STYLES_LOADING screens
-const STYLE_FILTER_CHIPS = ['All', 'Protective', 'Cuts', 'Natural', 'Locs', 'Short Styles', 'Color'];
-
-const MOCK_HAIR_LOOKS = [
-  { id: 'h1', label: 'Ginger',      category: 'Color',        colors: ['#C4783A', '#8B4E1E'], height: 200 },
-  { id: 'h2', label: 'Brown Fade',  category: 'Cuts',         colors: ['#3D2B1F', '#1A1208'], height: 230 },
-  { id: 'h3', label: 'Blonde Twists', category: 'Protective', colors: ['#D4A574', '#A67B5B'], height: 220 },
-  { id: 'h4', label: 'Honey Blonde', category: 'Color',       colors: ['#C4956A', '#8B5E3C'], height: 240 },
-  { id: 'h5', label: 'Locs',        category: 'Locs',         colors: ['#2C1810', '#1A0F08'], height: 210 },
-  { id: 'h6', label: 'Wash & Go',   category: 'Natural',      colors: ['#5D1F1F', '#3D1010'], height: 225 },
-  { id: 'h7', label: 'Box Braids',  category: 'Protective',   colors: ['#8B6E4E', '#5D4A34'], height: 215 },
-  { id: 'h8', label: 'Short Crop',  category: 'Short Styles', colors: ['#D4C4B0', '#B09880'], height: 200 },
-];
+// Hair "looks" grid shown on the redesigned HAIR_STYLES / STYLES_LOADING screens.
+// Data + images now live in src/constants/hairStyles.js (single source of truth).
+const STYLE_FILTER_CHIPS = HAIR_STYLE_CATEGORIES;
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -355,7 +369,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailError, setUsernameAvailError] = useState('');
   const [stylistFilter, setStylistFilter] = useState('All');
-  const [hairLookFilter, setHairLookFilter] = useState('All');
+  const [hairLookFilter, setHairLookFilter] = useState('Protective');
   const [phoneStage, setPhoneStage] = useState('enter'); // 'enter' | 'code'
   const [phoneCode, setPhoneCode] = useState('');
   const [locStateAbbr, setLocStateAbbr] = useState('');
@@ -376,8 +390,6 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   const signupInProgress = useRef(false);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
-  const loadingProgress = useRef(new Animated.Value(0)).current;
-  const [loadingMessage, setLoadingMessage] = useState('Creating your account...');
 
   // Returning user: signed in via the internal AuthScreen (not Google).
   // authUser will be set but isGoogleUser is false and showAuth is true.
@@ -409,31 +421,21 @@ export default function OnboardingScreen({ onDone = () => {} }) {
     }
   }, [currentStep]);
 
-  useEffect(() => {
-    if (currentStep === STEPS.LOADING) handleSignup();
-  }, [currentStep]);
-
+  // Creates the account (or, for Google users, confirms one already exists),
+  // then lets the user into the app immediately — everything after that
+  // (avatar, hair profile, stylist fields, preferences) finishes in the
+  // background, unblocked, with no visible loading screen.
   const handleSignup = async () => {
     if (signupInProgress.current) return;
     signupInProgress.current = true;
-    loadingProgress.setValue(0);
-    Animated.timing(loadingProgress, { toValue: 0.3, duration: 500, useNativeDriver: false }).start();
-    setLoadingMessage(isGoogleUser ? 'Saving your profile...' : 'Creating your account...');
-    try {
-      const username = formData.username.trim().toLowerCase();
-      let userId;
+    const username = formData.username.trim().toLowerCase();
+    let userId;
 
+    try {
       if (isGoogleUser) {
         // Already authenticated via Google — skip sign-up, just save onboarding data
         userId = authUser?.id;
         if (!userId) throw new Error('Missing user id for Google sign-in');
-        await profileService.upsertProfile(userId, {
-          email: formData.email,
-          full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-          username,
-          location: formData.location,
-          is_stylist: formData.userType === 'stylist',
-        });
       } else {
         const { user, error } = await signUp(
           formData.email.trim(),
@@ -468,26 +470,34 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           return;
         }
         userId = user?.id;
-        if (userId) {
-          await profileService.upsertProfile(userId, {
-            email: formData.email,
-            full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-            username,
-            location: formData.location,
-            is_stylist: formData.userType === 'stylist',
-          });
-        }
       }
+    } catch (err) {
+      signupInProgress.current = false;
+      Alert.alert('Error', 'Something went wrong. Please try again.');
+      goToStep(isGoogleUser ? STEPS.USERNAME : STEPS.EMAIL);
+      return;
+    }
 
-      Animated.timing(loadingProgress, { toValue: 0.6, duration: 500, useNativeDriver: false }).start();
-      setLoadingMessage('Setting up your hair profile...');
+    signupInProgress.current = false;
+    // Account + session are live — hand off to the app now.
+    onDone();
+
+    try {
+      if (userId) {
+        await profileService.upsertProfile(userId, {
+          full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+          username,
+          location: formData.location,
+          is_stylist: formData.userType === 'stylist',
+        });
+      }
 
       await Promise.allSettled([
         formData.profilePhoto && userId
           ? profileService.uploadAvatar(userId, formData.profilePhoto)
           : Promise.resolve(),
         formData.selectedStyles.length > 0 && userId
-          ? profileService.updateHairProfile(userId, { goals: formData.selectedStyles })
+          ? profileService.updateProfile(userId, { style_preferences: formData.selectedStyles })
           : Promise.resolve(),
       ]);
 
@@ -540,16 +550,8 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       if (Object.keys(prefs).length > 0 && userId) {
         await profileService.updateProfile(userId, { preferences: prefs });
       }
-
-      Animated.timing(loadingProgress, { toValue: 1, duration: 500, useNativeDriver: false }).start();
-      setLoadingMessage('Almost there...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      signupInProgress.current = false;
-      goToStep(STEPS.COMPLETE);
     } catch (err) {
-      signupInProgress.current = false;
-      Alert.alert('Error', 'Something went wrong. Please try again.');
-      goToStep(isGoogleUser ? STEPS.USERNAME : STEPS.EMAIL);
+      console.error('[Signup] background profile finalize failed:', err);
     }
   };
 
@@ -592,9 +594,10 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       case STEPS.USER_TYPE:
         goToStep(formData.userType === 'stylist' ? IMPORT_STEP_ORDER[0] : STEPS.USAGE_GOALS);
         break;
+      case STEPS.STYLIST_BUFFER: goToStep(STYLIST_STEP_ORDER[0]); break;
       case STEPS.USAGE_GOALS: goToStep(STEPS.STYLES_LOADING); break;
       case STEPS.HAIR_STYLES: goToStep(STEPS.ENDING_BUFFER); break;
-      case STEPS.ENDING_BUFFER: goToStep(STEPS.LOADING); break;
+      case STEPS.ENDING_BUFFER: handleSignup(); break;
       default: {
         const idx = BASE_STEP_ORDER.indexOf(currentStep);
         if (idx !== -1 && idx < BASE_STEP_ORDER.length - 1) goToStep(BASE_STEP_ORDER[idx + 1]);
@@ -876,6 +879,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your first name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="givenName"
         />
       </View>
 
@@ -888,6 +892,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your last name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="familyName"
         />
       </View>
 
@@ -1069,6 +1074,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your first name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="givenName"
         />
       </View>
 
@@ -1081,6 +1087,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your last name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="familyName"
         />
       </View>
 
@@ -1259,6 +1266,32 @@ export default function OnboardingScreen({ onDone = () => {} }) {
 
       <ContinueButton onPress={goNext} disabled={!formData.userType} />
     </WhiteScreen>
+  );
+
+  // Shown once, immediately after picking "I'm a hair professional" — a beat
+  // before the stylist-specific question flow starts. Not part of
+  // STYLIST_STEP_ORDER (no progress dots, no back button), same as ENDING_BUFFER.
+  const renderStylistBuffer = () => (
+    <View style={styles.completeScreen}>
+      <AnimatedGradientBackground />
+
+      <View style={styles.completeTextBlock}>
+        <Text style={styles.stylistBufferEyebrow}>A FEW MORE QUESTIONS TO</Text>
+        <Text style={styles.completeTitle}>
+          <Text style={styles.completeTitleDark}>complete</Text>
+          {'\n'}
+          <Text style={styles.completeTitleMaroon}>service provider</Text>
+          {'\n'}
+          <Text style={styles.completeTitleItalic}>onboarding.</Text>
+        </Text>
+      </View>
+
+      <SafeAreaView edges={['bottom']} style={styles.completeButtonWrap}>
+        <TouchableOpacity style={styles.completeContinueBtn} onPress={goNext}>
+          <Text style={styles.completeContinueBtnText}>Continue</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    </View>
   );
 
   const stylistSkipFooter = (disabled = false) => (
@@ -1894,14 +1927,17 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   );
 
   const renderStylesLoading = () => {
-    const placeholderHeights = [220, 180, 200, 240, 190, 210];
-    const leftHeights = placeholderHeights.filter((_, i) => i % 2 === 0);
-    const rightHeights = placeholderHeights.filter((_, i) => i % 2 === 1);
-    const renderPlaceholderCard = (height, key) => (
-      <View key={key} style={[styles.skeletonCard, { height }]}>
-        <Animated.View style={[StyleSheet.absoluteFill, { opacity: skeletonPulse, backgroundColor: '#E8E2DA', borderRadius: 14 }]} />
+    const placeholders = [220, 180, 200, 240, 190, 210].map((height, i) => ({ height, i }));
+    const leftPlaceholders = placeholders.filter((_, i) => i % 2 === 0);
+    const rightPlaceholders = placeholders.filter((_, i) => i % 2 === 1);
+    const renderPlaceholderCard = ({ height, i }) => (
+      <Animated.View key={i} style={[styles.skeletonCard, { height, opacity: skeletonPulse }]}>
+        <LinearGradient
+          colors={SKELETON_GRADIENTS[i % SKELETON_GRADIENTS.length]}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.skeletonLabel} />
-      </View>
+      </Animated.View>
     );
 
     return (
@@ -1917,24 +1953,22 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           contentContainerStyle={styles.filterContent}
         >
           {STYLE_FILTER_CHIPS.map(f => (
-            <View key={f} style={[styles.filterChip, f === 'All' && styles.filterChipActive]}>
-              <Text style={[styles.filterChipText, f === 'All' && styles.filterChipTextActive]}>{f}</Text>
+            <View key={f} style={[styles.filterChip, f === 'Protective' && styles.filterChipActive]}>
+              <Text style={[styles.filterChipText, f === 'Protective' && styles.filterChipTextActive]}>{f}</Text>
             </View>
           ))}
         </ScrollView>
 
         <View style={styles.masonryRow}>
-          <View style={styles.masonryCol}>{leftHeights.map((h, i) => renderPlaceholderCard(h, `l${i}`))}</View>
-          <View style={styles.masonryCol}>{rightHeights.map((h, i) => renderPlaceholderCard(h, `r${i}`))}</View>
+          <View style={styles.masonryCol}>{leftPlaceholders.map(renderPlaceholderCard)}</View>
+          <View style={styles.masonryCol}>{rightPlaceholders.map(renderPlaceholderCard)}</View>
         </View>
       </WhiteScreen>
     );
   };
 
   const renderHairStyles = () => {
-    const filteredLooks = hairLookFilter === 'All'
-      ? MOCK_HAIR_LOOKS
-      : MOCK_HAIR_LOOKS.filter(l => l.category === hairLookFilter);
+    const filteredLooks = HAIR_STYLES.filter(l => l.category === hairLookFilter);
     const leftLooks = filteredLooks.filter((_, i) => i % 2 === 0);
     const rightLooks = filteredLooks.filter((_, i) => i % 2 === 1);
 
@@ -1943,11 +1977,17 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       return (
         <View key={look.id} style={selected && styles.lookCardGlow}>
           <TouchableOpacity
-            style={[styles.personCard, { height: look.height }, selected && styles.lookCardSelected]}
+            style={[styles.personCard, { height: look.height }]}
             onPress={() => toggleStyle(look.id)}
             activeOpacity={0.9}
           >
-            <LinearGradient colors={look.colors} style={StyleSheet.absoluteFill} />
+            <Image source={look.image} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            <LinearGradient
+              colors={['transparent', 'rgba(26,22,18,0.9)']}
+              locations={[0, 1]}
+              style={styles.lookCardGradient}
+              pointerEvents="none"
+            />
             {selected && (
               <View style={styles.lookCheckmark}>
                 <Ionicons name="checkmark-circle" size={22} color={colors.white} />
@@ -1965,7 +2005,6 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       <WhiteScreen
         scrollable
         header={<>
-          {renderBack()}
           {renderProgress()}
           <Text style={styles.questionTitle}>What styles speak to you?</Text>
           {/* <Text style={styles.questionSubtitle}>Select all that apply — your feed will reflect your taste.</Text> */}
@@ -2138,52 +2177,30 @@ export default function OnboardingScreen({ onDone = () => {} }) {
     );
   };
 
+  // Its Continue button kicks off the actual signup/profile creation via
+  // handleSignup(), which hands off to the app as soon as the account exists
+  // — everything else finishes in the background with no visible loading step.
   const renderEndingBuffer = () => (
-    <View style={styles.endingContainer}>
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'flex-start', paddingHorizontal: 32 }} edges={['top']}>
-        <Text style={styles.endingEyebrow}>WELCOME TO THE COMMUNITY</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline' }}>
-          <Text style={styles.endingTitle}>Your crwn is {'\n'}</Text>
-          <Text style={styles.endingTitleCopper}>ready!</Text>
-        </View>
-      </SafeAreaView>
-      <SafeAreaView style={styles.endingBottom} edges={['bottom']}>
-        <TouchableOpacity style={styles.endingContinueBtn} onPress={goNext}>
-          <Text style={styles.endingContinueBtnText}>Continue</Text>
+    <View style={styles.completeScreen}>
+      <AnimatedGradientBackground />
+
+      <View style={styles.completeTextBlock}>
+        <Text style={styles.completeEyebrow}>WELCOME TO THE COMMUNITY</Text>
+        <Text style={styles.completeTitle}>
+          <Text style={styles.completeTitleDark}>your </Text>
+          <Text style={styles.completeTitleMaroon}>crwn</Text>
+          {'\n'}
+          <Text style={styles.completeTitleDark}>profile is </Text>
+          <Text style={styles.completeTitleItalic}>live.</Text>
+        </Text>
+      </View>
+
+      <SafeAreaView edges={['bottom']} style={styles.completeButtonWrap}>
+        <TouchableOpacity style={styles.completeContinueBtn} onPress={goNext}>
+          <Text style={styles.completeContinueBtnText}>Continue</Text>
         </TouchableOpacity>
       </SafeAreaView>
     </View>
-  );
-
-  const renderLoading = () => (
-    <GradientScreen>
-      <View style={styles.loadingContent}>
-        <View style={styles.loadingCard}>
-          <View style={styles.loadingCircle}>
-            <ActivityIndicator size="large" color={colors.copper} />
-          </View>
-          <Text style={styles.loadingText}>{loadingMessage}</Text>
-        </View>
-      </View>
-    </GradientScreen>
-  );
-
-  const renderComplete = () => (
-    <GradientScreen>
-      <View style={styles.loadingContent}>
-        <View style={styles.loadingCard}>
-          <View style={[styles.loadingCircle, { backgroundColor: colors.forest }]}>
-            <Ionicons name="checkmark" size={32} color="#fff" />
-          </View>
-          <Text style={styles.loadingText}>You're all set!</Text>
-        </View>
-      </View>
-      <View style={styles.completeButtonContainer}>
-        <TouchableOpacity style={styles.whiteButton} onPress={onDone}>
-          <Text style={styles.whiteButtonText}>Explore Your CRWN</Text>
-        </TouchableOpacity>
-      </View>
-    </GradientScreen>
   );
 
   // ── Step router ──────────────────────────────────────────────────────────────
@@ -2202,6 +2219,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       case STEPS.STYLIST_IMPORT:         return renderStylistImport();
       case STEPS.STYLIST_INSTAGRAM:      return renderStylistInstagram();
       case STEPS.STYLIST_REVIEW:         return renderStylistReview();
+      case STEPS.STYLIST_BUFFER:         return renderStylistBuffer();
       case STEPS.STYLIST_WORK_TYPE:      return renderStylistWorkType();
       case STEPS.STYLIST_EXPERIENCE:     return renderStylistExperience();
       case STEPS.STYLIST_SPECIALTIES:    return renderStylistSpecialties();
@@ -2219,8 +2237,6 @@ export default function OnboardingScreen({ onDone = () => {} }) {
       case STEPS.CREATORS:          return renderCreators();
       case STEPS.DISCOVER_STYLISTS: return renderDiscoverStylists();
       case STEPS.ENDING_BUFFER:     return renderEndingBuffer();
-      case STEPS.LOADING:           return renderLoading();
-      case STEPS.COMPLETE:          return renderComplete();
       default:                      return renderSplash();
     }
   };
@@ -2246,6 +2262,43 @@ export default function OnboardingScreen({ onDone = () => {} }) {
 }
 
 // ── Helper components ─────────────────────────────────────────────────────────
+
+// Slowly crossfades between SUNSET_GRADIENTS on a continuous loop — simulates
+// a drifting sunset rather than a single static gradient. Two stacked
+// LinearGradients (current + next) with the top one's opacity animated from
+// 0→1 reads as a smooth color/origin drift; expo-linear-gradient's `colors`
+// prop can't be driven directly by Animated, so crossfading whole gradients
+// is the reliable way to get this effect.
+const AnimatedGradientBackground = () => {
+  const [index, setIndex] = useState(0);
+  const fade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    fade.setValue(0);
+    const anim = Animated.timing(fade, {
+      toValue: 1,
+      duration: 10000,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    });
+    anim.start(({ finished }) => {
+      if (finished) setIndex(i => (i + 1) % SUNSET_GRADIENTS.length);
+    });
+    return () => anim.stop();
+  }, [index]);
+
+  const current = SUNSET_GRADIENTS[index];
+  const next = SUNSET_GRADIENTS[(index + 1) % SUNSET_GRADIENTS.length];
+
+  return (
+    <View style={StyleSheet.absoluteFill}>
+      <LinearGradient colors={current.colors} locations={current.locations} start={current.start} end={current.end} style={StyleSheet.absoluteFill} />
+      <Animated.View style={[StyleSheet.absoluteFill, { opacity: fade }]}>
+        <LinearGradient colors={next.colors} locations={next.locations} start={next.start} end={next.end} style={StyleSheet.absoluteFill} />
+      </Animated.View>
+    </View>
+  );
+};
 
 const GradientScreen = ({ children }) => (
   <LinearGradient
@@ -2422,28 +2475,35 @@ const styles = StyleSheet.create({
   masonryCol: { flex: 1, gap: CARD_GAP },
 
   // Styles-loading skeleton (STYLES_LOADING)
-  skeletonCard: { width: CARD_COL, borderRadius: 14, backgroundColor: '#E8E2DA', justifyContent: 'flex-end', padding: 10 },
+  skeletonCard: { width: CARD_COL, borderRadius: 14, overflow: 'hidden', justifyContent: 'flex-end', padding: 10 },
   skeletonLabel: { width: '50%', height: 14, borderRadius: 7, backgroundColor: '#D4CCC0' },
 
   // Hair look cards (redesigned HAIR_STYLES grid)
+  // Dark gradient behind the label — same treatment as the Explore feed's stylist tag
+  lookCardGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
+  },
   lookCardGlow: {
     borderRadius: 14,
     shadowColor: colors.honey,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 6,
+    elevation: 4,
   },
-  lookCardSelected: { borderWidth: 2, borderColor: colors.honey },
   lookCheckmark: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
   lookCardTag: {
     position: 'absolute',
     bottom: 10,
     left: 10,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   lookCardTagText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: colors.white },
 
@@ -2520,15 +2580,6 @@ const styles = StyleSheet.create({
   endingBottom: { paddingHorizontal: 24, paddingBottom: 32 },
   endingContinueBtn: { backgroundColor: '#3F523F', paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   endingContinueBtnText: { color: '#fff', fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
-
-  // Loading / complete
-  loadingContent: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 },
-  loadingCard: { backgroundColor: colors.white, borderRadius: 20, paddingVertical: 48, paddingHorizontal: 32, alignItems: 'center', width: '100%', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.12, shadowRadius: 24, elevation: 8 },
-  loadingCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.cream, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
-  loadingText: { fontSize: 15, color: colors.textBrown, textAlign: 'center', fontFamily: 'Figtree_400Regular' },
-  completeButtonContainer: { paddingHorizontal: 24, paddingBottom: 32 },
-  whiteButton: { backgroundColor: colors.white, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
-  whiteButtonText: { color: colors.textBrown, fontSize: 15, fontFamily: 'Figtree_600SemiBold' },
 
   // Location pickers
   pickerButton: {
@@ -2678,5 +2729,33 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     minHeight: 64,
     textAlignVertical: 'top',
+  },
+
+  // Completion + stylist-buffer screens (shared animated gradient background)
+  completeScreen: { flex: 1 },
+  completeTextBlock: { position: 'absolute', top: '40%', left: 0, right: 0, paddingHorizontal: 32 },
+  completeEyebrow: {
+    fontSize: 11,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#4F4032',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  completeTitle: { fontSize: 34, lineHeight: 40, textAlign: 'center' },
+  completeTitleDark: { fontFamily: 'LibreBaskerville_700Bold', color: colors.textPrimary, fontSize: 34 },
+  completeTitleMaroon: { fontFamily: 'LibreBaskerville_700Bold', color: colors.maroon, fontSize: 34 },
+  completeTitleItalic: { fontFamily: 'LibreBaskerville_400Regular', fontStyle: 'italic', color: colors.burntOchre, fontSize: 34 },
+  completeButtonWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingBottom: 16 },
+  completeContinueBtn: { backgroundColor: colors.forest, height: 52, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  completeContinueBtnText: { color: '#fff', fontSize: 16, fontFamily: 'Figtree_600SemiBold' },
+  stylistBufferEyebrow: {
+    fontSize: 11,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#4F4032',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginBottom: 12,
   },
 });

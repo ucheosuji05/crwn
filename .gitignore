@@ -5,6 +5,7 @@
 npm-debug.log
 yarn-error.log
 web-build/
+/dist/
 .env
 *.env
 .DS_Store
