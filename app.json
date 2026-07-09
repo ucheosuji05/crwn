@@ -33,6 +33,8 @@
       "policy": "appVersion"
     },
     "android": {},
-    "ios": {}
+    "ios": {
+      "bundleIdentifier": "com.crwnteam.crwnmvp"
+    }
   }
 }

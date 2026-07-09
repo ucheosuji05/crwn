@@ -24,6 +24,7 @@ import { stylistService } from '../services/stylistService';
 import { useAuth } from '../hooks/useAuth';
 import AuthScreen from './AuthScreen';
 import ForgotPasswordScreen from './ForgotPasswordScreen';
+import { HAIR_STYLE_CATEGORIES, HAIR_STYLES } from '../constants/hairStyles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -198,19 +199,9 @@ const USAGE_GOAL_OPTIONS = [
   'Share my journey with others',
 ];
 
-// Hair "looks" grid shown on the redesigned HAIR_STYLES / STYLES_LOADING screens
-const STYLE_FILTER_CHIPS = ['All', 'Protective', 'Cuts', 'Natural', 'Locs', 'Short Styles', 'Color'];
-
-const MOCK_HAIR_LOOKS = [
-  { id: 'h1', label: 'Ginger',      category: 'Color',        colors: ['#C4783A', '#8B4E1E'], height: 200 },
-  { id: 'h2', label: 'Brown Fade',  category: 'Cuts',         colors: ['#3D2B1F', '#1A1208'], height: 230 },
-  { id: 'h3', label: 'Blonde Twists', category: 'Protective', colors: ['#D4A574', '#A67B5B'], height: 220 },
-  { id: 'h4', label: 'Honey Blonde', category: 'Color',       colors: ['#C4956A', '#8B5E3C'], height: 240 },
-  { id: 'h5', label: 'Locs',        category: 'Locs',         colors: ['#2C1810', '#1A0F08'], height: 210 },
-  { id: 'h6', label: 'Wash & Go',   category: 'Natural',      colors: ['#5D1F1F', '#3D1010'], height: 225 },
-  { id: 'h7', label: 'Box Braids',  category: 'Protective',   colors: ['#8B6E4E', '#5D4A34'], height: 215 },
-  { id: 'h8', label: 'Short Crop',  category: 'Short Styles', colors: ['#D4C4B0', '#B09880'], height: 200 },
-];
+// Hair "looks" grid shown on the redesigned HAIR_STYLES / STYLES_LOADING screens.
+// Data + images now live in src/constants/hairStyles.js (single source of truth).
+const STYLE_FILTER_CHIPS = HAIR_STYLE_CATEGORIES;
 
 // ── Main component ────────────────────────────────────────────────────────────
 
@@ -253,7 +244,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   const [checkingUsername, setCheckingUsername] = useState(false);
   const [usernameAvailError, setUsernameAvailError] = useState('');
   const [stylistFilter, setStylistFilter] = useState('All');
-  const [hairLookFilter, setHairLookFilter] = useState('All');
+  const [hairLookFilter, setHairLookFilter] = useState('Protective');
   const [phoneStage, setPhoneStage] = useState('enter'); // 'enter' | 'code'
   const [phoneCode, setPhoneCode] = useState('');
   const skeletonPulse = useRef(new Animated.Value(0.4)).current;
@@ -357,7 +348,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           ? profileService.uploadAvatar(userId, formData.profilePhoto)
           : Promise.resolve(),
         formData.selectedStyles.length > 0 && userId
-          ? profileService.updateHairProfile(userId, { goals: formData.selectedStyles })
+          ? profileService.updateProfile(userId, { style_preferences: formData.selectedStyles })
           : Promise.resolve(),
       ]);
 
@@ -714,6 +705,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your first name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="givenName"
         />
       </View>
 
@@ -726,6 +718,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your last name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="familyName"
         />
       </View>
 
@@ -907,6 +900,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your first name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="givenName"
         />
       </View>
 
@@ -919,6 +913,7 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           placeholder="Enter your last name"
           placeholderTextColor="#999"
           autoCapitalize="words"
+          textContentType="familyName"
         />
       </View>
 
@@ -1401,8 +1396,8 @@ export default function OnboardingScreen({ onDone = () => {} }) {
           contentContainerStyle={styles.filterContent}
         >
           {STYLE_FILTER_CHIPS.map(f => (
-            <View key={f} style={[styles.filterChip, f === 'All' && styles.filterChipActive]}>
-              <Text style={[styles.filterChipText, f === 'All' && styles.filterChipTextActive]}>{f}</Text>
+            <View key={f} style={[styles.filterChip, f === 'Protective' && styles.filterChipActive]}>
+              <Text style={[styles.filterChipText, f === 'Protective' && styles.filterChipTextActive]}>{f}</Text>
             </View>
           ))}
         </ScrollView>
@@ -1416,32 +1411,35 @@ export default function OnboardingScreen({ onDone = () => {} }) {
   };
 
   const renderHairStyles = () => {
-    const filteredLooks = hairLookFilter === 'All'
-      ? MOCK_HAIR_LOOKS
-      : MOCK_HAIR_LOOKS.filter(l => l.category === hairLookFilter);
+    const filteredLooks = HAIR_STYLES.filter(l => l.category === hairLookFilter);
     const leftLooks = filteredLooks.filter((_, i) => i % 2 === 0);
     const rightLooks = filteredLooks.filter((_, i) => i % 2 === 1);
 
     const renderLookCard = (look) => {
       const selected = formData.selectedStyles.includes(look.id);
       return (
-        <View key={look.id} style={selected && styles.lookCardGlow}>
-          <TouchableOpacity
-            style={[styles.personCard, { height: look.height }, selected && styles.lookCardSelected]}
-            onPress={() => toggleStyle(look.id)}
-            activeOpacity={0.9}
-          >
-            <LinearGradient colors={look.colors} style={StyleSheet.absoluteFill} />
-            {selected && (
-              <View style={styles.lookCheckmark}>
-                <Ionicons name="checkmark-circle" size={22} color={colors.white} />
-              </View>
-            )}
-            <View style={styles.lookCardTag}>
-              <Text style={styles.lookCardTagText}>{look.label}</Text>
+        <TouchableOpacity
+          key={look.id}
+          style={[styles.personCard, { height: look.height }, selected && styles.lookCardSelected]}
+          onPress={() => toggleStyle(look.id)}
+          activeOpacity={0.9}
+        >
+          <Image source={look.image} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <LinearGradient
+            colors={['transparent', 'rgba(26,22,18,0.9)']}
+            locations={[0, 1]}
+            style={styles.lookCardGradient}
+            pointerEvents="none"
+          />
+          {selected && (
+            <View style={styles.lookCheckmark}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.maroon} />
             </View>
-          </TouchableOpacity>
-        </View>
+          )}
+          <View style={styles.lookCardTag}>
+            <Text style={styles.lookCardTagText}>{look.label}</Text>
+          </View>
+        </TouchableOpacity>
       );
     };
 
@@ -1907,24 +1905,24 @@ const styles = StyleSheet.create({
   skeletonLabel: { width: '50%', height: 14, borderRadius: 7, backgroundColor: '#D4CCC0' },
 
   // Hair look cards (redesigned HAIR_STYLES grid)
-  lookCardGlow: {
-    borderRadius: 14,
-    shadowColor: colors.honey,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 14,
-    elevation: 10,
+  // Dark gradient behind the label — same treatment as the Explore feed's stylist tag
+  lookCardGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
   },
-  lookCardSelected: { borderWidth: 2, borderColor: colors.honey },
+  lookCardSelected: { borderWidth: 2, borderColor: colors.maroon },
   lookCheckmark: { position: 'absolute', top: 10, right: 10, zIndex: 1 },
   lookCardTag: {
     position: 'absolute',
     bottom: 10,
     left: 10,
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: 'rgba(255,255,255,0.15)',
   },
   lookCardTagText: { fontSize: 12, fontFamily: 'Figtree_600SemiBold', color: colors.white },
 
