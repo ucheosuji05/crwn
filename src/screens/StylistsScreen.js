@@ -246,6 +246,17 @@ export default function StylistsScreen() {
       directionalLockEnabled
       alwaysBounceVertical={false}
     >
+      {/* Clear all — only shown when anything is active */}
+      {hasActiveState && (
+        <TouchableOpacity
+          style={styles.clearAllChip}
+          onPress={() => { setSearchTags([]); setActiveFilters([]); }}
+        >
+          <Ionicons name="close" size={13} color="#8E683B" />
+          <Text style={styles.clearAllText}>Clear all</Text>
+        </TouchableOpacity>
+      )}
+
       {/* Search tag pills — appear before specialty chips */}
       {searchTags.map((tag) => (
         <View key={tag} style={styles.searchTagChip}>
@@ -413,6 +424,20 @@ const makeStyles = (c) => StyleSheet.create({
   filterTextActive: {
     color: '#fff',
     fontFamily: 'Figtree_600SemiBold',
+  },
+  clearAllChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: '#F2E8DA',
+  },
+  clearAllText: {
+    fontSize: 13,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#8E683B',
   },
   searchTagChip: {
     flexDirection: 'row',
