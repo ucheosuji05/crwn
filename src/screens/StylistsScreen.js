@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity,
   Image, ScrollView, ActivityIndicator, RefreshControl,
@@ -160,14 +160,12 @@ export default function StylistsScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [searchTags, setSearchTags] = useState([]); // submitted keyword pills
+  const [activeFilters, setActiveFilters] = useState([]); // multi-select specialty filters
   const [searchOpen, setSearchOpen] = useState(false);
   const [stylists, setStylists] = useState([]);
-  const [searchResults, setSearchResults] = useState(null); // null = use stylists list
   const [loading, setLoading] = useState(true);
-  const [searching, setSearching] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const searchTimeout = useRef(null);
 
   const loadStylists = useCallback(async () => {
     const { data, error } = await stylistService.getStylists();
@@ -184,42 +182,100 @@ export default function StylistsScreen() {
     setRefreshing(false);
   };
 
-  // Live DB search when query changes
-  useEffect(() => {
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-    if (!searchQuery.trim()) {
-      setSearchResults(null);
-      setSearching(false);
-      return;
+  const handleSearchSubmit = () => {
+    const tag = searchQuery.trim();
+    if (tag && !searchTags.includes(tag)) {
+      setSearchTags(prev => [...prev, tag]);
     }
+    setSearchQuery('');
+  };
 
-    setSearching(true);
-    searchTimeout.current = setTimeout(async () => {
-      const { data, error } = await stylistService.searchStylists(searchQuery.trim());
-      if (!error && data) setSearchResults(data.map(normalizeStylist));
-      setSearching(false);
-    }, 300);
+  const removeSearchTag = (tag) => setSearchTags(prev => prev.filter(t => t !== tag));
 
-    return () => clearTimeout(searchTimeout.current);
-  }, [searchQuery]);
+  const toggleFilter = (filter) => {
+    if (filter === 'All') { setActiveFilters([]); return; }
+    setActiveFilters(prev =>
+      prev.includes(filter) ? prev.filter(f => f !== filter) : [...prev, filter]
+    );
+  };
 
   const filtered = useMemo(() => {
-    const list = searchResults !== null ? searchResults : stylists;
+    let list = stylists;
 
-    if (activeFilter !== 'All') {
-      return list.filter((s) =>
-        s.specialties.some((sp) => sp.toLowerCase() === activeFilter.toLowerCase())
+    // Each search tag must match somewhere (AND between tags)
+    for (const tag of searchTags) {
+      const t = tag.toLowerCase();
+      list = list.filter(s =>
+        s.name?.toLowerCase().includes(t) ||
+        s.location?.toLowerCase().includes(t) ||
+        s.specialties?.some(sp => sp.toLowerCase().includes(t))
+      );
+    }
+
+    // Live text input — real-time keyword filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      list = list.filter(s =>
+        s.name?.toLowerCase().includes(q) ||
+        s.location?.toLowerCase().includes(q) ||
+        s.specialties?.some(sp => sp.toLowerCase().includes(q))
+      );
+    }
+
+    // Specialty chips — at least one must match (OR between chips)
+    if (activeFilters.length > 0) {
+      list = list.filter(s =>
+        s.specialties.some(sp =>
+          activeFilters.some(f => sp.toLowerCase() === f.toLowerCase())
+        )
       );
     }
 
     return list;
-  }, [stylists, searchResults, activeFilter]);
+  }, [stylists, searchQuery, searchTags, activeFilters]);
+
+  const hasActiveState = searchTags.length > 0 || activeFilters.length > 0;
+
+  const filterRow = (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.filterList}
+      style={styles.filterScrollView}
+      keyboardShouldPersistTaps="handled"
+      directionalLockEnabled
+      alwaysBounceVertical={false}
+    >
+      {/* Search tag pills — appear before specialty chips */}
+      {searchTags.map((tag) => (
+        <View key={tag} style={styles.searchTagChip}>
+          <Text style={styles.searchTagText}>{tag}</Text>
+          <TouchableOpacity onPress={() => removeSearchTag(tag)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+            <Ionicons name="close" size={13} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      ))}
+
+      {/* Specialty filter chips — multi-select */}
+      {SPECIALTY_FILTERS.map((f) => {
+        const isActive = f === 'All' ? activeFilters.length === 0 && searchTags.length === 0 : activeFilters.includes(f);
+        return (
+          <TouchableOpacity
+            key={f}
+            style={[styles.filterChip, isActive && styles.filterChipActive]}
+            onPress={() => toggleFilter(f)}
+          >
+            <Text style={[styles.filterText, isActive && styles.filterTextActive]}>{f}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
 
-      {/* Header — full width, same structure as Community */}
+      {/* Header */}
       <View style={styles.header}>
         {searchOpen ? (
           <>
@@ -234,32 +290,15 @@ export default function StylistsScreen() {
                 <SearchBar
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Search service providers..."
+                  onSubmitEditing={handleSearchSubmit}
+                  placeholder="Type and press Enter to add filter..."
                   autoFocus
                   containerStyle={styles.searchBarContainer}
                 />
               </View>
             </View>
             <View style={[styles.chipsRow, webWrap(WEB_MAX_WIDTHS.feed)]}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.filterList}
-                style={styles.filterScrollView}
-                keyboardShouldPersistTaps="handled"
-                directionalLockEnabled
-                alwaysBounceVertical={false}
-              >
-                {SPECIALTY_FILTERS.map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
-                    onPress={() => setActiveFilter(f)}
-                  >
-                    <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              {filterRow}
             </View>
           </>
         ) : (
@@ -267,33 +306,14 @@ export default function StylistsScreen() {
             <TouchableOpacity style={styles.searchIconBtn} onPress={() => setSearchOpen(true)}>
               <Ionicons name="search-outline" size={22} color={colors.text} />
             </TouchableOpacity>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filterList}
-              style={styles.filterScrollView}
-              keyboardShouldPersistTaps="handled"
-              directionalLockEnabled
-              alwaysBounceVertical={false}
-            >
-              {SPECIALTY_FILTERS.map((f) => (
-                <TouchableOpacity
-                  key={f}
-                  style={[styles.filterChip, activeFilter === f && styles.filterChipActive]}
-                  onPress={() => setActiveFilter(f)}
-                >
-                  <Text style={[styles.filterText, activeFilter === f && styles.filterTextActive]}>{f}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            {filterRow}
           </View>
         )}
       </View>
 
-      {/* Main content — centered */}
+      {/* Main content */}
       <View style={[{ flex: 1 }, webWrap(WEB_MAX_WIDTHS.feed)]}>
 
-        {/* Provider mode banner — visible only to stylists in client mode */}
         {isStylist && (
           <TouchableOpacity
             style={[styles.providerBanner, { backgroundColor: colors.primaryLight || '#FDF1EE', borderBottomColor: colors.borderLight }]}
@@ -306,7 +326,7 @@ export default function StylistsScreen() {
           </TouchableOpacity>
         )}
 
-        {loading || searching ? (
+        {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color={colors.primary} />
           </View>
@@ -327,7 +347,7 @@ export default function StylistsScreen() {
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>No service providers found</Text>
                 <Text style={styles.emptySubtitle}>
-                  {searchQuery || activeFilter !== 'All'
+                  {hasActiveState || searchQuery
                     ? 'Try a different search or filter'
                     : 'Service providers will appear here once they join CRWN'}
                 </Text>
@@ -371,7 +391,7 @@ const makeStyles = (c) => StyleSheet.create({
   chipsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: HEADER_BAR_HEIGHT,
+    minHeight: HEADER_BAR_HEIGHT,
     paddingLeft: 16,
   },
   filterList: { paddingLeft: 6, paddingVertical: 6, paddingRight: 14, gap: 8, alignItems: 'center' },
@@ -393,6 +413,20 @@ const makeStyles = (c) => StyleSheet.create({
   filterTextActive: {
     color: '#fff',
     fontFamily: 'Figtree_600SemiBold',
+  },
+  searchTagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    backgroundColor: c.primary,
+  },
+  searchTagText: {
+    fontSize: 13,
+    fontFamily: 'Figtree_600SemiBold',
+    color: '#fff',
   },
 
   // ── Loading ──

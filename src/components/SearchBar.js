@@ -6,6 +6,7 @@ import { useTheme } from '../context/ThemeContext';
 export default function SearchBar({
   value = '',
   onChangeText,
+  onSubmitEditing,
   placeholder = 'Search for hair salons, inspos, etc.',
   autoFocus = false,
   containerStyle,
@@ -20,6 +21,7 @@ export default function SearchBar({
         placeholderTextColor={colors.placeholder}
         value={value}
         onChangeText={onChangeText}
+        onSubmitEditing={onSubmitEditing}
         returnKeyType="search"
         clearButtonMode="never"
         autoFocus={autoFocus}
