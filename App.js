@@ -30,7 +30,6 @@ import {
 } from '@expo-google-fonts/figtree';
 
 import OnboardingScreen from './src/screens/OnboardingScreen';
-import AuthScreen from './src/screens/AuthScreen';
 import ForgotPasswordScreen from './src/screens/ForgotPasswordScreen';
 import ResetPasswordScreen from './src/screens/ResetPasswordScreen';
 import RootNavigator from './src/navigation/RootNavigator';
@@ -129,17 +128,7 @@ function AppContent() {
     );
   }
 
-  // ── Returning user (previously onboarded) but not signed in → sign-in ──
-  if (!user && hasOnboarded) {
-    return (
-      <AuthScreen
-        onBack={() => setHasOnboarded(false)}
-        onForgotPassword={() => setAuthView('forgot-password')}
-      />
-    );
-  }
-
-  // ── New user OR mid-onboarding Google sign-in (user set but not done) ──
+  // ── Not authenticated → always show landing/onboarding (has its own sign-in flow) ──
   return (
     <OnboardingScreen
       onDone={async () => {
