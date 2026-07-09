@@ -11,7 +11,38 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  Modal,
+  FlatList,
 } from 'react-native';
+
+const US_STATES = [
+  { abbr: 'AL', name: 'Alabama' }, { abbr: 'AK', name: 'Alaska' },
+  { abbr: 'AZ', name: 'Arizona' }, { abbr: 'AR', name: 'Arkansas' },
+  { abbr: 'CA', name: 'California' }, { abbr: 'CO', name: 'Colorado' },
+  { abbr: 'CT', name: 'Connecticut' }, { abbr: 'DE', name: 'Delaware' },
+  { abbr: 'FL', name: 'Florida' }, { abbr: 'GA', name: 'Georgia' },
+  { abbr: 'HI', name: 'Hawaii' }, { abbr: 'ID', name: 'Idaho' },
+  { abbr: 'IL', name: 'Illinois' }, { abbr: 'IN', name: 'Indiana' },
+  { abbr: 'IA', name: 'Iowa' }, { abbr: 'KS', name: 'Kansas' },
+  { abbr: 'KY', name: 'Kentucky' }, { abbr: 'LA', name: 'Louisiana' },
+  { abbr: 'ME', name: 'Maine' }, { abbr: 'MD', name: 'Maryland' },
+  { abbr: 'MA', name: 'Massachusetts' }, { abbr: 'MI', name: 'Michigan' },
+  { abbr: 'MN', name: 'Minnesota' }, { abbr: 'MS', name: 'Mississippi' },
+  { abbr: 'MO', name: 'Missouri' }, { abbr: 'MT', name: 'Montana' },
+  { abbr: 'NE', name: 'Nebraska' }, { abbr: 'NV', name: 'Nevada' },
+  { abbr: 'NH', name: 'New Hampshire' }, { abbr: 'NJ', name: 'New Jersey' },
+  { abbr: 'NM', name: 'New Mexico' }, { abbr: 'NY', name: 'New York' },
+  { abbr: 'NC', name: 'North Carolina' }, { abbr: 'ND', name: 'North Dakota' },
+  { abbr: 'OH', name: 'Ohio' }, { abbr: 'OK', name: 'Oklahoma' },
+  { abbr: 'OR', name: 'Oregon' }, { abbr: 'PA', name: 'Pennsylvania' },
+  { abbr: 'RI', name: 'Rhode Island' }, { abbr: 'SC', name: 'South Carolina' },
+  { abbr: 'SD', name: 'South Dakota' }, { abbr: 'TN', name: 'Tennessee' },
+  { abbr: 'TX', name: 'Texas' }, { abbr: 'UT', name: 'Utah' },
+  { abbr: 'VT', name: 'Vermont' }, { abbr: 'VA', name: 'Virginia' },
+  { abbr: 'WA', name: 'Washington' }, { abbr: 'WV', name: 'West Virginia' },
+  { abbr: 'WI', name: 'Wisconsin' }, { abbr: 'WY', name: 'Wyoming' },
+  { abbr: 'DC', name: 'Washington D.C.' },
+];
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
@@ -33,7 +64,10 @@ export default function EditProfileScreen({ onBack, onSave }) {
   const [username, setUsername] = useState('');
   const [originalUsername, setOriginalUsername] = useState('');
   const [bio, setBio] = useState('');
-  const [location, setLocation] = useState('');
+  const [locCity, setLocCity] = useState('');
+  const [locStateAbbr, setLocStateAbbr] = useState('');
+  const [showStatePicker, setShowStatePicker] = useState(false);
+  const [stateSearch, setStateSearch] = useState('');
   const [phone, setPhone] = useState('');
 
   // Hair profile fields
@@ -63,7 +97,14 @@ export default function EditProfileScreen({ onBack, onSave }) {
       setUsername(data.username || '');
       setOriginalUsername(data.username || '');
       setBio(data.bio || '');
-      setLocation(data.location || '');
+      const loc = data.location || '';
+      const commaIdx = loc.lastIndexOf(', ');
+      if (commaIdx !== -1) {
+        setLocCity(loc.slice(0, commaIdx));
+        setLocStateAbbr(loc.slice(commaIdx + 2));
+      } else {
+        setLocCity(loc);
+      }
       setPhone(data.phone || '');
 
       // Set hair profile data
@@ -164,7 +205,7 @@ export default function EditProfileScreen({ onBack, onSave }) {
       full_name: fullName.trim(),
       username: username.trim().toLowerCase(),
       bio: bio.trim(),
-      location: location.trim(),
+      location: locCity.trim() && locStateAbbr ? `${locCity.trim()}, ${locStateAbbr}` : locCity.trim(),
       phone: phone.trim(),
     });
 
@@ -303,14 +344,87 @@ export default function EditProfileScreen({ onBack, onSave }) {
             numberOfLines={3}
           />
 
-          <Text style={styles.label}>Location</Text>
-          <TextInput
-            style={styles.input}
-            value={location}
-            onChangeText={setLocation}
-            placeholder="City, State"
-            placeholderTextColor={colors.placeholder}
-          />
+          <Text style={styles.label}>State</Text>
+          <TouchableOpacity
+            style={styles.pickerButton}
+            onPress={() => { setStateSearch(''); setShowStatePicker(true); }}
+          >
+            <Text style={[styles.input, styles.pickerButtonText, !locStateAbbr && { color: colors.placeholder }]}>
+              {locStateAbbr
+                ? `${US_STATES.find(s => s.abbr === locStateAbbr)?.name} (${locStateAbbr})`
+                : 'Select a state'}
+            </Text>
+            <Ionicons name="chevron-down" size={18} color={colors.placeholder} style={{ marginRight: 12 }} />
+          </TouchableOpacity>
+
+          {locStateAbbr ? (
+            <>
+              <Text style={styles.label}>City</Text>
+              <TextInput
+                style={styles.input}
+                value={locCity}
+                onChangeText={setLocCity}
+                placeholder="Enter your city"
+                placeholderTextColor={colors.placeholder}
+                autoCapitalize="words"
+              />
+            </>
+          ) : null}
+
+          <Modal
+            visible={showStatePicker}
+            animationType="slide"
+            presentationStyle="pageSheet"
+            onRequestClose={() => setShowStatePicker(false)}
+          >
+            <View style={styles.pickerModal}>
+              <View style={styles.pickerModalHeader}>
+                <Text style={styles.pickerModalTitle}>Select State</Text>
+                <TouchableOpacity onPress={() => setShowStatePicker(false)}>
+                  <Ionicons name="close" size={24} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              <View style={styles.pickerSearchWrap}>
+                <Ionicons name="search" size={16} color={colors.placeholder} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={[styles.input, { flex: 1, marginBottom: 0, borderWidth: 0 }]}
+                  placeholder="Search states…"
+                  placeholderTextColor={colors.placeholder}
+                  value={stateSearch}
+                  onChangeText={setStateSearch}
+                  autoFocus
+                />
+              </View>
+              <FlatList
+                data={stateSearch
+                  ? US_STATES.filter(s =>
+                      s.name.toLowerCase().includes(stateSearch.toLowerCase()) ||
+                      s.abbr.toLowerCase().includes(stateSearch.toLowerCase()))
+                  : US_STATES}
+                keyExtractor={item => item.abbr}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={[styles.pickerItem, item.abbr === locStateAbbr && styles.pickerItemSelected]}
+                    onPress={() => {
+                      setLocStateAbbr(item.abbr);
+                      setLocCity('');
+                      setStateSearch('');
+                      setShowStatePicker(false);
+                    }}
+                  >
+                    <Text style={[styles.pickerItemText, item.abbr === locStateAbbr && { color: colors.primary }]}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.pickerItemAbbr}>{item.abbr}</Text>
+                    {item.abbr === locStateAbbr && (
+                      <Ionicons name="checkmark" size={18} color={colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                )}
+                ItemSeparatorComponent={() => <View style={styles.pickerSep} />}
+              />
+            </View>
+          </Modal>
 
           <Text style={styles.label}>Phone</Text>
           <TextInput
@@ -513,5 +627,75 @@ const makeStyles = (c) => StyleSheet.create({
     color: c.textSecondary,
     marginTop: 4,
     fontStyle: 'italic',
+  },
+
+  // State picker
+  pickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: c.inputBackground || c.surface,
+  },
+  pickerButtonText: {
+    flex: 1,
+    marginBottom: 0,
+    borderWidth: 0,
+  },
+  pickerModal: {
+    flex: 1,
+    backgroundColor: c.background,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: c.border,
+  },
+  pickerModalTitle: {
+    fontSize: 17,
+    fontFamily: 'Figtree_700Bold',
+    color: c.text,
+  },
+  pickerSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    margin: 12,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 8,
+    backgroundColor: c.inputBackground || c.surface,
+  },
+  pickerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  pickerItemSelected: {
+    backgroundColor: c.primaryLight || '#FDF1EE',
+  },
+  pickerItemText: {
+    flex: 1,
+    fontSize: 16,
+    color: c.text,
+    fontFamily: 'Figtree_400Regular',
+  },
+  pickerItemAbbr: {
+    fontSize: 14,
+    color: c.textMuted,
+    fontFamily: 'Figtree_500Medium',
+    marginRight: 8,
+  },
+  pickerSep: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: c.border,
+    marginLeft: 16,
   },
 });
