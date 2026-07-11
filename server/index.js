@@ -1487,7 +1487,7 @@ app.post('/api/scrape-booking', async (req, res) => {
 // ── Google Calendar OAuth ─────────────────────────────────────────────────────
 
 const GCAL_REDIRECT_URI = `${process.env.BETTER_AUTH_URL}/api/calendar/google/callback`;
-const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar';
 
 app.get('/api/calendar/google/auth-url', async (req, res) => {
   const userId = await getSessionUserId(req);
