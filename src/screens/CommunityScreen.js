@@ -5,6 +5,7 @@ import ThreadDetailScreen from './ThreadDetailScreen';
 import CreateThreadScreen from './CreateThreadScreen';
 import { useThreads } from '../hooks/useThreads';
 import { supabase } from '../config/supabase';
+import { useTheme } from '../context/ThemeContext';
 
 // Three views the community tab can show
 const VIEW = {
@@ -21,6 +22,7 @@ const VIEW = {
  * view are immediately reflected when the user goes back to the list.
  */
 export default function CommunityScreen({ route, navigation }) {
+  const { colors } = useTheme();
   const [view, setView]                   = useState(VIEW.LIST);
   const [selectedThread, setSelectedThread] = useState(null);
 
@@ -134,7 +136,7 @@ export default function CommunityScreen({ route, navigation }) {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: '#FCFCFC' }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ThreadList
         threads={threads}
         upvotedIds={upvotedIds}

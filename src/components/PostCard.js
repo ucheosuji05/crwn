@@ -35,6 +35,7 @@ export default function PostCard({
   onNavigateToProfile,
   onNavigateToStylist,
   onCommentsOpenChange,
+  onClose,
   scrollViewRef,
   initialCommentsOpen = false,
 }) {
@@ -827,7 +828,7 @@ export default function PostCard({
         <Text style={[styles.webCmtPanelTitle, { color: colors.text }]}>
           {comments.length > 0 ? `${comments.length} Comment${comments.length !== 1 ? 's' : ''}` : 'Comments'}
         </Text>
-        <TouchableOpacity onPress={() => setCommentsExpanded(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+        <TouchableOpacity onPress={() => { setCommentsExpanded(false); onClose?.(); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
           <Ionicons name="close" size={20} color={colors.textMuted} />
         </TouchableOpacity>
       </View>

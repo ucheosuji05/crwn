@@ -172,7 +172,7 @@ export default function ThreadList({
               onPress={() => onThreadPress?.(item)}
             />
           )}
-          style={{ backgroundColor: '#FCFCFC' }}
+          style={{ backgroundColor: colors.background }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmpty}
@@ -221,10 +221,10 @@ export default function ThreadList({
 }
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FCFCFC' },
+  safe: { flex: 1, backgroundColor: c.background },
   header: {
     minHeight: HEADER_BAR_HEIGHT,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline,
   },
@@ -244,12 +244,12 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: 'rgba(232, 226, 217, 0.4)',
+    backgroundColor: c.inputBackground,
   },
   filterChipActive: { backgroundColor: c.primary },
   filterText: { fontSize: 13, fontWeight: '500', color: c.textSecondary },
   filterTextActive: { color: '#fff' },
-  listContent: { paddingBottom: 100, flexGrow: 1, backgroundColor: '#FCFCFC' },
+  listContent: { paddingBottom: 100, flexGrow: 1, backgroundColor: c.background },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   centerMessage: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   centerText: { color: c.textMuted, fontSize: 15, fontFamily: 'Figtree_500Medium' },

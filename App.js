@@ -27,6 +27,7 @@ import {
   Figtree_500Medium,
   Figtree_600SemiBold,
   Figtree_700Bold,
+  Figtree_800ExtraBold,
 } from '@expo-google-fonts/figtree';
 
 import OnboardingScreen from './src/screens/OnboardingScreen';
@@ -153,6 +154,7 @@ export default function App() {
     Figtree_500Medium,
     Figtree_600SemiBold,
     Figtree_700Bold,
+    Figtree_800ExtraBold,
   });
 
   if (!fontsLoaded && !fontError) {

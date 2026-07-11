@@ -393,13 +393,16 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
 
   // Check whether the user's hair profile is complete (own profile only)
   const [hairProfileComplete, setHairProfileComplete] = useState(true);
-  useEffect(() => {
+  const checkHairProfileComplete = () => {
     if (!isOwnProfile || !user?.id) return;
     profileService.getProfile(user.id).then(({ data }) => {
-      const hp = data?.hair_profiles?.[0];
+      const raw = data?.hair_profiles;
+      const hp = Array.isArray(raw) ? raw[0] : raw;
       setHairProfileComplete(!!(hp?.hair_type));
     });
-  }, [isOwnProfile, user?.id]);
+  };
+  useEffect(() => { checkHairProfileComplete(); }, [isOwnProfile, user?.id]);
+  useEffect(() => navigation.addListener('focus', checkHairProfileComplete), [navigation, isOwnProfile, user?.id]);
 
   // Mark booking notifications as read when client opens the Bookings tab
   useEffect(() => {

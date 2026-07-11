@@ -40,7 +40,11 @@ const COLL_GAP  = 24;
 const COLL_ROW_GAP = 28;
 
 // How many collection columns to show at a given container width
-function collCols(w)  { return w >= 700 ? 4 : w >= 480 ? 3 : 2; }
+function collCols(w)   { return w >= 900 ? 4 : w >= 600 ? 3 : 2; }
+// Gap/padding scale with column count so stacked cards have breathing room
+function collGap(n)    { return n >= 4 ? 40 : n >= 3 ? 32 : 24; }
+function collPad(n)    { return n >= 4 ? 36 : n >= 3 ? 28 : 24; }
+function collRowGap(n) { return n >= 4 ? 44 : n >= 3 ? 36 : 28; }
 // How many post-grid columns
 function postCols(w)  { return w >= 600 ? 3 : 2; }
 
@@ -62,15 +66,18 @@ export default function SavedLooks() {
     if (w > 0) setCw(w);
   };
 
-  const nCollCols   = 2;
+  const nCollCols   = collCols(cw);
   const nPostCols   = postCols(cw);
-  const collCardW   = (cw - COLL_PAD * 2 - COLL_GAP * (nCollCols - 1)) / nCollCols;
-  const collCardH   = collCardW * 1.15;
+  const COLL_GAP_V    = collGap(nCollCols);
+  const COLL_PAD_V    = collPad(nCollCols);
+  const COLL_ROW_GAP_V = collRowGap(nCollCols);
+  const collCardW   = (cw - COLL_PAD_V * 2 - COLL_GAP_V * (nCollCols - 1)) / nCollCols;
+  const collCardH   = collCardW * 1.1;
   const postTileW   = (cw - POST_GAP * (nPostCols - 1)) / nPostCols;
 
   const styles = useMemo(
-    () => makeStyles(colors, collCardW, collCardH, postTileW),
-    [colors, collCardW, collCardH, postTileW]
+    () => makeStyles(colors, collCardW, collCardH, postTileW, COLL_PAD_V, COLL_GAP_V, COLL_ROW_GAP_V),
+    [colors, collCardW, collCardH, postTileW, COLL_PAD_V, COLL_GAP_V, COLL_ROW_GAP_V]
   );
 
   // ── View state + transition ─────────────────────────────────────────────────
@@ -392,10 +399,10 @@ export default function SavedLooks() {
     for (let i = 0; i < items.length; i += nCollCols) {
       const row = items.slice(i, i + nCollCols);
       rows.push(
-        <View key={`coll-row-${i}`} style={styles.collRow}>
+        <View key={`coll-row-${i}`} style={[styles.collRow, { gap: COLL_GAP_V }]}>
           {row.map(item => item === 'all' ? renderCollectionCard('all') : renderCollectionCard(item))}
           {row.length < nCollCols && Array(nCollCols - row.length).fill(null).map((_, j) => (
-            <View key={`ph-${j}`} style={{ flex: 1 }} />
+            <View key={`ph-${j}`} style={{ width: collCardW }} />
           ))}
         </View>
       );
@@ -663,7 +670,7 @@ export default function SavedLooks() {
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
-const makeStyles = (c, collCardW, collCardH, postTileW) => {
+const makeStyles = (c, collCardW, collCardH, postTileW, collPadV, collGapV, collRowGapV) => {
   // Individual stack card is slightly smaller than the container cell
   const CW = collCardW - 14;
   const CH = collCardH - 8;
@@ -675,12 +682,12 @@ const makeStyles = (c, collCardW, collCardH, postTileW) => {
 
     // ── Collections grid ──────────────────────────────────────────────────────
     collectionsGrid: {
-      paddingHorizontal: COLL_PAD,
+      paddingHorizontal: collPadV,
       paddingTop: 20,
       paddingBottom: 48,
-      gap: COLL_ROW_GAP,
+      gap: collRowGapV,
     },
-    collRow: { flexDirection: 'row', justifyContent: 'space-between' },
+    collRow: { flexDirection: 'row' },
     collCard: { width: collCardW },
 
     // Stacked photo thumbnails

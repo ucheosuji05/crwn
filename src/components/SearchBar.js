@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -12,6 +12,7 @@ export default function SearchBar({
   containerStyle,
 }) {
   const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.container, containerStyle]}>
       <Ionicons name="search" size={20} color={colors.textMuted} style={styles.icon} />
@@ -35,7 +36,7 @@ export default function SearchBar({
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (c) => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -43,7 +44,9 @@ const styles = StyleSheet.create({
     marginVertical: 12,
     padding: 10,
     borderRadius: 10,
-    backgroundColor: 'rgba(232, 226, 217, 0.4)',
+    backgroundColor: c.isDark ? '#2A2A2A' : 'rgba(232, 226, 217, 0.4)',
+    borderWidth: c.isDark ? 1 : 0,
+    borderColor: c.isDark ? '#3A3A3A' : 'transparent',
   },
   icon: { marginRight: 8 },
   input: { flex: 1, fontSize: 16 },

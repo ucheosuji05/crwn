@@ -374,7 +374,7 @@ export default function StylistsScreen() {
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const makeStyles = (c) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#FFFFFF' },
+  safe: { flex: 1, backgroundColor: c.background },
   providerBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,7 +391,7 @@ const makeStyles = (c) => StyleSheet.create({
 
   header: {
     minHeight: HEADER_BAR_HEIGHT,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: c.hairline || c.borderLight,
   },
@@ -432,7 +432,7 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    backgroundColor: '#F2E8DA',
+    backgroundColor: c.isDark ? 'rgba(142, 104, 59, 0.2)' : '#F2E8DA',
   },
   clearAllText: {
     fontSize: 13,
@@ -458,7 +458,7 @@ const makeStyles = (c) => StyleSheet.create({
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   // ── List ──
-  list: { flex: 1, backgroundColor: '#FFFFFF' },
+  list: { flex: 1, backgroundColor: c.background },
   listContent: {
     paddingHorizontal: 16,
     paddingTop: 16,
@@ -472,7 +472,7 @@ const makeStyles = (c) => StyleSheet.create({
   // clipping instead happens on cardInner below.
   card: {
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.card,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: c.isDark ? 0 : 0.08,
@@ -480,7 +480,7 @@ const makeStyles = (c) => StyleSheet.create({
     elevation: c.isDark ? 0 : 2,
   },
   cardInner: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.card,
     borderRadius: 16,
     overflow: 'hidden',
   },
@@ -502,11 +502,11 @@ const makeStyles = (c) => StyleSheet.create({
     flex: 1,
     backgroundColor: c.borderLight,
     borderLeftWidth: 2,
-    borderLeftColor: '#FFFFFF',
+    borderLeftColor: c.background,
   },
   photoSmallBottom: {
     borderTopWidth: 2,
-    borderTopColor: '#FFFFFF',
+    borderTopColor: c.background,
   },
 
   // ── Card body ──
@@ -567,7 +567,7 @@ const makeStyles = (c) => StyleSheet.create({
   chip: {
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: '#F2E8DA',
+    backgroundColor: c.isDark ? 'rgba(142, 104, 59, 0.2)' : '#F2E8DA',
     borderRadius: 999,
     shadowColor: '#8E683B',
     shadowOffset: { width: 0, height: 2 },

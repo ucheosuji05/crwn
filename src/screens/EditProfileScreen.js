@@ -70,14 +70,6 @@ export default function EditProfileScreen({ onBack, onSave }) {
   const [stateSearch, setStateSearch] = useState('');
   const [phone, setPhone] = useState('');
 
-  // Hair profile fields
-  const [hairType, setHairType] = useState('');
-  const [porosity, setPorosity] = useState('');
-  const [density, setDensity] = useState('');
-  const [texture, setTexture] = useState('');
-  const [length, setLength] = useState('');
-  const [goals, setGoals] = useState([]);
-  const [goalsInput, setGoalsInput] = useState('');
 
   useEffect(() => {
     fetchProfile();
@@ -107,22 +99,6 @@ export default function EditProfileScreen({ onBack, onSave }) {
       }
       setPhone(data.phone || '');
 
-      // Set hair profile data
-      const hairProfile = data.hair_profiles?.[0];
-      if (hairProfile) {
-        setHairType(hairProfile.hair_type || '');
-        setPorosity(hairProfile.porosity || '');
-        setDensity(hairProfile.density || '');
-        setTexture(hairProfile.texture || '');
-        setLength(hairProfile.length || '');
-
-        // Parse goals if it's a JSON string
-        const goalsData = typeof hairProfile.goals === 'string'
-          ? JSON.parse(hairProfile.goals || '[]')
-          : hairProfile.goals || [];
-        setGoals(goalsData);
-        setGoalsInput(goalsData.join(', '));
-      }
     }
     setLoading(false);
   };
@@ -213,27 +189,6 @@ export default function EditProfileScreen({ onBack, onSave }) {
       Alert.alert('Error', profileError.message || 'Failed to update profile');
       setSaving(false);
       return;
-    }
-
-    // Parse goals from comma-separated string
-    const parsedGoals = goalsInput
-      .split(',')
-      .map(g => g.trim())
-      .filter(g => g.length > 0);
-
-    // Update hair profile
-    const { error: hairError } = await profileService.updateHairProfile(user.id, {
-      hair_type: hairType,
-      porosity: porosity,
-      density: density,
-      texture: texture,
-      length: length,
-      goals: parsedGoals,
-    });
-
-    if (hairError) {
-      console.error('Hair profile update error:', hairError);
-      Alert.alert('Warning', 'Profile updated but hair profile update failed');
     }
 
     // Refresh AuthContext so every component reading profile stays in sync
@@ -437,72 +392,6 @@ export default function EditProfileScreen({ onBack, onSave }) {
           />
         </View>
 
-        {/* Hair Profile */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Hair Profile</Text>
-          <Text style={styles.sectionDescription}>
-            This information helps us personalize your experience
-          </Text>
-
-          <Text style={styles.label}>Hair Type</Text>
-          <TextInput
-            style={styles.input}
-            value={hairType}
-            onChangeText={setHairType}
-            placeholder="e.g., Type 4C, 3B, Coily"
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <Text style={styles.label}>Porosity</Text>
-          <TextInput
-            style={styles.input}
-            value={porosity}
-            onChangeText={setPorosity}
-            placeholder="Low, Medium, High"
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <Text style={styles.label}>Density</Text>
-          <TextInput
-            style={styles.input}
-            value={density}
-            onChangeText={setDensity}
-            placeholder="Low, Medium, High"
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <Text style={styles.label}>Texture</Text>
-          <TextInput
-            style={styles.input}
-            value={texture}
-            onChangeText={setTexture}
-            placeholder="e.g., Coarse, Fine, Medium"
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <Text style={styles.label}>Length</Text>
-          <TextInput
-            style={styles.input}
-            value={length}
-            onChangeText={setLength}
-            placeholder="e.g., Short, Shoulder Length, Long"
-            placeholderTextColor={colors.placeholder}
-          />
-
-          <Text style={styles.label}>Hair Goals</Text>
-          <TextInput
-            style={[styles.input, styles.textArea]}
-            value={goalsInput}
-            onChangeText={setGoalsInput}
-            placeholder="e.g., Hair growth, Damage repair, Moisture retention (separate with commas)"
-            placeholderTextColor={colors.placeholder}
-            multiline
-            numberOfLines={3}
-          />
-          <Text style={styles.helpText}>
-            Separate multiple goals with commas
-          </Text>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );

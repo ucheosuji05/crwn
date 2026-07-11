@@ -231,38 +231,29 @@ export const profileService = {
 
   // Update hair profile
   updateHairProfile: async (userId, hairData) => {
-    try {
-      // Check if hair profile exists
-      const { data: existing } = await supabase
+    const { data: existing } = await supabase
+      .from('hair_profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      const { data, error } = await supabase
         .from('hair_profiles')
-        .select('id')
+        .update(hairData)
         .eq('user_id', userId)
+        .select()
         .single();
-
-      let result;
-      
-      if (existing) {
-        // Update existing hair profile
-        result = await supabase
-          .from('hair_profiles')
-          .update(hairData)
-          .eq('user_id', userId)
-          .select()
-          .single();
-      } else {
-        // Create new hair profile
-        result = await supabase
-          .from('hair_profiles')
-          .insert({ ...hairData, user_id: userId })
-          .select()
-          .single();
-      }
-
-      if (result.error) throw result.error;
-      return { data: result.data, error: null };
-    } catch (error) {
-      console.error('Error updating hair profile:', error);
-      return { data: null, error };
+      if (error) throw error;
+      return { data, error: null };
+    } else {
+      const { data, error } = await supabase
+        .from('hair_profiles')
+        .insert({ ...hairData, user_id: userId })
+        .select()
+        .single();
+      if (error) throw error;
+      return { data, error: null };
     }
   },
 

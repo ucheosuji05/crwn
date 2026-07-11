@@ -10,9 +10,8 @@ import { getAuthToken } from '../../lib/auth-client';
 import { AUTH_URL } from '../../lib/auth-url';
 
 const FEEDBACK_TYPES = [
-  { value: 'bug',        label: 'Report a Bug',      icon: 'bug-outline' },
-  { value: 'suggestion', label: 'Suggest a Feature',  icon: 'bulb-outline' },
-  { value: 'question',   label: 'Ask a Question',     icon: 'help-circle-outline' },
+  { value: 'bug',        label: 'Report a Bug',     icon: 'bug-outline' },
+  { value: 'suggestion', label: 'Suggest a Feature', icon: 'bulb-outline' },
 ];
 
 async function postFeedback(payload) {

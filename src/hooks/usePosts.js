@@ -2,10 +2,12 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { postService } from '../services/postService';
 import { supabase } from '../config/supabase';
 import { useBlock } from '../context/BlockContext';
+import { scorePost } from '../utils/feedScoring';
 
 const PAGE_SIZE = 20;
+const EXPLORE_BATCH = 60; // larger initial batch for client-side personalization
 
-export const usePosts = (userId = null) => {
+export const usePosts = (userId = null, userHairProfile = null, userLocation = null) => {
   const { allHiddenIds } = useBlock();
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ export const usePosts = (userId = null) => {
       if (userId) {
         result = await postService.getPostsByUser(userId);
       } else {
-        result = await postService.getPosts(PAGE_SIZE, 0, Array.from(hiddenIdsRef.current));
+        result = await postService.getPosts(EXPLORE_BATCH, 0, Array.from(hiddenIdsRef.current));
       }
 
       if (result.error) {
@@ -37,7 +39,7 @@ export const usePosts = (userId = null) => {
         const fetched = result.data || [];
         setPosts(fetched);
         offsetRef.current = fetched.length;
-        setHasMore(!userId && fetched.length === PAGE_SIZE);
+        setHasMore(!userId && fetched.length === EXPLORE_BATCH);
       }
     } catch (err) {
       setError(err);
@@ -112,7 +114,7 @@ export const usePosts = (userId = null) => {
     try {
       const result = userId
         ? await postService.getPostsByUser(userId)
-        : await postService.getPosts(PAGE_SIZE, 0, Array.from(hiddenIdsRef.current));
+        : await postService.getPosts(EXPLORE_BATCH, 0, Array.from(hiddenIdsRef.current));
       if (!result.error) setPosts(result.data || []);
     } catch (err) {
       console.error('usePosts silentRefetch error:', err);
@@ -172,11 +174,23 @@ export const usePosts = (userId = null) => {
     };
   }, [userId]);
 
-  // Filter out hidden users (blocked by me or blocking me) for instant feed update
-  const visiblePosts = useMemo(
-    () => posts.filter(p => !allHiddenIds.has(p.user_id)),
-    [posts, allHiddenIds]
-  );
+  // Filter out blocked users; always sort explore feed by score (engagement+recency
+  // always available; location and hair type contribute when data exists)
+  const visiblePosts = useMemo(() => {
+    const filtered = posts.filter(p => !allHiddenIds.has(p.user_id));
+    if (userId) return filtered; // profile feeds stay chronological
+    const sorted = [...filtered].sort(
+      (a, b) => scorePost(b, userHairProfile, userLocation) - scorePost(a, userHairProfile, userLocation)
+    );
+    console.log('[feed] top 5 scores:', sorted.slice(0, 5).map(p => ({
+      id: p.id?.slice(0, 8),
+      likes: p.likes?.[0]?.count ?? 0,
+      comments: p.comments?.[0]?.count ?? 0,
+      age_days: Math.round((Date.now() - new Date(p.created_at).getTime()) / 86400000),
+      score: Math.round(scorePost(p, userHairProfile, userLocation) * 10) / 10,
+    })));
+    return sorted;
+  }, [posts, allHiddenIds, userId, userHairProfile, userLocation]);
 
   return { posts: visiblePosts, loading, loadingMore, hasMore, loadMore, error, refresh: fetchPosts, silentRefetch, deletePost, updatePost };
 };

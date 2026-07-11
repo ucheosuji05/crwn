@@ -89,13 +89,13 @@ export default function ThreadCard({ thread, isUpvoted = false, onUpvoteToggle, 
 
 const makeStyles = (c) => StyleSheet.create({
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.card,
     marginHorizontal: 14,
     marginVertical: 8,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E8DDD3',
+    borderColor: c.border,
     shadowColor: '#000',
     shadowOpacity: c.isDark ? 0 : 0.10,
     shadowRadius: 12,
@@ -104,7 +104,7 @@ const makeStyles = (c) => StyleSheet.create({
   },
   tagBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#F2E8DA',
+    backgroundColor: c.isDark ? 'rgba(142, 104, 59, 0.2)' : '#F2E8DA',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 4,

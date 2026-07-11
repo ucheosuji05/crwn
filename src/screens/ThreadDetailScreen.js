@@ -493,7 +493,7 @@ const makeStyles = (c) => StyleSheet.create({
   header: {
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 12, paddingVertical: 10,
-    borderBottomWidth: 1, borderBottomColor: '#f0ece8',
+    borderBottomWidth: 1, borderBottomColor: c.border,
     backgroundColor: c.surface,
   },
   backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
@@ -613,7 +613,7 @@ const makeStyles = (c) => StyleSheet.create({
   inputBar: {
     backgroundColor: c.surface,
     borderTopWidth: 1,
-    borderTopColor: '#f0ece8',
+    borderTopColor: c.border,
     paddingBottom: 10,
   },
   inputRow: {
@@ -621,7 +621,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 14, paddingTop: 10, gap: 10,
   },
   input: {
-    flex: 1, backgroundColor: '#EDEDED', borderRadius: 20,
+    flex: 1, backgroundColor: c.inputBackground, borderRadius: 20,
     paddingHorizontal: 16, paddingVertical: 10,
     fontSize: 14, color: c.text, maxHeight: 100,
   },
@@ -630,6 +630,6 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 16, paddingVertical: 10,
     minWidth: 56, alignItems: 'center',
   },
-  postBtnDisabled: { backgroundColor: '#D1D1D1' },
+  postBtnDisabled: { backgroundColor: c.border },
   postBtnText: { color: '#fff', fontSize: 14, fontFamily: 'Figtree_600SemiBold' },
 });

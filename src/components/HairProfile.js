@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { profileService } from '../services/profileService';
 import { useTheme } from '../context/ThemeContext';
+import { useNavigation } from '@react-navigation/native';
 
-const BURNT_OCHRE = '#B35D2B';
+const HONEY = '#E8A020';
 
 const FIELDS = [
   { label: 'Hair Pattern',    key: 'hair_type' },
@@ -11,15 +13,40 @@ const FIELDS = [
   { label: 'Density',         key: 'density' },
   { label: 'Strand Thickness',key: 'texture' },
   { label: 'Scalp Type',      key: 'scalp_type' },
-  { label: 'Hair State',      key: 'hair_state' },
 ];
 
 export default function HairProfile({ viewedUserId }) {
   const { colors } = useTheme();
+  const navigation = useNavigation();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [hairProfile, setHairProfile] = useState(null);
   const [loading, setLoading]         = useState(true);
+
+  const fetchHairProfile = async () => {
+    setLoading(true);
+    try {
+      const { data } = await profileService.getProfile(viewedUserId);
+      setHairProfile(parseHairProfile(data));
+    } catch {
+      setHairProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const parseHairProfile = (data) => {
+    const hp = data?.hair_profiles;
+    if (!hp) return null;
+    return Array.isArray(hp) ? hp[0] || null : hp;
+  };
+
+  const silentRefetch = async () => {
+    try {
+      const { data } = await profileService.getProfile(viewedUserId);
+      setHairProfile(parseHairProfile(data));
+    } catch {}
+  };
 
   useEffect(() => {
     if (viewedUserId) {
@@ -29,17 +56,11 @@ export default function HairProfile({ viewedUserId }) {
     }
   }, [viewedUserId]);
 
-  const fetchHairProfile = async () => {
-    setLoading(true);
-    try {
-      const { data } = await profileService.getProfile(viewedUserId);
-      setHairProfile(data?.hair_profiles?.[0] || null);
-    } catch {
-      setHairProfile(null);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Re-fetch silently when the screen regains focus after editing via the wizard
+  useEffect(() => {
+    if (!viewedUserId) return;
+    return navigation.addListener('focus', silentRefetch);
+  }, [navigation, viewedUserId]);
 
   if (loading) {
     return (
@@ -49,10 +70,14 @@ export default function HairProfile({ viewedUserId }) {
     );
   }
 
-  const val = (key) => hairProfile?.[key] || '--';
+  const val = (key) => {
+    const v = hairProfile?.[key];
+    if (!v) return '--';
+    return v.charAt(0).toUpperCase() + v.slice(1);
+  };
 
   const goals = (() => {
-    const g = hairProfile?.goals;
+    const g = hairProfile?.hair_goals;
     if (!g || (Array.isArray(g) && g.length === 0)) return '--';
     if (Array.isArray(g)) return g.join(', ');
     return g;
@@ -66,6 +91,12 @@ export default function HairProfile({ viewedUserId }) {
 
   return (
     <View style={styles.container}>
+      {/* Privacy notice */}
+      <View style={styles.privateBadge}>
+        <Ionicons name="lock-closed-outline" size={14} color={HONEY} style={{ marginRight: 6 }} />
+        <Text style={styles.privateText}>Private - Shared with stylists only</Text>
+      </View>
+
       {/* 2-column grid */}
       <View style={styles.grid}>
         {FIELDS.map((f) => (
@@ -94,6 +125,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 24,
+    backgroundColor: c.background,
   },
   grid: {
     flexDirection: 'row',
@@ -103,16 +135,16 @@ const makeStyles = (c) => StyleSheet.create({
   },
   card: {
     width: '47.5%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.card,
     borderRadius: 16,
     paddingTop: 16,
     paddingHorizontal: 16,
     paddingBottom: 16,
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: c.isDark ? 0 : 0.08,
     shadowRadius: 6,
-    elevation: 2,
+    elevation: c.isDark ? 0 : 2,
   },
   cardFull: {
     width: '100%',
@@ -120,12 +152,28 @@ const makeStyles = (c) => StyleSheet.create({
   cardLabel: {
     fontSize: 14,
     fontFamily: 'Figtree_600SemiBold',
-    color: BURNT_OCHRE,
+    color: HONEY,
     marginBottom: 20,
   },
   cardValue: {
-    fontSize: 14,
+    fontSize: 18,
     fontFamily: 'Figtree_600SemiBold',
     color: c.text,
+  },
+  privateBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: c.cardWarm,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 14,
+  },
+  privateText: {
+    fontSize: 14,
+    fontFamily: 'Figtree_400Regular',
+    color: HONEY,
   },
 });

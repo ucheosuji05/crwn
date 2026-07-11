@@ -285,7 +285,7 @@ export function ImageWithFallback({ uri }) {
 
 export default function ExploreScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { colors } = useTheme();
   const isWebLayout = useIsWebLayout();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -320,7 +320,18 @@ export default function ExploreScreen() {
   const pendingDimsRef = useRef({});
   const rafRef = useRef(null);
 
-  const { posts, loading, loadingMore, hasMore, loadMore, refresh } = usePosts();
+  const [viewerHairProfile, setViewerHairProfile] = useState(null);
+  useEffect(() => {
+    if (!user?.id) return;
+    supabase
+      .from('hair_profiles')
+      .select('hair_type, porosity, density, texture, hair_goals')
+      .eq('user_id', user.id)
+      .maybeSingle()
+      .then(({ data }) => setViewerHairProfile(data || null));
+  }, [user?.id]);
+
+  const { posts, loading, loadingMore, hasMore, loadMore, refresh } = usePosts(null, viewerHairProfile, profile?.location);
   const { allHiddenIds } = useBlock();
   const isLoadingMoreRef = useRef(false);
 
@@ -864,6 +875,7 @@ export default function ExploreScreen() {
                 currentUserId={user?.id}
                 scrollViewRef={postModalScrollRef}
                 onCommentsOpenChange={setPostCommentsOpen}
+                onClose={() => { setSelectedPost(null); setPostCommentsOpen(false); }}
                 onDelete={async (postId) => {
                   const result = await postService.deletePost(postId);
                   if (result?.success) { setSelectedPost(null); setPostCommentsOpen(false); }
@@ -896,7 +908,7 @@ export default function ExploreScreen() {
 
 const makeStyles = (c) => StyleSheet.create({
   container: { flex: 1, backgroundColor: c.surface },
-  safeHeader: { backgroundColor: '#FFFFFF' },
+  safeHeader: { backgroundColor: c.surface },
 
   // ── Header ──
   header: {
@@ -905,7 +917,7 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: c.surface,
     overflow: 'hidden',
   },
   headerLogo: {
@@ -1032,7 +1044,7 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: 'rgba(232, 226, 217, 0.4)',
+    backgroundColor: c.inputBackground,
   },
   filterChipActive: {
     backgroundColor: c.primary,
@@ -1040,7 +1052,7 @@ const makeStyles = (c) => StyleSheet.create({
   filterChipText: {
     fontSize: 14,
     fontFamily: 'Figtree_400Regular',
-    color: '#5E5E5E',
+    color: c.textSecondary,
   },
   filterChipTextActive: {
     fontSize: 14,

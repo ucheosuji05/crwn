@@ -22,7 +22,7 @@ export const postService = {
       .from('posts')
       .select(`
         *,
-        profiles:user_id (id, username, full_name, avatar_url, is_stylist, hair_profiles(hair_type)),
+        profiles:user_id (id, username, full_name, avatar_url, is_stylist, location, hair_profiles(hair_type)),
         stylists:profiles!posts_stylist_id_fkey (id, username, full_name),
         post_media (id, media_url, media_type, position),
         likes(count),

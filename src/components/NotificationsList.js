@@ -586,7 +586,7 @@ const makeStyles = (c) => StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: 'rgba(232, 226, 217, 0.4)',
+    backgroundColor: c.inputBackground,
   },
   filterChipActive: {
     backgroundColor: c.primary,
@@ -594,7 +594,7 @@ const makeStyles = (c) => StyleSheet.create({
   filterChipText: {
     fontSize: 14,
     fontFamily: 'Figtree_400Regular',
-    color: '#5E5E5E',
+    color: c.textSecondary,
   },
   filterChipTextActive: {
     fontSize: 14,
