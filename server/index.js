@@ -1506,19 +1506,36 @@ app.get('/api/calendar/google/auth-url', async (req, res) => {
   res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
 });
 
+function calendarCallbackPage(params) {
+  const deepLink = `crwn://calendar-callback?${new URLSearchParams(params)}`;
+  const isSuccess = params.success === 'true';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>CRWN Calendar</title>
+  <style>body{font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;background:#1a1a1a;color:#fff}
+  .box{text-align:center;padding:32px}.icon{font-size:48px;margin-bottom:16px}
+  p{color:#aaa;margin:8px 0 0}</style></head><body>
+  <div class="box">
+    <div class="icon">${isSuccess ? '✅' : '❌'}</div>
+    <h2>${isSuccess ? 'Google Calendar connected!' : 'Connection failed'}</h2>
+    <p>${isSuccess ? 'You can close this window and return to CRWN.' : 'Please close this window and try again.'}</p>
+  </div>
+  <script>
+    try { window.location.href = ${JSON.stringify(deepLink)}; } catch(e) {}
+    setTimeout(function(){ try { window.close(); } catch(e) {} }, 800);
+  </script></body></html>`;
+}
+
 app.get('/api/calendar/google/callback', async (req, res) => {
   const { code, state, error } = req.query;
-  const appScheme = 'crwn://calendar-callback';
 
   if (error || !code) {
-    return res.redirect(`${appScheme}?error=${encodeURIComponent(error || 'cancelled')}`);
+    return res.send(calendarCallbackPage({ error: error || 'cancelled' }));
   }
 
   let stylistId;
   try {
     stylistId = JSON.parse(Buffer.from(state, 'base64').toString()).stylistId;
   } catch {
-    return res.redirect(`${appScheme}?error=invalid_state`);
+    return res.send(calendarCallbackPage({ error: 'invalid_state' }));
   }
 
   try {
@@ -1537,7 +1554,7 @@ app.get('/api/calendar/google/callback', async (req, res) => {
 
     if (!tokenData.access_token) {
       console.error('[calendar/callback] token error:', tokenData);
-      return res.redirect(`${appScheme}?error=token_failed`);
+      return res.send(calendarCallbackPage({ error: 'token_failed' }));
     }
 
     const tokenExpiry = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();
@@ -1557,10 +1574,10 @@ app.get('/api/calendar/google/callback', async (req, res) => {
       }),
     });
 
-    return res.redirect(`${appScheme}?success=true`);
+    return res.send(calendarCallbackPage({ success: 'true' }));
   } catch (err) {
     console.error('[calendar/callback] error:', err.message);
-    return res.redirect(`${appScheme}?error=server_error`);
+    return res.send(calendarCallbackPage({ error: 'server_error' }));
   }
 });
 
