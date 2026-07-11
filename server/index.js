@@ -1560,6 +1560,30 @@ app.get('/api/calendar/google/callback', async (req, res) => {
     const tokenExpiry = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();
     const h = supabaseAdminHeaders();
 
+    // Create a dedicated "CRWN Bookings" calendar if one doesn't exist yet
+    let calendarId = 'primary';
+    try {
+      const listRes = await fetch(
+        'https://www.googleapis.com/calendar/v3/users/me/calendarList',
+        { headers: { Authorization: `Bearer ${tokenData.access_token}` } }
+      );
+      const listData = await listRes.json();
+      const existing = (listData.items || []).find(c => c.summary === 'CRWN Bookings');
+      if (existing) {
+        calendarId = existing.id;
+      } else {
+        const createRes = await fetch('https://www.googleapis.com/calendar/v3/calendars', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${tokenData.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ summary: 'CRWN Bookings' }),
+        });
+        const created = await createRes.json();
+        if (created.id) calendarId = created.id;
+      }
+    } catch (calErr) {
+      console.warn('[calendar/callback] could not create CRWN Bookings calendar:', calErr.message);
+    }
+
     await fetch(`${SUPABASE_URL}/rest/v1/stylist_calendar_integrations`, {
       method: 'POST',
       headers: { ...h, Prefer: 'resolution=merge-duplicates,return=minimal' },
@@ -1569,7 +1593,7 @@ app.get('/api/calendar/google/callback', async (req, res) => {
         access_token:        tokenData.access_token,
         refresh_token:       tokenData.refresh_token || null,
         token_expiry:        tokenExpiry,
-        google_calendar_id:  'primary',
+        google_calendar_id:  calendarId,
         updated_at:          new Date().toISOString(),
       }),
     });
