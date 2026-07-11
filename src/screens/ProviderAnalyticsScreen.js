@@ -176,8 +176,9 @@ export default function ProviderAnalyticsScreen() {
   const [loading,        setLoading]        = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
   const [posts,          setPosts]          = useState([]);
-  const [stats,          setStats]          = useState(null);
   const [bmCounts,       setBmCounts]       = useState({});
+  const [bookings,       setBookings]       = useState([]);
+  const [followerCount,  setFollowerCount]  = useState(0);
   const [weekly,         setWeekly]         = useState([]);
   const [comments,       setComments]       = useState([]);
   const [selectedPost,   setSelectedPost]   = useState(null);
@@ -194,18 +195,18 @@ export default function ProviderAnalyticsScreen() {
       const safePosts = rawPosts || [];
       const postIds   = safePosts.map(p => p.id);
 
-      const [bm, wk, cm, { data: bkgs }] = await Promise.all([
+      const [bm, wk, cm, { data: bkgs }, followerCount] = await Promise.all([
         analyticsService.getBookmarkCounts(postIds),
         analyticsService.getWeeklyActivity(postIds),
         analyticsService.getRecentComments(postIds, 6),
         bookingService.getBookingsByStylist(user.id),
+        analyticsService.getFollowerCount(user.id),
       ]);
 
-      const aggStats = analyticsService.computeAggregateStats(safePosts, bm, bkgs || []);
-
       setPosts(safePosts);
-      setStats(aggStats);
       setBmCounts(bm);
+      setBookings(bkgs || []);
+      setFollowerCount(followerCount);
       setWeekly(wk);
       setComments(cm.data || []);
       if (safePosts.length > 0) setSelectedPost(safePosts[0]);
@@ -227,10 +228,22 @@ export default function ProviderAnalyticsScreen() {
     return posts.filter(p => new Date(p.created_at) >= cutoff);
   }, [posts, filterDays]);
 
+  const stats = useMemo(() => {
+    const filteredBmCounts = Object.fromEntries(filteredPosts.map(p => [p.id, bmCounts[p.id] || 0]));
+    const filteredBookings = filterDays
+      ? bookings.filter(b => {
+          if (!b.appointment_date) return false;
+          const cutoff = new Date(Date.now() - filterDays * 24 * 60 * 60 * 1000);
+          return new Date(b.appointment_date) >= cutoff;
+        })
+      : bookings;
+    return analyticsService.computeAggregateStats(filteredPosts, filteredBmCounts, filteredBookings, followerCount);
+  }, [filteredPosts, bmCounts, bookings, followerCount, filterDays]);
+
   const filterLabel = FILTER_OPTIONS.find(f => f.value === filterDays)?.label ?? 'Last 30 days';
 
   const postMetrics = (post) =>
-    analyticsService.computePostMetrics(post, bmCounts[post.id] || 0, stats?.totalBookings || 0);
+    analyticsService.computePostMetrics(post, bmCounts[post.id] || 0, followerCount);
 
   const selectedMetrics = useMemo(
     () => selectedPost ? postMetrics(selectedPost) : null,
@@ -239,14 +252,14 @@ export default function ProviderAnalyticsScreen() {
 
   // ── Overview stats card (matches Figma exactly) ────────────────────────────
   const renderStatsCard = () => {
-    if (!stats) return null;
-    const { totalCrowns, totalSaves, totalBookings, engagementRate } = stats;
+    if (loading) return null;
+    const { totalCrowns, totalSaves, totalBookings, engagementRate, followerCount } = stats;
 
     // Each stat: outline icons, slightly larger size = visually thicker stroke
     const statPairs = [
       [
-        { icon: 'crown-outline',    isMCI: true,  label: 'Total Crowns',   value: fmtNum(totalCrowns)     },
-        { icon: 'eye-outline',      isMCI: false, label: 'Profile Visits', value: fmtNum(totalCrowns * 5) },
+        { icon: 'heart-outline',  isMCI: false, label: 'Total Likes',  value: fmtNum(totalCrowns)   },
+        { icon: 'people-outline', isMCI: false, label: 'Followers',    value: fmtNum(followerCount) },
       ],
       [
         { icon: 'bookmark-outline', isMCI: false, label: 'Total Saves',    value: fmtNum(totalSaves)      },
@@ -319,8 +332,8 @@ export default function ProviderAnalyticsScreen() {
               {/* Labels row */}
               <View style={styles.metricLabelsRow}>
                 {[
-                  { icon: 'crown-outline',    isMCI: true,  label: 'Crowns' },
-                  { icon: 'eye-outline',      isMCI: false, label: 'Visits' },
+                  { icon: 'heart-outline',    isMCI: false, label: 'Likes'  },
+                  { icon: 'people-outline',   isMCI: false, label: 'Reach'  },
                   { icon: 'bookmark-outline', isMCI: false, label: 'Saves'  },
                 ].map(({ icon, isMCI, label }) => (
                   <View key={label} style={styles.metricCol}>
@@ -336,7 +349,7 @@ export default function ProviderAnalyticsScreen() {
               </View>
               {/* Values row */}
               <View style={styles.metricValuesRow}>
-                {[m.likes, m.estViews, m.saves].map((val, i) => (
+                {[m.likes, m.reach, m.saves].map((val, i) => (
                   <View key={i} style={styles.metricCol}>
                     <Text style={styles.metricValue}>{fmtNum(val)}</Text>
                   </View>
@@ -385,13 +398,13 @@ export default function ProviderAnalyticsScreen() {
     const thumb  = post.post_media?.[0]?.media_url;
     const tags   = Array.isArray(post.tags) ? post.tags.map(t => `#${t}`).join(' ') : '';
     const m      = selectedMetrics;
-    const cvRate = ((stats?.totalBookings || 0) / Math.max(m.estViews, 1) * 100).toFixed(1);
+    const cvRate = ((stats.totalBookings || 0) / Math.max(m.reach, 1) * 100).toFixed(1);
 
     // Engagement pairs — same flat layout as the overview stats card
     const engPairs = [
       [
-        { icon: 'crown-outline',     isMCI: true,  val: m.likes,    label: 'Crowns'   },
-        { icon: 'eye-outline',        isMCI: false, val: m.estViews, label: 'Views'    },
+        { icon: 'heart-outline',     isMCI: false, val: m.likes,   label: 'Likes'    },
+        { icon: 'people-outline',    isMCI: false, val: m.reach,   label: 'Reach'    },
       ],
       [
         { icon: 'bookmark-outline',   isMCI: false, val: m.saves,    label: 'Saves'    },
@@ -729,6 +742,7 @@ const makeStyles = (c) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 12,
+    zIndex: 20,
   },
   sectionHeaderLabel: {
     fontSize: 12,
@@ -747,7 +761,7 @@ const makeStyles = (c) => StyleSheet.create({
     paddingVertical: 6,
   },
   filterChipText:   { fontSize: 12, fontFamily: 'Figtree_500Medium' },
-  filterDropdown:   { position: 'absolute', top: 34, right: 0, minWidth: 155, borderWidth: 1, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 8, overflow: 'hidden' },
+  filterDropdown:   { position: 'absolute', top: 34, right: 0, minWidth: 155, borderWidth: 1, borderRadius: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 8, zIndex: 30 },
   filterOption:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 11 },
   filterOptionText: { fontSize: 13, fontFamily: 'Figtree_400Regular' },
 
@@ -770,6 +784,7 @@ const makeStyles = (c) => StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 4,
+    zIndex: 1,
   },
   statRow: {
     flexDirection: 'row',

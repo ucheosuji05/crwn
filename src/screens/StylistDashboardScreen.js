@@ -17,6 +17,8 @@ import { bookingService } from '../services/bookingService';
 import { analyticsService } from '../services/analyticsService';
 import { supabase } from '../config/supabase';
 import AddToCalendarButton from '../components/AddToCalendarButton';
+import { addToCalendar } from '../utils/calendarUtils';
+import { googleCalendarService } from '../services/googleCalendarService';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -150,7 +152,7 @@ const APPT_STATUS_CFG = {
   cancellation_requested: { label: 'Cancel Requested', bg: '#FEF2F2', text: '#991B1B', dot: '#EF4444' },
 };
 
-function AppointmentCard({ booking, colors, styles, onPress, onAccept, onDecline, onApproveCancellation, onDenyCancellation }) {
+function AppointmentCard({ booking, colors, styles, onPress, onAccept, onDecline, onApproveCancellation, onDenyCancellation, onAddToCalendar }) {
   const clientName      = booking.client?.full_name || booking.client?.username || 'Client';
   const time            = formatTime(booking.appointment_time);
   const duration        = formatDuration(booking.duration_min || booking.service?.duration_min);
@@ -171,6 +173,15 @@ function AppointmentCard({ booking, colors, styles, onPress, onAccept, onDecline
           <View style={styles.depositBadge}>
             <Text style={styles.depositBadgeText}>Deposit Paid</Text>
           </View>
+        )}
+        {onAddToCalendar && (
+          <TouchableOpacity
+            onPress={(e) => { e.stopPropagation?.(); onAddToCalendar(); }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={{ marginLeft: 'auto' }}
+          >
+            <Ionicons name="calendar-outline" size={17} color={colors.primary} />
+          </TouchableOpacity>
         )}
       </View>
       <Text style={styles.appointmentService}>{booking.service_name}</Text>
@@ -811,6 +822,8 @@ export default function StylistDashboardScreen() {
   const [postModalVisible,  setPostModalVisible]  = useState(false);
   const [filterDays,        setFilterDays]        = useState(30);
   const [filterMenuOpen,    setFilterMenuOpen]    = useState(false);
+  const [gcalConnected,     setGcalConnected]     = useState(null); // null = unknown
+  const [gcalConnecting,    setGcalConnecting]    = useState(false);
 
   // ── Data loading ─────────────────────────────────────────────────────────────
 
@@ -889,6 +902,9 @@ export default function StylistDashboardScreen() {
   useEffect(() => { loadServices(); }, [loadServices]);
   useEffect(() => { loadAnalytics(); }, [loadAnalytics]);
   useEffect(() => { loadWorkSchedules(); }, [loadWorkSchedules]);
+  useEffect(() => {
+    googleCalendarService.getStatus().then(s => setGcalConnected(s.connected));
+  }, []);
 
   // Re-fetch bookings every time this tab gains focus (e.g. after accepting
   // a request from the Inbox screen) so the calendar stays in sync.
@@ -963,6 +979,10 @@ export default function StylistDashboardScreen() {
       return;
     }
     setBookings(prev => prev.map(b => b.id === bookingId ? { ...b, status: 'upcoming' } : b));
+    // Push to Google Calendar if the stylist has connected it (fire-and-forget)
+    if (booking) {
+      googleCalendarService.createBookingEvent(booking).catch(() => {});
+    }
     // Navigate to the day on the calendar so the stylist immediately sees it
     if (booking?.appointment_date) {
       const apptDay = new Date(booking.appointment_date + 'T00:00:00');
@@ -1657,6 +1677,13 @@ export default function StylistDashboardScreen() {
                     colors={colors}
                     styles={styles}
                     onPress={() => openAppointmentDetail(b)}
+                    onAddToCalendar={() => addToCalendar({
+                      title: `${b.service_name} – ${b.client?.full_name || b.client?.username || 'Client'}`,
+                      appointmentDate: b.appointment_date,
+                      appointmentTime: b.appointment_time,
+                      durationMin: b.duration_min || 60,
+                      notes: b.notes || '',
+                    })}
                   />
                 ))}
               </>
@@ -1702,6 +1729,34 @@ export default function StylistDashboardScreen() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Google Calendar sync banner */}
+      {gcalConnected === false && (
+        <TouchableOpacity
+          style={styles.gcalBanner}
+          onPress={async () => {
+            setGcalConnecting(true);
+            const result = await googleCalendarService.connect();
+            setGcalConnecting(false);
+            if (result.success) setGcalConnected(true);
+            else if (result.error !== 'cancelled') Alert.alert('Connection failed', 'Could not connect Google Calendar. Please try again.');
+          }}
+          disabled={gcalConnecting}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="logo-google" size={15} color={colors.primary} />
+          <Text style={styles.gcalBannerText}>
+            {gcalConnecting ? 'Connecting…' : 'Link Google Calendar — bookings sync automatically'}
+          </Text>
+          {!gcalConnecting && <Ionicons name="chevron-forward" size={14} color={colors.primary} />}
+        </TouchableOpacity>
+      )}
+      {gcalConnected === true && (
+        <View style={styles.gcalConnectedBadge}>
+          <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
+          <Text style={styles.gcalConnectedText}>Synced with Google Calendar</Text>
+        </View>
+      )}
 
       {calView === 'Month' && renderMonthView()}
       {calView === 'Week'  && renderWeekView()}
@@ -1876,7 +1931,16 @@ export default function StylistDashboardScreen() {
          bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending' || b.status === 'cancellation_requested').length === 0 ? (
           <Text style={styles.calEmptyText}>No bookings this day</Text>
         ) : selDayBookings.map(b => (
-          <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles} onPress={() => openAppointmentDetail(b)} />
+          <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles}
+            onPress={() => openAppointmentDetail(b)}
+            onAddToCalendar={() => addToCalendar({
+              title: `${b.service_name} – ${b.client?.full_name || b.client?.username || 'Client'}`,
+              appointmentDate: b.appointment_date,
+              appointmentTime: b.appointment_time,
+              durationMin: b.duration_min || 60,
+              notes: b.notes || '',
+            })}
+          />
         ))}
       </>
     );
@@ -2029,7 +2093,16 @@ export default function StylistDashboardScreen() {
            bookingsForDay(bookings, selectedDay).filter(b => b.status === 'pending' || b.status === 'cancellation_requested').length === 0
             ? <Text style={styles.calEmptyText}>No bookings this day</Text>
             : selDayBookings.map(b => (
-              <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles} onPress={() => openAppointmentDetail(b)} />
+              <AppointmentCard key={b.id} booking={b} colors={colors} styles={styles}
+                onPress={() => openAppointmentDetail(b)}
+                onAddToCalendar={() => addToCalendar({
+                  title: `${b.service_name} – ${b.client?.full_name || b.client?.username || 'Client'}`,
+                  appointmentDate: b.appointment_date,
+                  appointmentTime: b.appointment_time,
+                  durationMin: b.duration_min || 60,
+                  notes: b.notes || '',
+                })}
+              />
             ))
           }
         </View>
@@ -2163,15 +2236,28 @@ export default function StylistDashboardScreen() {
                 </View>
               )}
               {slotBookings.map(b => (
-                <TouchableOpacity key={b.id} style={[styles.hourBooking, { backgroundColor: colors.primaryLight, borderLeftColor: colors.primary }]}
-                  onPress={() => openAppointmentDetail(b)}>
-                  <Text style={[styles.hourBookingName, { color: colors.primary }]} numberOfLines={1}>
-                    {b.client?.full_name || b.client?.username || 'Client'}
-                  </Text>
-                  <Text style={styles.hourBookingService} numberOfLines={1}>
-                    {b.service_name}{b.duration_min ? ` · ${formatDuration(b.duration_min)}` : ''}
-                  </Text>
-                </TouchableOpacity>
+                <View key={b.id} style={[styles.hourBooking, { backgroundColor: colors.primaryLight, borderLeftColor: colors.primary, flexDirection: 'row', alignItems: 'center' }]}>
+                  <TouchableOpacity style={{ flex: 1 }} onPress={() => openAppointmentDetail(b)}>
+                    <Text style={[styles.hourBookingName, { color: colors.primary }]} numberOfLines={1}>
+                      {b.client?.full_name || b.client?.username || 'Client'}
+                    </Text>
+                    <Text style={styles.hourBookingService} numberOfLines={1}>
+                      {b.service_name}{b.duration_min ? ` · ${formatDuration(b.duration_min)}` : ''}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    onPress={() => addToCalendar({
+                      title: `${b.service_name} – ${b.client?.full_name || b.client?.username || 'Client'}`,
+                      appointmentDate: b.appointment_date,
+                      appointmentTime: b.appointment_time,
+                      durationMin: b.duration_min || 60,
+                      notes: b.notes || '',
+                    })}
+                  >
+                    <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           );
@@ -2432,17 +2518,6 @@ export default function StylistDashboardScreen() {
                 )}
               </View>
 
-              {/* Add to Calendar */}
-              {!isPending && !isCancelReq && !isTerminal && b.appointment_date && (
-                <AddToCalendarButton
-                  title={`${b.service_name} – ${clientName}`}
-                  appointmentDate={b.appointment_date}
-                  appointmentTime={b.appointment_time}
-                  durationMin={b.duration_min || 60}
-                  notes={b.notes || ''}
-                  style={styles.apptCalendarBtn}
-                />
-              )}
 
               {/* Mark Complete */}
               {!isPending && !isCancelReq && !isTerminal && (
@@ -2896,7 +2971,18 @@ const makeStyles = (c) => StyleSheet.create({
   blockTimeBtnText: { fontSize: 14, fontFamily: 'Figtree_600SemiBold', color: '#C8835A' },
 
   // ── Calendar ──
-  calViewRow:    { flexDirection: 'row', backgroundColor: c.surface, borderRadius: 10, padding: 4, marginBottom: 16, borderWidth: 1, borderColor: c.border },
+  calViewRow:    { flexDirection: 'row', backgroundColor: c.surface, borderRadius: 10, padding: 4, marginBottom: 8, borderWidth: 1, borderColor: c.border },
+  gcalBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: c.primaryLight, borderWidth: 1, borderColor: c.border,
+    borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, marginBottom: 14,
+  },
+  gcalBannerText: { flex: 1, fontSize: 13, color: c.primary, fontFamily: 'Figtree_500Medium' },
+  gcalConnectedBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 6, paddingHorizontal: 14, marginBottom: 10,
+  },
+  gcalConnectedText: { fontSize: 12, color: '#16a34a', fontFamily: 'Figtree_500Medium' },
   calViewBtn:    { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
   calViewBtnActive: { backgroundColor: '#5D1F1F' },
   calViewText:   { fontSize: 13, fontFamily: 'Figtree_500Medium', color: c.textSecondary },

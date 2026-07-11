@@ -11,9 +11,11 @@ import { supabase } from '../config/supabase';
 import AccountSettings from './settings/AccountSettings';
 import PrivacySettings from './settings/PrivacySettings';
 import SupportFeedback from './settings/SupportFeedback';
+import CalendarIntegration from './settings/CalendarIntegration';
 
 // Sections that open an inline panel (mirrors SettingsScreen.js's activeScreen switch).
 const PANEL_SECTIONS = [
+  { title: 'Calendar Integration', icon: 'calendar-outline', screen: 'calendar', description: 'Sync bookings to Google Calendar' },
   { title: 'Account', icon: 'person-circle-outline', screen: 'account', description: 'Your account, your crown' },
   { title: 'Privacy & Safety', icon: 'shield-checkmark-outline', screen: 'privacy', description: 'Control your data and privacy' },
   { title: 'Support & Feedback', icon: 'chatbubble-ellipses-outline', screen: 'support', description: 'Help us improve CRWN' },
@@ -59,6 +61,8 @@ export default function StylistSettingsScreen({ navigation }) {
 
   const renderScreen = () => {
     switch (activeScreen) {
+      case 'calendar':
+        return <CalendarIntegration onBack={() => setActiveScreen(null)} />;
       case 'account':
         return <AccountSettings onBack={() => setActiveScreen(null)} />;
       case 'privacy':

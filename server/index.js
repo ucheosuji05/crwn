@@ -1484,6 +1484,208 @@ app.post('/api/scrape-booking', async (req, res) => {
   }
 });
 
+// ── Google Calendar OAuth ─────────────────────────────────────────────────────
+
+const GCAL_REDIRECT_URI = `${process.env.BETTER_AUTH_URL}/api/calendar/google/callback`;
+const GCAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
+app.get('/api/calendar/google/auth-url', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const state = Buffer.from(JSON.stringify({ stylistId: userId })).toString('base64');
+  const params = new URLSearchParams({
+    client_id:     process.env.GOOGLE_CLIENT_ID,
+    redirect_uri:  GCAL_REDIRECT_URI,
+    response_type: 'code',
+    scope:         GCAL_SCOPE,
+    access_type:   'offline',
+    prompt:        'consent',
+    state,
+  });
+  res.json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${params}` });
+});
+
+app.get('/api/calendar/google/callback', async (req, res) => {
+  const { code, state, error } = req.query;
+  const appScheme = 'crwn://calendar-callback';
+
+  if (error || !code) {
+    return res.redirect(`${appScheme}?error=${encodeURIComponent(error || 'cancelled')}`);
+  }
+
+  let stylistId;
+  try {
+    stylistId = JSON.parse(Buffer.from(state, 'base64').toString()).stylistId;
+  } catch {
+    return res.redirect(`${appScheme}?error=invalid_state`);
+  }
+
+  try {
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id:     process.env.GOOGLE_CLIENT_ID,
+        client_secret: process.env.GOOGLE_CLIENT_SECRET,
+        redirect_uri:  GCAL_REDIRECT_URI,
+        grant_type:    'authorization_code',
+        code,
+      }).toString(),
+    });
+    const tokenData = await tokenRes.json();
+
+    if (!tokenData.access_token) {
+      console.error('[calendar/callback] token error:', tokenData);
+      return res.redirect(`${appScheme}?error=token_failed`);
+    }
+
+    const tokenExpiry = new Date(Date.now() + (tokenData.expires_in || 3600) * 1000).toISOString();
+    const h = supabaseAdminHeaders();
+
+    await fetch(`${SUPABASE_URL}/rest/v1/stylist_calendar_integrations`, {
+      method: 'POST',
+      headers: { ...h, Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        stylist_id:          stylistId,
+        provider:            'google',
+        access_token:        tokenData.access_token,
+        refresh_token:       tokenData.refresh_token || null,
+        token_expiry:        tokenExpiry,
+        google_calendar_id:  'primary',
+        updated_at:          new Date().toISOString(),
+      }),
+    });
+
+    return res.redirect(`${appScheme}?success=true`);
+  } catch (err) {
+    console.error('[calendar/callback] error:', err.message);
+    return res.redirect(`${appScheme}?error=server_error`);
+  }
+});
+
+app.get('/api/calendar/google/status', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ connected: false });
+  try {
+    const r = await fetch(
+      `${SUPABASE_URL}/rest/v1/stylist_calendar_integrations?stylist_id=eq.${userId}&select=google_calendar_id,connected_at`,
+      { headers: supabaseAdminHeaders() }
+    );
+    const rows = await r.json();
+    if (Array.isArray(rows) && rows.length > 0) {
+      return res.json({ connected: true, connectedAt: rows[0].connected_at });
+    }
+    return res.json({ connected: false });
+  } catch {
+    return res.json({ connected: false });
+  }
+});
+
+app.delete('/api/calendar/google/disconnect', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    await fetch(
+      `${SUPABASE_URL}/rest/v1/stylist_calendar_integrations?stylist_id=eq.${userId}`,
+      { method: 'DELETE', headers: supabaseAdminHeaders() }
+    );
+    return res.json({ success: true });
+  } catch {
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+async function refreshGCalToken(userId, refreshToken) {
+  const refreshRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id:     process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type:    'refresh_token',
+    }).toString(),
+  });
+  const data = await refreshRes.json();
+  if (!data.access_token) return null;
+  const newExpiry = new Date(Date.now() + (data.expires_in || 3600) * 1000).toISOString();
+  await fetch(
+    `${SUPABASE_URL}/rest/v1/stylist_calendar_integrations?stylist_id=eq.${userId}`,
+    {
+      method: 'PATCH',
+      headers: { ...supabaseAdminHeaders(), Prefer: 'return=minimal' },
+      body: JSON.stringify({ access_token: data.access_token, token_expiry: newExpiry, updated_at: new Date().toISOString() }),
+    }
+  );
+  return data.access_token;
+}
+
+app.post('/api/calendar/google/create-event', async (req, res) => {
+  const userId = await getSessionUserId(req);
+  if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+
+  const { bookingId, title, startDateTime, endDateTime, description, attendeeEmail } = req.body || {};
+  if (!startDateTime || !endDateTime) {
+    return res.status(400).json({ message: 'startDateTime and endDateTime are required' });
+  }
+
+  const h = supabaseAdminHeaders();
+  try {
+    const tokensRes = await fetch(
+      `${SUPABASE_URL}/rest/v1/stylist_calendar_integrations?stylist_id=eq.${userId}&select=*`,
+      { headers: h }
+    );
+    const tokens = await tokensRes.json();
+    if (!Array.isArray(tokens) || tokens.length === 0) {
+      return res.status(404).json({ message: 'Google Calendar not connected' });
+    }
+
+    let { access_token, refresh_token, token_expiry, google_calendar_id } = tokens[0];
+
+    if (new Date(token_expiry) <= new Date() && refresh_token) {
+      access_token = await refreshGCalToken(userId, refresh_token) || access_token;
+    }
+
+    const event = {
+      summary:     title || 'Appointment',
+      description: description || '',
+      start: { dateTime: startDateTime, timeZone: 'UTC' },
+      end:   { dateTime: endDateTime,   timeZone: 'UTC' },
+    };
+    if (attendeeEmail) event.attendees = [{ email: attendeeEmail }];
+
+    const calendarId = google_calendar_id || 'primary';
+    const eventRes = await fetch(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(event),
+      }
+    );
+    const eventData = await eventRes.json();
+
+    if (!eventRes.ok) {
+      console.error('[calendar/create-event] Google API error:', eventData);
+      return res.status(eventRes.status).json({ message: eventData.error?.message || 'Calendar API error' });
+    }
+
+    if (bookingId) {
+      await fetch(`${SUPABASE_URL}/rest/v1/bookings?id=eq.${bookingId}`, {
+        method: 'PATCH',
+        headers: { ...h, Prefer: 'return=minimal' },
+        body: JSON.stringify({ google_event_id: eventData.id }),
+      });
+    }
+
+    return res.json({ success: true, eventId: eventData.id });
+  } catch (err) {
+    console.error('[calendar/create-event] error:', err.message);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // ── Instagram OAuth ───────────────────────────────────────────────────────────
 
 app.get('/api/instagram/auth-url', (_req, res) => {

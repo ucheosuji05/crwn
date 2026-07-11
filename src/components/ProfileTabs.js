@@ -495,6 +495,8 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
       ? (bookings.find(b => b.id === selectedBooking.id) || selectedBooking)
       : null;
 
+    if (!bk) return null;
+
     const closeBkModal = () => { setSelectedBooking(null); setBkConfirmAction(null); setBkActionSuccess(null); setBkActionError(null); };
 
     const stylist   = bk?.stylist || {};

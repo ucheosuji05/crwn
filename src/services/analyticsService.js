@@ -88,28 +88,40 @@ export const analyticsService = {
     return { data: data || [], error };
   },
 
+  // ── Real follower count for a stylist ──────────────────────────────────────
+  async getFollowerCount(stylistId) {
+    const { count } = await supabase
+      .from('follows')
+      .select('id', { count: 'exact', head: true })
+      .eq('following_id', stylistId);
+    return count ?? 0;
+  },
+
   // ── Aggregate stats derived from posts + bookings ───────────────────────────
-  computeAggregateStats(posts, bookmarkCounts, bookings) {
+  computeAggregateStats(posts, bookmarkCounts, bookings, followerCount = 0) {
     const totalCrowns   = posts.reduce((s, p) => s + (p.likes_count    || 0), 0);
     const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
     const totalSaves    = Object.values(bookmarkCounts).reduce((s, n) => s + n, 0);
     const totalBookings = bookings.length;
 
-    // Engagement = (crowns + saves + comments) / estimated reach
-    // Estimated reach = crowns × 5  (industry ~20% like rate)
-    const estimatedViews  = Math.max(totalCrowns * 5, 1);
-    const engagementRate  = (((totalCrowns + totalComments + totalSaves) / estimatedViews) * 100).toFixed(1);
+    // Avg per-post engagement rate, with bookings weighted 5× as a monetized conversion.
+    // Formula: (content_engagements + bookings × 5) / (reach × numPosts) × 100
+    // This averages per-post so one viral post doesn't skew the overall number.
+    const reach    = Math.max(followerCount, 1);
+    const numPosts = Math.max(posts.length, 1);
+    const weightedEngagements = totalCrowns + totalComments + totalSaves + totalBookings * 5;
+    const engagementRate = ((weightedEngagements / (reach * numPosts)) * 100).toFixed(1);
 
-    return { totalCrowns, totalSaves, totalBookings, engagementRate, totalComments, estimatedViews };
+    return { totalCrowns, totalSaves, totalBookings, engagementRate, totalComments, followerCount };
   },
 
   // ── Per-post engagement metrics ─────────────────────────────────────────────
-  computePostMetrics(post, bookmarkCount, relatedBookings = 0) {
+  computePostMetrics(post, bookmarkCount, followerCount = 0) {
     const likes    = post.likes_count    || 0;
     const comments = post.comments_count || 0;
     const saves    = bookmarkCount       || 0;
-    const estViews = Math.max(likes * 5, 1);
-    const rate     = (((likes + saves + comments) / estViews) * 100).toFixed(1);
-    return { likes, comments, saves, estViews, rate, bookings: relatedBookings };
+    const reach    = Math.max(followerCount, 1);
+    const rate     = (((likes + saves + comments) / reach) * 100).toFixed(1);
+    return { likes, comments, saves, reach, rate };
   },
 };
