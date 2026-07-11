@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
@@ -14,6 +14,7 @@ export default function CalendarIntegration({ onBack }) {
   const [loading, setLoading] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [status, setStatus] = useState({ connected: false });
 
   useEffect(() => {
@@ -35,24 +36,12 @@ export default function CalendarIntegration({ onBack }) {
     }
   };
 
-  const handleDisconnect = () => {
-    Alert.alert(
-      'Disconnect Google Calendar',
-      'New bookings will no longer be added to your Google Calendar automatically.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Disconnect',
-          style: 'destructive',
-          onPress: async () => {
-            setDisconnecting(true);
-            await googleCalendarService.disconnect();
-            setStatus({ connected: false });
-            setDisconnecting(false);
-          },
-        },
-      ]
-    );
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    await googleCalendarService.disconnect();
+    setStatus({ connected: false });
+    setConfirmDisconnect(false);
+    setDisconnecting(false);
   };
 
   if (loading) {
@@ -102,15 +91,25 @@ export default function CalendarIntegration({ onBack }) {
                 Since {new Date(status.connectedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
               </Text>
             )}
-            <TouchableOpacity
-              style={styles.disconnectBtn}
-              onPress={handleDisconnect}
-              disabled={disconnecting}
-            >
-              {disconnecting
-                ? <ActivityIndicator size="small" color="#ef4444" />
-                : <Text style={styles.disconnectText}>Disconnect</Text>}
-            </TouchableOpacity>
+            {!confirmDisconnect ? (
+              <TouchableOpacity style={styles.disconnectBtn} onPress={() => setConfirmDisconnect(true)}>
+                <Text style={styles.disconnectText}>Disconnect</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.confirmRow}>
+                <Text style={styles.confirmText}>Remove Google Calendar sync?</Text>
+                <View style={styles.confirmBtns}>
+                  <TouchableOpacity style={styles.cancelConfirmBtn} onPress={() => setConfirmDisconnect(false)}>
+                    <Text style={styles.cancelConfirmText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.confirmDisconnectBtn} onPress={handleDisconnect} disabled={disconnecting}>
+                    {disconnecting
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={styles.confirmDisconnectText}>Remove</Text>}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </>
         ) : (
           <TouchableOpacity
@@ -202,6 +201,13 @@ const makeStyles = (c) => StyleSheet.create({
     marginBottom: 32,
   },
   disconnectText: { fontSize: 15, color: '#ef4444', fontFamily: 'Figtree_500Medium' },
+  confirmRow: { alignSelf: 'stretch', marginTop: 12, marginBottom: 24, gap: 10 },
+  confirmText: { fontSize: 14, color: '#ef4444', textAlign: 'center', fontFamily: 'Figtree_500Medium' },
+  confirmBtns: { flexDirection: 'row', gap: 10 },
+  cancelConfirmBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: '#d1d5db', alignItems: 'center' },
+  cancelConfirmText: { fontSize: 14, color: '#6b7280', fontFamily: 'Figtree_500Medium' },
+  confirmDisconnectBtn: { flex: 1, paddingVertical: 11, borderRadius: 10, backgroundColor: '#ef4444', alignItems: 'center' },
+  confirmDisconnectText: { fontSize: 14, color: '#fff', fontFamily: 'Figtree_600SemiBold' },
   connectBtn: {
     flexDirection: 'row',
     alignItems: 'center',
