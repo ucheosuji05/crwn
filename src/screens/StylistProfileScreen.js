@@ -18,6 +18,7 @@ import { profileService } from '../services/profileService';
 import { reviewService } from '../services/reviewService';
 import { injectScrollbarCSS } from '../utils/injectScrollbarCSS';
 import { useIsWebLayout } from '../utils/webLayout';
+import AddToCalendarButton from '../components/AddToCalendarButton';
 import { supabase } from '../config/supabase';
 import PostCard from '../components/PostCard';
 import SkeletonPulse from '../components/SkeletonPulse';
@@ -462,6 +463,9 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
           date:         selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }),
           time:         selectedHour !== null ? bkFmtHour(selectedHour) : null,
           notes:        notes.trim() || null,
+          rawDate:      bkToDateStr(selectedDate),
+          rawTime:      selectedHour !== null ? `${String(selectedHour).padStart(2, '0')}:00:00` : null,
+          durationMin:  selected.duration_min || null,
         });
         setConfirmed(true);
       }
@@ -564,6 +568,18 @@ function BookingModal({ visible, stylist, preselectedService, onClose, colors })
               </>
             )}
           </View>
+
+          {/* Add to Calendar */}
+          {confirmedDetails.rawDate && (
+            <AddToCalendarButton
+              title={`${confirmedDetails.serviceName} with ${confirmedDetails.stylistName}`}
+              appointmentDate={confirmedDetails.rawDate}
+              appointmentTime={confirmedDetails.rawTime}
+              durationMin={confirmedDetails.durationMin || 60}
+              notes={confirmedDetails.notes || ''}
+              style={bs.calendarBtn}
+            />
+          )}
 
           {/* Action buttons */}
           <TouchableOpacity
@@ -919,6 +935,7 @@ const makeBookingStyles = (c) => StyleSheet.create({
     fontSize: 14, fontFamily: 'Figtree_600SemiBold', flex: 1, textAlign: 'right',
   },
   summaryDivider: { height: StyleSheet.hairlineWidth, marginLeft: 16 },
+  calendarBtn: { width: '100%', marginBottom: 10 },
   doneBtn: {
     width: '100%', borderRadius: 14, paddingVertical: 16,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

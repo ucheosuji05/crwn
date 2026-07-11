@@ -33,6 +33,7 @@ import { reviewService } from '../services/reviewService';
 import { supabase } from '../config/supabase';
 import { Crown, Scissors } from 'lucide-react-native';
 import { useIsWebLayout, WEB_MAX_WIDTHS } from '../utils/webLayout';
+import AddToCalendarButton from './AddToCalendarButton';
 
 const HONEY = '#D4930A';
 
@@ -633,14 +634,24 @@ export default function ProfileTabs({ viewedUserId, isOwnProfile }) {
                   )}
 
                   {isActive && (
-                    <TouchableOpacity
-                      style={[styles.bkDetailActionBtn, { borderColor: colors.border }]}
-                      onPress={() => setBkConfirmAction('request_cancel')}
-                      activeOpacity={0.85}
-                    >
-                      <Icon name="calendar-clear-outline" size={18} color={colors.textMuted} />
-                      <Text style={[styles.bkDetailActionBtnText, { color: colors.text }]}>Request Cancellation</Text>
-                    </TouchableOpacity>
+                    <>
+                      <AddToCalendarButton
+                        title={`${bk.service_name} with ${bkName}`}
+                        appointmentDate={bk.appointment_date}
+                        appointmentTime={bk.appointment_time}
+                        durationMin={bk.duration_min || 60}
+                        notes={bk.notes || ''}
+                        style={styles.bkCalendarBtn}
+                      />
+                      <TouchableOpacity
+                        style={[styles.bkDetailActionBtn, { borderColor: colors.border }]}
+                        onPress={() => setBkConfirmAction('request_cancel')}
+                        activeOpacity={0.85}
+                      >
+                        <Icon name="calendar-clear-outline" size={18} color={colors.textMuted} />
+                        <Text style={[styles.bkDetailActionBtnText, { color: colors.text }]}>Request Cancellation</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
 
                   {isCancelRequested && (
@@ -1371,6 +1382,7 @@ const makeStyles = (c) => StyleSheet.create({
     fontFamily: 'Figtree_400Regular',
     lineHeight: 20,
   },
+  bkCalendarBtn: { marginBottom: 10 },
   bkDetailActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',

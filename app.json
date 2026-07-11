@@ -21,7 +21,14 @@
     "scheme": "crwn",
     "plugins": [
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Allow CRWN to access your calendar to save appointments.",
+          "remindersPermission": "Allow CRWN to access your reminders."
+        }
+      ]
     ],
     "extra": {
       "authUrl": "https://crwn-production.up.railway.app",

@@ -16,6 +16,7 @@ import { useUnreadCount } from '../context/UnreadCountContext';
 import { bookingService } from '../services/bookingService';
 import { analyticsService } from '../services/analyticsService';
 import { supabase } from '../config/supabase';
+import AddToCalendarButton from '../components/AddToCalendarButton';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -2431,6 +2432,18 @@ export default function StylistDashboardScreen() {
                 )}
               </View>
 
+              {/* Add to Calendar */}
+              {!isPending && !isCancelReq && !isTerminal && b.appointment_date && (
+                <AddToCalendarButton
+                  title={`${b.service_name} – ${clientName}`}
+                  appointmentDate={b.appointment_date}
+                  appointmentTime={b.appointment_time}
+                  durationMin={b.duration_min || 60}
+                  notes={b.notes || ''}
+                  style={styles.apptCalendarBtn}
+                />
+              )}
+
               {/* Mark Complete */}
               {!isPending && !isCancelReq && !isTerminal && (
                 <TouchableOpacity
@@ -3044,6 +3057,7 @@ const makeStyles = (c) => StyleSheet.create({
     gap: 5, paddingVertical: 14, paddingBottom: 20,
   },
   cancelApptLinkText: { fontSize: 13, fontFamily: 'Figtree_500Medium', color: '#ef4444' },
+  apptCalendarBtn: { marginHorizontal: 20, marginBottom: 10 },
   markCompleteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
